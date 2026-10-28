@@ -209,7 +209,7 @@ pub fn compare_package_version(
     let (_, repository, _) = repository_parts(homepage)?;
     let normalize_name = |name: &str| {
         name.chars()
-            .filter(|character| !matches!(character, '-' | '_'))
+            .filter(|character| *character != '-' && *character != '_')
             .flat_map(char::to_lowercase)
             .collect::<String>()
     };
