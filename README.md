@@ -6,7 +6,7 @@ Copr Hub is a native Linux desktop application for discovering Fedora COPR proje
 
 - Search the public COPR API for projects by name, sort current results by project name or owner, and filter displayed results locally by project name, owner, or description without repeating the network request.
 - Display project names, owners, descriptions, and optional homepage links.
-- Open project details with package names, build targets, reported build states, and package versions; inspect every build target for a package in a dedicated details window.
+- Open project details with package names, build targets, reported build states, and package versions; inspect every build target for a package in a dedicated details window. Project details also show the latest project-build age and state when COPR provides timestamps, flagging builds at least 90 days old as “No recent project build.” Missing timestamps are shown as unavailable rather than guessed.
 - Save and unsave projects locally, filter saved projects by name, owner, or description, and revisit them from the Saved tab; Saved and Activity refresh automatically when opened.
 - Read enabled and disabled COPR repository definitions from `/etc/yum.repos.d`, including DNF5 repository enablement overrides.
 - Enable or disable a COPR repository after explicit confirmation, using `pkexec` and DNF's config-manager rather than running the application as root.
@@ -19,7 +19,7 @@ Copr Hub is a native Linux desktop application for discovering Fedora COPR proje
 - Use native GTK/libadwaita widgets and the active system theme. Accent colors are not hard-coded, allowing Matugen palette changes to flow through the existing GTK theme.
 - Include a desktop entry, SVG icon, AppStream metadata, and per-user install/uninstall scripts.
 
-COPR build status is informational and is **not** a security or trust assessment. Package names exposed by a COPR project may not always correspond to installable binary RPM names; DNF reports resolution and transaction failures to the app.
+COPR build status and freshness are informational and are **not** a security or trust assessment. The 90-day freshness threshold is a heuristic, not a claim that a project is abandoned or unsafe; timestamps that COPR does not provide are reported as unavailable. Package names exposed by a COPR project may not always correspond to installable binary RPM names; DNF reports resolution and transaction failures to the app.
 
 ## Build and run on Fedora
 

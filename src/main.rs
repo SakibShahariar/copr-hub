@@ -897,10 +897,17 @@ fn render_project_monitor(
                 .iter()
                 .map(|package| package.chroots.len())
                 .sum::<usize>();
+            let freshness = copr::build_freshness_message(
+                monitor.latest_build.as_ref(),
+                gtk::glib::DateTime::now_local()
+                    .and_then(|date| date.to_unix())
+                    .unwrap_or(0),
+            );
             status.set_text(&format!(
-                "{} packages · {} package build-target entries. Build status is informational, not a security assessment.",
+                "{} packages · {} package build-target entries. {} Build status is informational, not a security assessment.",
                 monitor.packages.len(),
-                target_count
+                target_count,
+                freshness
             ));
 
             for package in monitor.packages {

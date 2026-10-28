@@ -2,6 +2,8 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::time::Duration;
 
+const STALE_BUILD_AFTER_DAYS: i64 = 90;
+
 const COPR_API_BASE: &str = "https://copr.fedorainfracloud.org/api_3";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 const SEARCH_LIMIT: &str = "25";
@@ -28,6 +30,24 @@ struct ProjectListResponse {
 pub struct ProjectMonitor {
     #[serde(default)]
     pub packages: Vec<MonitoredPackage>,
+    #[serde(skip)]
+    pub latest_build: Option<ProjectBuildSummary>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProjectBuildSummary {
+    #[serde(default)]
+    pub state: Option<String>,
+    #[serde(default)]
+    pub ended_on: Option<i64>,
+    #[serde(default)]
+    pub submitted_on: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct BuildListResponse {
+    #[serde(default)]
+    builds: Vec<ProjectBuildSummary>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -113,9 +133,58 @@ pub fn fetch_project_monitor(owner: &str, project: &str) -> Result<ProjectMonito
         .error_for_status()
         .map_err(|error| service_response_error(error, "project"))?;
 
-    response
+    let mut monitor: ProjectMonitor = response
         .json()
-        .map_err(|error| format!("Could not read the project build information: {error}"))
+        .map_err(|error| format!("Could not read the project build information: {error}"))?;
+
+    // The monitor endpoint has no timestamps, so use the newest project build for freshness.
+    let latest_build = client()
+        .and_then(|client| {
+            client
+                .get(format!("{}/build/list/", COPR_API_BASE))
+                .query(&[
+                    ("ownername", owner),
+                    ("projectname", project),
+                    ("limit", "1"),
+                ])
+                .send()
+                .map_err(request_error)?
+                .error_for_status()
+                .map_err(|error| service_response_error(error, "recent build"))?
+                .json::<BuildListResponse>()
+                .map_err(|error| format!("Could not read recent build information: {error}"))
+        })
+        .ok()
+        .and_then(|mut response| response.builds.drain(..).next());
+    monitor.latest_build = latest_build;
+    Ok(monitor)
+}
+
+pub fn build_freshness_message(build: Option<&ProjectBuildSummary>, now: i64) -> String {
+    let Some(build) = build else {
+        return "Recent build age is unavailable; COPR did not provide build timestamps.".to_string();
+    };
+    let timestamp = build.ended_on.or(build.submitted_on);
+    let Some(timestamp) = timestamp.filter(|timestamp| *timestamp > 0) else {
+        return format!(
+            "Latest project build state: {} · build age unavailable.",
+            build.state.as_deref().unwrap_or("unknown")
+        );
+    };
+    let age_days = now.saturating_sub(timestamp).max(0) / 86_400;
+    let age = if age_days == 0 {
+        "less than a day ago".to_string()
+    } else if age_days == 1 {
+        "1 day ago".to_string()
+    } else {
+        format!("{age_days} days ago")
+    };
+    let state = build.state.as_deref().unwrap_or("unknown");
+    if age_days >= STALE_BUILD_AFTER_DAYS {
+        format!("No recent project build: latest reported build was {age} (state: {state}).")
+    } else {
+        format!("Latest project build: {age} (state: {state}).")
+    }
 }
 
 #[cfg(test)]
@@ -139,6 +208,21 @@ mod tests {
         assert!(
             service_status_message(reqwest::StatusCode::FORBIDDEN, "search").contains("HTTP 403")
         );
+    }
+
+    #[test]
+    fn build_freshness_distinguishes_recent_stale_and_missing_timestamps() {
+        let now = 2_000_000_000_i64;
+        let recent = ProjectBuildSummary { state: Some("succeeded".into()), ended_on: Some(now - 7 * 86_400), submitted_on: None };
+        assert!(build_freshness_message(Some(&recent), now).contains("7 days ago"));
+        assert!(!build_freshness_message(Some(&recent), now).contains("No recent"));
+        let stale = ProjectBuildSummary { state: Some("failed".into()), ended_on: Some(now - 100 * 86_400), submitted_on: None };
+        let message = build_freshness_message(Some(&stale), now);
+        assert!(message.contains("No recent project build"));
+        assert!(message.contains("failed"));
+        let missing = ProjectBuildSummary { state: None, ended_on: None, submitted_on: None };
+        assert!(build_freshness_message(Some(&missing), now).contains("age unavailable"));
+        assert!(build_freshness_message(None, now).contains("unavailable"));
     }
 
     #[test]
