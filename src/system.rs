@@ -73,10 +73,7 @@ fn parse_enabled_overrides(contents: &str) -> HashMap<String, bool> {
 
         if let (Some(id), Some((key, value))) = (current_id.as_ref(), line.split_once('=')) {
             if key.trim() == "enabled" {
-                overrides.insert(
-                    id.clone(),
-                    !matches!(value.trim(), "0" | "false" | "False"),
-                );
+                overrides.insert(id.clone(), !matches!(value.trim(), "0" | "false" | "False"));
             }
         }
     }
@@ -283,7 +280,8 @@ mod tests {
 
     #[test]
     fn parses_dnf5_repository_enabled_overrides() {
-        let contents = "[copr:copr.fedorainfracloud.org:alice:demo]\\nenabled=0\\n[fedora]\\nenabled=1\\n";
+        let contents =
+            "[copr:copr.fedorainfracloud.org:alice:demo]\\nenabled=0\\n[fedora]\\nenabled=1\\n";
         let overrides = parse_enabled_overrides(contents);
         assert_eq!(
             overrides.get("copr:copr.fedorainfracloud.org:alice:demo"),
