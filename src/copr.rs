@@ -63,6 +63,22 @@ fn request_error(error: reqwest::Error) -> String {
     }
 }
 
+fn service_response_error(error: reqwest::Error, operation: &str) -> String {
+    match error.status() {
+        Some(reqwest::StatusCode::TOO_MANY_REQUESTS) => {
+            "COPR is receiving too many requests. Wait a moment and try again.".to_string()
+        }
+        Some(reqwest::StatusCode::NOT_FOUND) => {
+            format!("COPR could not find the requested {operation}.")
+        }
+        Some(status) if status.is_server_error() => {
+            format!("COPR is temporarily unavailable (HTTP {status}). Try again later.")
+        }
+        Some(status) => format!("COPR rejected the {operation} request (HTTP {status})."),
+        None => format!("The COPR service request failed: {error}"),
+    }
+}
+
 pub fn search_projects(pattern: &str) -> Result<Vec<CoprProject>, String> {
     let pattern = pattern.trim();
     if pattern.is_empty() {
@@ -75,7 +91,7 @@ pub fn search_projects(pattern: &str) -> Result<Vec<CoprProject>, String> {
         .send()
         .map_err(request_error)?
         .error_for_status()
-        .map_err(|error| format!("The COPR service returned an error: {error}"))?;
+        .map_err(|error| service_response_error(error, "search"))?;
 
     let result: ProjectListResponse = response
         .json()
@@ -91,7 +107,7 @@ pub fn fetch_project_monitor(owner: &str, project: &str) -> Result<ProjectMonito
         .send()
         .map_err(request_error)?
         .error_for_status()
-        .map_err(|error| format!("The COPR service returned an error: {error}"))?;
+        .map_err(|error| service_response_error(error, "project"))?;
 
     response
         .json()
