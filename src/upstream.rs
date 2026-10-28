@@ -5,6 +5,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct UpstreamRelease {
+    pub version: String,
     pub name: String,
     pub published_at: Option<String>,
     pub url: Option<String>,
@@ -95,10 +96,11 @@ pub fn latest_release(homepage: &str) -> Result<Option<UpstreamRelease>, String>
             .map_err(|error| format!("Could not read GitLab release metadata: {error}"))?;
         let url = release._links.and_then(|links| links.self_url);
         return Ok(Some(UpstreamRelease {
+            version: release.tag_name.clone(),
             name: release
                 .name
                 .filter(|name| !name.trim().is_empty())
-                .unwrap_or(release.tag_name),
+                .unwrap_or_else(|| release.tag_name.clone()),
             published_at: release.released_at,
             url,
         }));
@@ -121,10 +123,11 @@ pub fn latest_release(homepage: &str) -> Result<Option<UpstreamRelease>, String>
         return Ok(None);
     }
     Ok(Some(UpstreamRelease {
+        version: release.tag_name.clone(),
         name: release
             .name
             .filter(|name| !name.trim().is_empty())
-            .unwrap_or(release.tag_name),
+            .unwrap_or_else(|| release.tag_name.clone()),
         published_at: release.published_at,
         url: release.html_url,
     }))
