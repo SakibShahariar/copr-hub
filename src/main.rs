@@ -1059,6 +1059,27 @@ fn render_project_monitor(
                     .build();
                 row.set_widget_name(&package.name);
                 row.add_prefix(&gtk::Image::from_icon_name("package-x-generic-symbolic"));
+                let has_newer_upstream = targets.iter().any(|(_, build)| {
+                    build
+                        .pkg_version
+                        .as_deref()
+                        .and_then(|version| {
+                            upstream_release.zip(homepage).and_then(|(release, homepage)| {
+                                upstream::compare_package_version(
+                                    homepage,
+                                    &release.version,
+                                    &package.name,
+                                    version,
+                                )
+                            })
+                        })
+                        == Some(std::cmp::Ordering::Greater)
+                });
+                if has_newer_upstream {
+                    let label = gtk::Label::new(Some("Upstream newer"));
+                    label.add_css_class("warning");
+                    row.add_suffix(&label);
+                }
                 row.add_suffix(&gtk::Label::new(Some(&format!(
                     "{} targets",
                     targets.len()
