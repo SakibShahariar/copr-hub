@@ -855,8 +855,12 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
     upstream_status.add_css_class("dim-label");
     content.append(&upstream_status);
 
-    let package_filter_mode =
-        gtk::DropDown::from_strings(&["All packages", "Upstream updates", "Failed builds", "In progress"]);
+    let package_filter_mode = gtk::DropDown::from_strings(&[
+        "All packages",
+        "Upstream updates",
+        "Failed builds",
+        "In progress",
+    ]);
     package_filter_mode.set_tooltip_text("Show packages by update or build status");
     content.append(&package_filter_mode);
 
@@ -1198,7 +1202,12 @@ fn render_project_monitor(
                 });
                 let has_failed_target = targets.iter().any(|(_, build)| {
                     matches!(
-                        build.state.as_deref().unwrap_or("unknown").to_ascii_lowercase().as_str(),
+                        build
+                            .state
+                            .as_deref()
+                            .unwrap_or("unknown")
+                            .to_ascii_lowercase()
+                            .as_str(),
                         "failed" | "error"
                     )
                 });
