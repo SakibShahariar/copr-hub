@@ -861,7 +861,7 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
         "Failed builds",
         "In progress",
     ]);
-    package_filter_mode.set_tooltip_text("Show packages by update or build status");
+    package_filter_mode.set_tooltip_text(Some("Show packages by update or build status"));
     content.append(&package_filter_mode);
 
     let package_filter = gtk::SearchEntry::builder()
@@ -1182,7 +1182,7 @@ fn render_project_monitor(
                     .subtitle(if summary.is_empty() {
                         "No build-target information reported".to_string()
                     } else {
-                        summary
+                        summary.clone()
                     })
                     .build();
                 row.add_prefix(&gtk::Image::from_icon_name("package-x-generic-symbolic"));
