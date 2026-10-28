@@ -14,7 +14,9 @@ pub struct ActivityEntry {
 }
 
 fn history_path() -> PathBuf {
-    gtk::glib::user_data_dir().join("copr-hub").join("activity.json")
+    gtk::glib::user_data_dir()
+        .join("copr-hub")
+        .join("activity.json")
 }
 
 pub fn load() -> Result<Vec<ActivityEntry>, String> {
