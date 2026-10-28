@@ -884,7 +884,7 @@ fn confirm_package_operation<F: Fn() + Clone + 'static>(
         .buttons(gtk::ButtonsType::None)
         .text(format!("{action} {package_name}?"))
         .secondary_text(
-            "DNF will perform this system package operation and resolve dependencies. Administrator authentication is required.",
+            "DNF will perform this system package operation and resolve dependencies. Administrator authentication is required. COPR is a community build service: install packages only from project owners you trust.",
         )
         .build();
     dialog.add_button("Cancel", gtk::ResponseType::Cancel);
