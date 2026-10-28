@@ -1016,11 +1016,13 @@ fn render_project_monitor(
                     .map(|date| date.to_unix())
                     .unwrap_or(0),
             );
+            let target_health = copr::build_target_health_summary(&monitor.packages);
             status.set_text(&format!(
-                "{} packages · {} package build-target entries. {} Build status is informational, not a security assessment.",
+                "{} packages · {} package build-target entries. {} Build health by target: {}. Build status is informational, not a security assessment.",
                 monitor.packages.len(),
                 target_count,
-                freshness
+                freshness,
+                target_health
             ));
 
             for package in monitor.packages {
