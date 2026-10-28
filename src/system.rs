@@ -316,7 +316,7 @@ enabled=1
 
     #[test]
     fn repository_files_and_overrides_share_boolean_parsing() {
-        let contents = "[copr:copr.fedorainfracloud.org:alice:demo]\\nenabled=FALSE\\n";
+        let contents = "[copr:copr.fedorainfracloud.org:alice:demo]\nenabled=FALSE\n";
         let repositories = parse_copr_repositories(contents, Path::new("/tmp/test.repo"));
         assert_eq!(repositories.len(), 1);
         assert!(!repositories[0].enabled);
