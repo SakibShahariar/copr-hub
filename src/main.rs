@@ -1451,9 +1451,17 @@ fn build_saved_page(parent: &adw::ApplicationWindow, stack: &adw::ViewStack) -> 
         .hexpand(true)
         .build();
     title.add_css_class("title-2");
+    let export = gtk::Button::with_label("Export");
+    export.set_tooltip_text(Some("Save a JSON backup of your saved projects"));
+    export.set_icon_name("document-save-symbolic");
+    let import = gtk::Button::with_label("Import");
+    import.set_tooltip_text(Some("Merge projects from a Copr Hub JSON backup"));
+    import.set_icon_name("document-open-symbolic");
     let refresh = gtk::Button::with_label("Refresh");
     refresh.set_icon_name("view-refresh-symbolic");
     heading.append(&title);
+    heading.append(&export);
+    heading.append(&import);
     heading.append(&refresh);
     content.append(&heading);
 
@@ -1487,6 +1495,76 @@ fn build_saved_page(parent: &adw::ApplicationWindow, stack: &adw::ViewStack) -> 
     });
     content.append(&list);
 
+    export.connect_clicked({
+        let parent = parent.clone();
+        let feedback = feedback.clone();
+        move |_| {
+            let dialog = gtk::FileChooserNative::new(
+                Some("Export saved projects"),
+                Some(&parent),
+                gtk::FileChooserAction::Save,
+                Some("Export"),
+                Some("Cancel"),
+            );
+            dialog.set_current_name("copr-hub-saved-projects.json");
+            dialog.connect_response({
+                let feedback = feedback.clone();
+                move |dialog, response| {
+                    if response == gtk::ResponseType::Accept {
+                        match dialog.file().and_then(|file| file.path()) {
+                            Some(path) => match favorites::export_to(&path) {
+                                Ok(count) => feedback.set_text(&format!(
+                                    "Exported {count} saved project(s) to {}.",
+                                    path.display()
+                                )),
+                                Err(error) => feedback.set_text(&error),
+                            },
+                            None => feedback.set_text("Could not access the selected export path."),
+                        }
+                    }
+                    dialog.destroy();
+                }
+            });
+            dialog.show();
+        }
+    });
+    import.connect_clicked({
+        let parent = parent.clone();
+        let list = list.clone();
+        let feedback = feedback.clone();
+        move |_| {
+            let dialog = gtk::FileChooserNative::new(
+                Some("Import saved projects"),
+                Some(&parent),
+                gtk::FileChooserAction::Open,
+                Some("Import"),
+                Some("Cancel"),
+            );
+            dialog.connect_response({
+                let parent = parent.clone();
+                let list = list.clone();
+                let feedback = feedback.clone();
+                move |dialog, response| {
+                    if response == gtk::ResponseType::Accept {
+                        match dialog.file().and_then(|file| file.path()) {
+                            Some(path) => match favorites::import_from(&path) {
+                                Ok(added) => {
+                                    refresh_saved_projects(&parent, &list, &feedback);
+                                    feedback.set_text(&format!(
+                                        "Imported {added} new project(s); existing saved projects were preserved."
+                                    ));
+                                }
+                                Err(error) => feedback.set_text(&error),
+                            },
+                            None => feedback.set_text("Could not access the selected backup file."),
+                        }
+                    }
+                    dialog.destroy();
+                }
+            });
+            dialog.show();
+        }
+    });
     refresh.connect_clicked({
         let parent = parent.clone();
         let list = list.clone();
