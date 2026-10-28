@@ -148,6 +148,12 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     sort_row.append(&sort);
     content.append(&sort_row);
 
+    let result_filter = gtk::SearchEntry::builder()
+        .placeholder_text("Filter results by project, owner, or description")
+        .tooltip_text("Filter the current results locally without making another request")
+        .build();
+    content.append(&result_filter);
+
     let feedback = gtk::Label::builder()
         .label("Search the COPR catalogue to find community projects.")
         .wrap(true)
@@ -160,6 +166,17 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     let latest_response: Rc<RefCell<Option<ProjectSearchResponse>>> = Rc::new(RefCell::new(None));
     results.set_selection_mode(gtk::SelectionMode::None);
     results.add_css_class("boxed-list");
+    results.set_filter_func({
+        let result_filter = result_filter.clone();
+        move |row| {
+            let query = result_filter.text().trim().to_ascii_lowercase();
+            query.is_empty() || row.widget_name().to_ascii_lowercase().contains(&query)
+        }
+    });
+    result_filter.connect_search_changed({
+        let results = results.clone();
+        move |_| results.invalidate_filter()
+    });
     content.append(&results);
 
     let perform_search = {
@@ -651,6 +668,12 @@ fn render_projects(
                     )
                     .activatable(true)
                     .build();
+                row.set_widget_name(&format!(
+                    "{} {} {}",
+                    project.name,
+                    project.owner,
+                    project.description.as_deref().unwrap_or("")
+                ));
                 row.add_prefix(&gtk::Image::from_icon_name("package-x-generic-symbolic"));
                 row.add_suffix(&gtk::Label::new(Some(&format!("@{}", project.owner))));
                 row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
