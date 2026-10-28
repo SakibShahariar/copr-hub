@@ -143,11 +143,12 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
         move || {
             let query = search.text().trim().to_string();
             if query.is_empty() {
-                feedback.set_text("Enter a project, package, or owner to search.");
+                feedback.set_text("Enter a COPR project name to search.");
                 return;
             }
 
             feedback.set_text("Searching COPR…");
+            search.set_sensitive(false);
             search_button.set_sensitive(false);
             clear_list_box(&results);
 
@@ -155,10 +156,12 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
             let results = results.clone();
             let feedback = feedback.clone();
             let search_button = search_button.clone();
+            let search = search.clone();
             let parent = parent.clone();
             gtk::glib::MainContext::default().spawn_local(async move {
                 let response =
                     gtk::gio::spawn_blocking(move || copr::search_projects(&query)).await;
+                search.set_sensitive(true);
                 search_button.set_sensitive(true);
                 let response = match response {
                     Ok(result) => result,
