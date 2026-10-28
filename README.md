@@ -16,11 +16,11 @@ Copr Hub is a native Linux desktop application for discovering Fedora COPR proje
 - Show feedback for empty results, timeouts, and network/API failures.
 - Run blocking network, filesystem, and package-manager operations away from the GTK main thread.
 - Use native GTK/libadwaita widgets and the active system theme. Accent colors are not hard-coded, allowing Matugen palette changes to flow through the existing GTK theme.
-- Include a desktop entry, SVG icon, and AppStream metadata under `data/`.
+- Include a desktop entry, SVG icon, AppStream metadata, and per-user install/uninstall scripts.
 
 COPR build status is informational and is **not** a security or trust assessment. Package names exposed by a COPR project may not always correspond to installable binary RPM names; DNF reports resolution and transaction failures to the app.
 
-## Build on Fedora
+## Build and run on Fedora
 
 Install native development dependencies:
 
@@ -42,6 +42,22 @@ For a strict lint pass:
 ```bash
 cargo clippy --all-targets --all-features -- -D warnings
 ```
+
+## Install for the current user
+
+From the repository checkout:
+
+```bash
+sh scripts/install-local.sh
+```
+
+This builds the release binary and installs it under `~/.local`; it does not require root privileges. To uninstall the launcher and application metadata:
+
+```bash
+sh scripts/uninstall-local.sh
+```
+
+Uninstalling preserves local saved projects and activity history.
 
 ## Local data
 
