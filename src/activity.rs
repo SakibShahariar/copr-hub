@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
+use crate::storage;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -37,13 +38,10 @@ pub fn clear() -> Result<(), String> {
     fs::create_dir_all(parent)
         .map_err(|error| format!("Could not create activity history directory: {error}"))?;
 
-    let temporary_path = path.with_extension("json.tmp");
     let contents = serde_json::to_vec_pretty(&Vec::<ActivityEntry>::new())
         .map_err(|error| format!("Could not encode empty activity history: {error}"))?;
-    fs::write(&temporary_path, contents)
+    storage::atomic_write(&path, &contents)
         .map_err(|error| format!("Could not clear activity history: {error}"))?;
-    fs::rename(&temporary_path, &path)
-        .map_err(|error| format!("Could not update activity history: {error}"))?;
     Ok(())
 }
 
@@ -71,13 +69,10 @@ pub fn record(action: &str, target: &str, summary: &str) -> Result<(), String> {
     );
     entries.truncate(MAX_ENTRIES);
 
-    let temporary_path = path.with_extension("json.tmp");
     let contents = serde_json::to_vec_pretty(&entries)
         .map_err(|error| format!("Could not encode activity history: {error}"))?;
-    fs::write(&temporary_path, contents)
+    storage::atomic_write(&path, &contents)
         .map_err(|error| format!("Could not save activity history: {error}"))?;
-    fs::rename(&temporary_path, &path)
-        .map_err(|error| format!("Could not update activity history: {error}"))?;
     Ok(())
 }
 
