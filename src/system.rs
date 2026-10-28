@@ -304,7 +304,10 @@ enabled=1
     #[test]
     fn parses_common_boolean_spellings_case_insensitively() {
         for value in ["0", "false", "FALSE", "False", "no", "NO", "off", "OFF"] {
-            assert!(!parse_enabled_value(value), "{value} should disable a repository");
+            assert!(
+                !parse_enabled_value(value),
+                "{value} should disable a repository"
+            );
         }
         for value in ["1", "true", "TRUE", "yes", "on", "unexpected"] {
             assert!(parse_enabled_value(value), "{value} should remain enabled");
@@ -319,7 +322,10 @@ enabled=1
         assert!(!repositories[0].enabled);
 
         let overrides = parse_enabled_overrides(contents);
-        assert_eq!(overrides.get("copr:copr.fedorainfracloud.org:alice:demo"), Some(&false));
+        assert_eq!(
+            overrides.get("copr:copr.fedorainfracloud.org:alice:demo"),
+            Some(&false)
+        );
     }
 
     #[test]
