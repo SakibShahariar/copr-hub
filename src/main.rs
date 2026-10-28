@@ -892,7 +892,7 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                     ));
                 }
                 Ok(Ok(None)) => upstream_status.set_text(
-                    "Upstream release tracking unavailable: the project homepage is not a recognized GitHub or GitLab repository URL."
+                    "No stable upstream release metadata is available for this project homepage."
                 ),
                 Ok(Err(error)) => upstream_status.set_text(&format!("Could not check upstream releases: {error}")),
                 Err(_) => upstream_status.set_text("The background upstream release lookup failed unexpectedly."),
