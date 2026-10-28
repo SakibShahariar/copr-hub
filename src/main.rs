@@ -875,12 +875,64 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
     window.set_content(Some(&scroll));
     window.present();
 
-    if let Some(homepage) = project.homepage.clone() {
+    let homepage = project.homepage.clone();
+    if homepage.is_none() {
+        upstream_status.set_text(
+            "Upstream release tracking unavailable: COPR does not provide a project homepage.",
+        );
+    }
+
+    let homepage_for_comparison = homepage.clone();
+    let monitor_state: Rc<RefCell<Option<Result<copr::ProjectMonitor, String>>>> =
+        Rc::new(RefCell::new(None));
+    let release_state: Rc<RefCell<Option<upstream::UpstreamRelease>>> =
+        Rc::new(RefCell::new(None));
+
+    let owner = project.owner.clone();
+    let name = project.name.clone();
+    let parent = window.clone();
+    {
+        let monitor_state = monitor_state.clone();
+        let release_state = release_state.clone();
+        let parent = parent.clone();
+        let packages = packages.clone();
+        let status = status.clone();
+        let homepage = homepage_for_comparison.clone();
+        gtk::glib::MainContext::default().spawn_local(async move {
+            let response =
+                gtk::gio::spawn_blocking(move || copr::fetch_project_monitor(&owner, &name)).await;
+            let response = match response {
+                Ok(result) => result,
+                Err(_) => Err("The background project lookup failed unexpectedly.".to_string()),
+            };
+            *monitor_state.borrow_mut() = Some(response);
+            let response = monitor_state.borrow().clone();
+            let release = release_state.borrow().clone();
+            if let Some(response) = response {
+                render_project_monitor(
+                    &parent,
+                    &packages,
+                    &status,
+                    response,
+                    release.as_ref(),
+                    homepage.as_deref(),
+                );
+            }
+        });
+    }
+
+    if let Some(homepage) = homepage {
         let upstream_status = upstream_status.clone();
+        let monitor_state = monitor_state.clone();
+        let release_state = release_state.clone();
+        let parent = parent.clone();
+        let packages = packages.clone();
+        let status = status.clone();
+        let homepage_for_comparison = Some(homepage.clone());
         gtk::glib::MainContext::default().spawn_local(async move {
             let response =
                 gtk::gio::spawn_blocking(move || upstream::latest_release(&homepage)).await;
-            match response {
+            let release = match response {
                 Ok(Ok(Some(release))) => {
                     let date = release
                         .published_at
@@ -898,35 +950,40 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                             format!(" · {url}")
                         }
                     ));
+                    Some(release)
                 }
-                Ok(Ok(None)) => upstream_status.set_text(
-                    "No stable upstream release metadata is available for this project homepage.",
-                ),
+                Ok(Ok(None)) => {
+                    upstream_status.set_text(
+                        "No stable upstream release metadata is available for this project homepage.",
+                    );
+                    None
+                }
                 Ok(Err(error)) => {
-                    upstream_status.set_text(&format!("Could not check upstream releases: {error}"))
+                    upstream_status.set_text(&format!("Could not check upstream releases: {error}"));
+                    None
                 }
-                Err(_) => upstream_status
-                    .set_text("The background upstream release lookup failed unexpectedly."),
+                Err(_) => {
+                    upstream_status
+                        .set_text("The background upstream release lookup failed unexpectedly.");
+                    None
+                }
+            };
+            *release_state.borrow_mut() = release;
+            let response = monitor_state.borrow().clone();
+            let release = release_state.borrow().clone();
+            if let Some(response) = response {
+                render_project_monitor(
+                    &parent,
+                    &packages,
+                    &status,
+                    response,
+                    release.as_ref(),
+                    homepage_for_comparison.as_deref(),
+                );
             }
         });
-    } else {
-        upstream_status.set_text(
-            "Upstream release tracking unavailable: COPR does not provide a project homepage.",
-        );
     }
 
-    let owner = project.owner.clone();
-    let name = project.name.clone();
-    let parent = window.clone();
-    gtk::glib::MainContext::default().spawn_local(async move {
-        let response =
-            gtk::gio::spawn_blocking(move || copr::fetch_project_monitor(&owner, &name)).await;
-        let response = match response {
-            Ok(result) => result,
-            Err(_) => Err("The background project lookup failed unexpectedly.".to_string()),
-        };
-        render_project_monitor(&parent, &packages, &status, response);
-    });
 }
 
 fn render_project_monitor(
@@ -934,6 +991,8 @@ fn render_project_monitor(
     list: &gtk::ListBox,
     status: &gtk::Label,
     response: Result<copr::ProjectMonitor, String>,
+    upstream_release: Option<&upstream::UpstreamRelease>,
+    homepage: Option<&str>,
 ) {
     clear_list_box(list);
 
@@ -969,7 +1028,26 @@ fn render_project_monitor(
                     .map(|(target, build)| {
                         let state = build.state.as_deref().unwrap_or("unknown");
                         match build.pkg_version.as_deref() {
-                            Some(version) => format!("{target}: {state} ({version})"),
+                            Some(version) => {
+                                let freshness = upstream_release
+                                    .zip(homepage)
+                                    .and_then(|(release, homepage)| {
+                                        upstream::compare_package_version(
+                                            homepage,
+                                            &release.version,
+                                            &package.name,
+                                            version,
+                                        )
+                                    });
+                                let indicator = if freshness
+                                    == Some(std::cmp::Ordering::Greater)
+                                {
+                                    " · upstream release newer"
+                                } else {
+                                    ""
+                                };
+                                format!("{target}: {state} ({version}){indicator}")
+                            }
                             None => format!("{target}: {state}"),
                         }
                     })

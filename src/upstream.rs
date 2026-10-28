@@ -197,6 +197,69 @@ fn fetch_release(
     }))
 }
 
+
+/// Compare a numeric upstream tag with a package version only when the repository
+/// slug matches the package name. Unsupported version schemes return None.
+pub fn compare_package_version(
+    homepage: &str,
+    release_version: &str,
+    package_name: &str,
+    package_version: &str,
+) -> Option<std::cmp::Ordering> {
+    let (_, repository, _) = repository_parts(homepage)?;
+    let normalize_name = |name: &str| {
+        name.chars()
+            .filter(|character| !matches!(character, '-' | '_'))
+            .flat_map(char::to_lowercase)
+            .collect::<String>()
+    };
+    if normalize_name(&repository) != normalize_name(package_name) {
+        return None;
+    }
+
+    let upstream = parse_numeric_version(release_version, false)?;
+    let packaged = parse_numeric_version(package_version, true)?;
+    let width = upstream.len().max(packaged.len());
+    for index in 0..width {
+        let upstream_part = upstream.get(index).copied().unwrap_or(0);
+        let packaged_part = packaged.get(index).copied().unwrap_or(0);
+        match upstream_part.cmp(&packaged_part) {
+            std::cmp::Ordering::Equal => {}
+            ordering => return Some(ordering),
+        }
+    }
+    Some(std::cmp::Ordering::Equal)
+}
+
+fn parse_numeric_version(value: &str, is_package_version: bool) -> Option<Vec<u64>> {
+    let value = value.trim();
+    if value.contains(':') {
+        // RPM epochs change ordering and cannot safely be ignored.
+        return None;
+    }
+    let value = if is_package_version {
+        value.split_once('-').map_or(value, |(version, _)| version)
+    } else {
+        value
+    };
+    let value = value
+        .strip_prefix('v')
+        .or_else(|| value.strip_prefix('V'))
+        .unwrap_or(value);
+    if value.is_empty() {
+        return None;
+    }
+    value
+        .split('.')
+        .map(|part| {
+            if part.is_empty() || !part.bytes().all(|byte| byte.is_ascii_digit()) {
+                return None;
+            }
+            part.parse::<u64>().ok()
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::repository_parts;
@@ -218,6 +281,38 @@ mod tests {
         assert_eq!(
             repository_parts("https://gitlab.com/group/subgroup/project/-/tree/main"),
             Some(("group/subgroup".into(), "project".into(), true))
+        );
+    }
+
+    #[test]
+    fn compares_versions_only_for_matching_packages_and_supported_syntax() {
+        use super::compare_package_version;
+        use std::cmp::Ordering;
+
+        let homepage = "https://github.com/demo/tool";
+        assert_eq!(
+            compare_package_version(homepage, "v1.3.0", "tool", "1.2.9-2.fc44"),
+            Some(Ordering::Greater)
+        );
+        assert_eq!(
+            compare_package_version(homepage, "1.3.0", "tool", "1.3-1.fc44"),
+            Some(Ordering::Equal)
+        );
+        assert_eq!(
+            compare_package_version(homepage, "1.2.0", "tool", "1.4.0-1.fc44"),
+            Some(Ordering::Less)
+        );
+        assert_eq!(
+            compare_package_version(homepage, "2.0.0", "different-package", "1.0.0-1"),
+            None
+        );
+        assert_eq!(
+            compare_package_version(homepage, "release-2.0", "tool", "1.0.0-1"),
+            None
+        );
+        assert_eq!(
+            compare_package_version(homepage, "2.0.0", "tool", "1:1.0.0-1"),
+            None
         );
     }
 
