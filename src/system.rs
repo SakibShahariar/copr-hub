@@ -186,9 +186,48 @@ pub fn set_copr_repository_enabled(repository_id: &str, enabled: bool) -> Result
     }
 }
 
+
+pub fn set_package_installed(package_name: &str, install: bool) -> Result<(), String> {
+    if package_name.is_empty()
+        || !package_name
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || "+._-".contains(character))
+    {
+        return Err("The package name contains unsupported characters.".to_string());
+    }
+
+    let action = if install { "install" } else { "remove" };
+    let output = Command::new("pkexec")
+        .args(["dnf", action, "--assumeyes", package_name])
+        .output()
+        .map_err(|error| format!("Could not start the privileged DNF helper: {error}"))?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let details = if !stderr.is_empty() {
+        stderr
+    } else if !stdout.is_empty() {
+        stdout
+    } else {
+        "Authentication may have been cancelled, or DNF could not complete the transaction."
+            .to_string()
+    };
+    Err(format!("DNF could not {action} {package_name}: {details}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rejects_package_names_with_option_or_shell_characters() {
+        assert!(set_package_installed("--assumeyes", true).is_err());
+        assert!(set_package_installed("demo;touch /tmp/bad", true).is_err());
+    }
 
     #[test]
     fn filters_installed_packages_to_copr_sources() {

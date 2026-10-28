@@ -26,7 +26,7 @@ fn build_ui(app: &adw::Application) {
 
     let discover = build_discover_page(&window);
     let repositories = build_repositories_page(&window);
-    let installed = build_installed_page();
+    let installed = build_installed_page(&window);
     let activity = build_activity_page();
 
     add_page(
@@ -182,7 +182,7 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     content.upcast()
 }
 
-fn build_installed_page() -> gtk::Widget {
+fn build_installed_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
     content.set_margin_top(24);
     content.set_margin_bottom(24);
@@ -218,17 +218,23 @@ fn build_installed_page() -> gtk::Widget {
     refresh.connect_clicked({
         let list = list.clone();
         let feedback = feedback.clone();
-        move |_| refresh_installed_packages(&list, &feedback)
+        let parent = parent.clone();
+        move |_| refresh_installed_packages(&parent, &list, &feedback)
     });
-    refresh_installed_packages(&list, &feedback);
+    refresh_installed_packages(parent, &list, &feedback);
 
     content.upcast()
 }
 
-fn refresh_installed_packages(list: &gtk::ListBox, feedback: &gtk::Label) {
+fn refresh_installed_packages(
+    parent: &adw::ApplicationWindow,
+    list: &gtk::ListBox,
+    feedback: &gtk::Label,
+) {
     feedback.set_text("Querying DNF for installed COPR packages…");
     clear_list_box(list);
 
+    let parent = parent.clone();
     let list = list.clone();
     let feedback = feedback.clone();
     gtk::glib::MainContext::default().spawn_local(async move {
@@ -248,6 +254,34 @@ fn refresh_installed_packages(list: &gtk::ListBox, feedback: &gtk::Label) {
                         .subtitle(format!("{} · {}", package.version, package.repository))
                         .build();
                     row.add_prefix(&gtk::Image::from_icon_name("package-x-generic-symbolic"));
+                    let remove = gtk::Button::with_label("Remove");
+                    remove.set_valign(gtk::Align::Center);
+                    remove.add_css_class("destructive-action");
+                    remove.connect_clicked({
+                        let parent = parent.clone();
+                        let package_name = package.name.clone();
+                        let list = list.clone();
+                        let feedback = feedback.clone();
+                        move |_| {
+                            let refresh_list = list.clone();
+                            let refresh_feedback = feedback.clone();
+                            let refresh_parent = parent.clone();
+                            confirm_package_operation(
+                                &parent,
+                                package_name.clone(),
+                                false,
+                                feedback.clone(),
+                                move || {
+                                    refresh_installed_packages(
+                                        &refresh_parent,
+                                        &refresh_list,
+                                        &refresh_feedback,
+                                    )
+                                },
+                            );
+                        }
+                    });
+                    row.add_suffix(&remove);
                     list.append(&row);
                 }
             }
@@ -560,6 +594,7 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
 
     let owner = project.owner.clone();
     let name = project.name.clone();
+    let parent = window.clone();
     gtk::glib::MainContext::default().spawn_local(async move {
         let response =
             gtk::gio::spawn_blocking(move || copr::fetch_project_monitor(&owner, &name)).await;
@@ -567,11 +602,12 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
             Ok(result) => result,
             Err(_) => Err("The background project lookup failed unexpectedly.".to_string()),
         };
-        render_project_monitor(&packages, &status, response);
+        render_project_monitor(&parent, &packages, &status, response);
     });
 }
 
 fn render_project_monitor(
+    parent: &adw::Window,
     list: &gtk::ListBox,
     status: &gtk::Label,
     response: Result<copr::ProjectMonitor, String>,
@@ -622,6 +658,24 @@ fn render_project_monitor(
                     "{} targets",
                     targets.len()
                 ))));
+                let install = gtk::Button::with_label("Install");
+                install.set_valign(gtk::Align::Center);
+                install.add_css_class("suggested-action");
+                install.connect_clicked({
+                    let parent = parent.clone();
+                    let package_name = package.name.clone();
+                    let status = status.clone();
+                    move |_| {
+                        confirm_package_operation(
+                            &parent,
+                            package_name.clone(),
+                            true,
+                            status.clone(),
+                            || {},
+                        );
+                    }
+                });
+                row.add_suffix(&install);
                 list.append(&row);
             }
         }
@@ -631,6 +685,67 @@ fn render_project_monitor(
     }
 }
 
+
+
+fn confirm_package_operation<F: Fn() + Clone + 'static>(
+    parent: &impl IsA<gtk::Window>,
+    package_name: String,
+    install: bool,
+    feedback: gtk::Label,
+    on_success: F,
+) {
+    let action = if install { "Install" } else { "Remove" };
+    let dialog = gtk::MessageDialog::builder()
+        .transient_for(parent)
+        .modal(true)
+        .message_type(gtk::MessageType::Question)
+        .buttons(gtk::ButtonsType::None)
+        .text(format!("{action} {package_name}?"))
+        .secondary_text(
+            "DNF will perform this system package operation and resolve dependencies. Administrator authentication is required.",
+        )
+        .build();
+    dialog.add_button("Cancel", gtk::ResponseType::Cancel);
+    dialog.add_button(action, gtk::ResponseType::Accept);
+
+    dialog.connect_response({
+        let package_name = package_name.clone();
+        let feedback = feedback.clone();
+        move |dialog, response| {
+            dialog.close();
+            if response != gtk::ResponseType::Accept {
+                return;
+            }
+
+            feedback.set_text(&format!("Waiting for DNF to {action_lower} {package_name}…", action_lower = action.to_lowercase()));
+            let package_name = package_name.clone();
+            let feedback = feedback.clone();
+            let on_success = on_success.clone();
+            gtk::glib::MainContext::default().spawn_local(async move {
+                let operation_name = package_name.clone();
+                let result = gtk::gio::spawn_blocking(move || {
+                    system::set_package_installed(&package_name, install)
+                })
+                .await;
+                match result {
+                    Ok(Ok(())) => {
+                        let action_past = if install { "installed" } else { "removed" };
+                        let _ = activity::record(
+                            "Package operation",
+                            &operation_name,
+                            &format!("Package {action_past} successfully"),
+                        );
+                        feedback.set_text(&format!("Package {action_past} successfully."));
+                        on_success();
+                    }
+                    Ok(Err(error)) => feedback.set_text(&error),
+                    Err(_) => feedback.set_text("The background package operation failed unexpectedly."),
+                }
+            });
+        }
+    });
+    dialog.present();
+}
 
 fn build_activity_page() -> gtk::Widget {
     let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
