@@ -15,10 +15,10 @@ pub fn atomic_write(path: &Path, contents: &[u8]) -> io::Result<()> {
         io::Error::new(io::ErrorKind::InvalidInput, "target path has no file name")
     })?;
 
-    let mut temporary_path = parent.join(file_name);
+    let temporary_path;
     let mut temporary_file = loop {
         let sequence = TEMP_FILE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        temporary_path = parent.join(format!(
+        let candidate = parent.join(format!(
             ".{}.{}.{}.tmp",
             file_name.to_string_lossy(),
             std::process::id(),
@@ -27,9 +27,12 @@ pub fn atomic_write(path: &Path, contents: &[u8]) -> io::Result<()> {
         match OpenOptions::new()
             .write(true)
             .create_new(true)
-            .open(&temporary_path)
+            .open(&candidate)
         {
-            Ok(file) => break file,
+            Ok(file) => {
+                temporary_path = candidate;
+                break file;
+            }
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
             Err(error) => return Err(error),
         }
