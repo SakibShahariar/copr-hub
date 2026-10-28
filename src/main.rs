@@ -437,6 +437,17 @@ fn build_repositories_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::SelectionMode::None);
     list.add_css_class("boxed-list");
+    list.set_filter_func({
+        let filter = filter.clone();
+        move |row| {
+            let query = filter.text().trim().to_ascii_lowercase();
+            query.is_empty() || row.widget_name().to_ascii_lowercase().contains(&query)
+        }
+    });
+    filter.connect_search_changed({
+        let list = list.clone();
+        move |_| list.invalidate_filter()
+    });
     content.append(&list);
 
     refresh.connect_clicked({
@@ -1095,6 +1106,12 @@ fn build_saved_page(parent: &adw::ApplicationWindow, stack: &adw::ViewStack) -> 
     heading.append(&refresh);
     content.append(&heading);
 
+    let filter = gtk::SearchEntry::builder()
+        .placeholder_text("Filter saved projects by name, owner, or description")
+        .tooltip_text("Search your locally saved projects")
+        .build();
+    content.append(&filter);
+
     let feedback = gtk::Label::builder()
         .label("Saved projects are stored locally on this user account.")
         .xalign(0.0)
@@ -1152,6 +1169,12 @@ fn refresh_saved_projects(
                     ))
                     .activatable(true)
                     .build();
+                row.set_widget_name(&format!(
+                    "{} {} {}",
+                    project.name,
+                    project.owner,
+                    project.description.as_deref().unwrap_or("")
+                ));
                 row.add_prefix(&gtk::Image::from_icon_name("starred-symbolic"));
                 row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
                 row.connect_activated({
