@@ -994,6 +994,7 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                     &parent,
                     &packages,
                     &status,
+                    &intelligence,
                     response,
                     release.as_ref(),
                     homepage_for_comparison.as_deref(),
@@ -1053,10 +1054,7 @@ fn update_intelligence_summary(
     } else {
         "upstream update comparison unavailable".to_string()
     };
-    let build_age = copr::build_freshness_message(
-        latest_build,
-        u64::try_from(now).unwrap_or(0),
-    );
+    let build_age = copr::build_freshness_message(latest_build, now);
     let stale_release = release
         .filter(|release| upstream::release_is_stale(release.published_at.as_deref()))
         .map(|_| " · upstream release is over one year old")
