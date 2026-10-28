@@ -4,11 +4,11 @@ Copr Hub is a native Linux desktop application for discovering Fedora COPR proje
 
 ## Current functionality
 
-- Search the public COPR API for projects.
+- Search the public COPR API for projects by name.
 - Display project names, owners, descriptions, and optional homepage links.
 - Open project details with package names, build targets, reported build states, and package versions.
 - Save and unsave projects locally, then revisit them from the Saved tab.
-- Read enabled and disabled COPR repository definitions from `/etc/yum.repos.d`.
+- Read enabled and disabled COPR repository definitions from `/etc/yum.repos.d`, including DNF5 repository enablement overrides.
 - Enable or disable a COPR repository after explicit confirmation, using `pkexec` and DNF's config-manager rather than running the application as root.
 - List installed packages whose recorded source repository is a COPR repository, using DNF's read-only `repoquery` command.
 - Install packages from project details and remove installed COPR packages after explicit confirmation. DNF runs through `pkexec`; the app itself never runs as root.

@@ -113,7 +113,7 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     search_row.set_hexpand(true);
 
     let search = gtk::SearchEntry::builder()
-        .placeholder_text("Search projects, packages, or owners")
+        .placeholder_text("Search COPR project names")
         .tooltip_text("Enter a query and press Enter to search COPR")
         .hexpand(true)
         .build();

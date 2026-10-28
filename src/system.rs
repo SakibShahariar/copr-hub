@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -30,8 +31,57 @@ pub fn scan_copr_repositories() -> Result<Vec<CoprRepository>, String> {
         repositories.extend(parse_copr_repositories(&contents, &path));
     }
 
+    let mut overrides = HashMap::new();
+    let override_directory = Path::new("/etc/dnf/repos.override.d");
+    if let Ok(entries) = fs::read_dir(override_directory) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|extension| extension.to_str()) != Some("repo") {
+                continue;
+            }
+            if let Ok(contents) = fs::read_to_string(&path) {
+                overrides.extend(parse_enabled_overrides(&contents));
+            }
+        }
+    }
+
+    for repository in &mut repositories {
+        if let Some(enabled) = overrides.get(&repository.id) {
+            repository.enabled = *enabled;
+        }
+    }
+
     repositories.sort_by(|left, right| left.id.cmp(&right.id));
     Ok(repositories)
+}
+
+fn parse_enabled_overrides(contents: &str) -> HashMap<String, bool> {
+    let mut overrides = HashMap::new();
+    let mut current_id: Option<String> = None;
+
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.starts_with('[') && line.ends_with(']') {
+            let id = &line[1..line.len() - 1];
+            current_id = if id.starts_with("copr:") {
+                Some(id.to_string())
+            } else {
+                None
+            };
+            continue;
+        }
+
+        if let (Some(id), Some((key, value))) = (current_id.as_ref(), line.split_once('=')) {
+            if key.trim() == "enabled" {
+                overrides.insert(
+                    id.clone(),
+                    !matches!(value.trim(), "0" | "false" | "False"),
+                );
+            }
+        }
+    }
+
+    overrides
 }
 
 fn parse_copr_repositories(contents: &str, path: &Path) -> Vec<CoprRepository> {
@@ -229,6 +279,17 @@ mod tests {
     fn rejects_package_names_with_option_or_shell_characters() {
         assert!(set_package_installed("--assumeyes", true).is_err());
         assert!(set_package_installed("demo;touch /tmp/bad", true).is_err());
+    }
+
+    #[test]
+    fn parses_dnf5_repository_enabled_overrides() {
+        let contents = "[copr:copr.fedorainfracloud.org:alice:demo]\\nenabled=0\\n[fedora]\\nenabled=1\\n";
+        let overrides = parse_enabled_overrides(contents);
+        assert_eq!(
+            overrides.get("copr:copr.fedorainfracloud.org:alice:demo"),
+            Some(&false)
+        );
+        assert!(!overrides.contains_key("fedora"));
     }
 
     #[test]
