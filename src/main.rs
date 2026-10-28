@@ -1021,6 +1021,16 @@ fn build_activity_page() -> gtk::Widget {
     content.upcast()
 }
 
+fn format_activity_timestamp(timestamp: u64) -> String {
+    let Ok(timestamp) = i64::try_from(timestamp) else {
+        return "Unknown time".to_string();
+    };
+    gtk::glib::DateTime::from_unix_local(timestamp)
+        .and_then(|date_time| date_time.format("%Y-%m-%d %H:%M"))
+        .map(|formatted| formatted.to_string())
+        .unwrap_or_else(|_| "Unknown time".to_string())
+}
+
 fn refresh_activity(list: &gtk::ListBox, feedback: &gtk::Label) {
     clear_list_box(list);
     match activity::load() {
@@ -1035,7 +1045,11 @@ fn refresh_activity(list: &gtk::ListBox, feedback: &gtk::Label) {
             for entry in entries {
                 let row = adw::ActionRow::builder()
                     .title(format!("{} — {}", entry.action, entry.target))
-                    .subtitle(entry.summary)
+                    .subtitle(format!(
+                        "{} · {}",
+                        format_activity_timestamp(entry.timestamp),
+                        entry.summary
+                    ))
                     .build();
                 row.add_prefix(&gtk::Image::from_icon_name("document-properties-symbolic"));
                 list.append(&row);
