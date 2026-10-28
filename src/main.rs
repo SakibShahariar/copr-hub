@@ -623,7 +623,11 @@ fn render_projects(
                     a.owner
                         .to_ascii_lowercase()
                         .cmp(&b.owner.to_ascii_lowercase())
-                        .then_with(|| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()))
+                        .then_with(|| {
+                            a.name
+                                .to_ascii_lowercase()
+                                .cmp(&b.name.to_ascii_lowercase())
+                        })
                 }),
                 _ => {}
             }
