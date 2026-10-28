@@ -23,7 +23,7 @@ fn build_ui(app: &adw::Application) {
     let stack = adw::ViewStack::new();
     stack.set_vexpand(true);
 
-    let discover = build_discover_page();
+    let discover = build_discover_page(&window);
     let repositories = build_placeholder_page(
         "folder-symbolic",
         "Your repositories",
@@ -47,9 +47,27 @@ fn build_ui(app: &adw::Application) {
         "Discover",
         "system-search-symbolic",
     );
-    add_page(&stack, &repositories, "repositories", "Repositories", "folder-symbolic");
-    add_page(&stack, &installed, "installed", "Installed", "package-x-generic-symbolic");
-    add_page(&stack, &activity, "activity", "Activity", "document-properties-symbolic");
+    add_page(
+        &stack,
+        &repositories,
+        "repositories",
+        "Repositories",
+        "folder-symbolic",
+    );
+    add_page(
+        &stack,
+        &installed,
+        "installed",
+        "Installed",
+        "package-x-generic-symbolic",
+    );
+    add_page(
+        &stack,
+        &activity,
+        "activity",
+        "Activity",
+        "document-properties-symbolic",
+    );
 
     let switcher_title = adw::ViewSwitcherTitle::builder()
         .stack(&stack)
@@ -78,7 +96,7 @@ fn add_page(
     page.set_icon_name(Some(icon_name));
 }
 
-fn build_discover_page() -> gtk::Widget {
+fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     let content = gtk::Box::new(gtk::Orientation::Vertical, 20);
     content.set_margin_top(32);
     content.set_margin_bottom(32);
@@ -130,6 +148,8 @@ fn build_discover_page() -> gtk::Widget {
         let search = search.clone();
         let results = results.clone();
         let feedback = feedback.clone();
+        let search_button = search_button.clone();
+        let parent = parent.clone();
         move || {
             let query = search.text().trim().to_string();
             if query.is_empty() {
@@ -138,14 +158,18 @@ fn build_discover_page() -> gtk::Widget {
             }
 
             feedback.set_text("Searching COPR…");
+            search_button.set_sensitive(false);
             clear_list_box(&results);
 
             let results = results.clone();
             let feedback = feedback.clone();
+            let search_button = search_button.clone();
+            let parent = parent.clone();
             gtk::glib::MainContext::default().spawn_local(async move {
                 let response =
                     gtk::gio::spawn_blocking(move || copr::search_projects(&query)).await;
-                render_projects(&results, &feedback, response);
+                search_button.set_sensitive(true);
+                render_projects(&parent, &results, &feedback, response);
             });
         }
     };
@@ -166,6 +190,7 @@ fn clear_list_box(list: &gtk::ListBox) {
 }
 
 fn render_projects(
+    parent: &adw::ApplicationWindow,
     list: &gtk::ListBox,
     feedback: &gtk::Label,
     response: Result<Vec<copr::CoprProject>, String>,
@@ -177,7 +202,7 @@ fn render_projects(
             feedback.set_text("No projects matched that search. Try a different name or owner.");
         }
         Ok(projects) => {
-            feedback.set_text(&format!("Found {} project(s).", projects.len()));
+            feedback.set_text(&format!("Found {} project(s). Select one for details.", projects.len()));
             for project in projects {
                 let row = adw::ActionRow::builder()
                     .title(project.name.as_str())
@@ -187,17 +212,70 @@ fn render_projects(
                             .as_deref()
                             .unwrap_or("No project description provided"),
                     )
+                    .activatable(true)
                     .build();
                 row.add_prefix(&gtk::Image::from_icon_name("package-x-generic-symbolic"));
                 row.add_suffix(&gtk::Label::new(Some(&format!("@{}", project.owner))));
-                if let Some(homepage) = project.homepage.as_deref().filter(|url| !url.is_empty()) {
-                    row.set_tooltip_text(Some(homepage));
-                }
+                row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
+
+                let parent = parent.clone();
+                row.connect_activated(move |_| show_project_details(&parent, &project));
                 list.append(&row);
             }
         }
         Err(error) => feedback.set_text(&format!("Search failed: {error}")),
     }
+}
+
+fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprProject) {
+    let window = adw::Window::builder()
+        .transient_for(parent)
+        .modal(true)
+        .title(project.name.as_str())
+        .default_width(560)
+        .default_height(420)
+        .build();
+
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 16);
+    content.set_margin_top(24);
+    content.set_margin_bottom(24);
+    content.set_margin_start(24);
+    content.set_margin_end(24);
+
+    let heading = adw::StatusPage::builder()
+        .icon_name("package-x-generic-symbolic")
+        .title(project.name.as_str())
+        .description(project.description.as_deref().unwrap_or(
+            "This project does not provide a description.",
+        ))
+        .build();
+    content.append(&heading);
+
+    let owner = adw::ActionRow::builder()
+        .title("Project owner")
+        .subtitle(format!("@{}", project.owner))
+        .build();
+    owner.add_prefix(&gtk::Image::from_icon_name("avatar-default-symbolic"));
+    let details = gtk::ListBox::new();
+    details.add_css_class("boxed-list");
+    details.append(&owner);
+    content.append(&details);
+
+    if let Some(homepage) = project.homepage.as_deref().filter(|url| !url.is_empty()) {
+        let link = gtk::LinkButton::with_label(homepage, "Open project homepage");
+        link.set_halign(gtk::Align::Center);
+        content.append(&link);
+    }
+
+    let note = gtk::Label::builder()
+        .label("Build targets, package availability, and repository actions will be shown here as project inspection is expanded.")
+        .wrap(true)
+        .build();
+    note.add_css_class("dim-label");
+    content.append(&note);
+
+    window.set_content(Some(&content));
+    window.present();
 }
 
 fn build_placeholder_page(icon_name: &str, title: &str, description: &str) -> gtk::Widget {

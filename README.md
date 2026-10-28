@@ -1,24 +1,25 @@
 # Copr Hub
 
-Copr Hub is a native Linux desktop application for discovering Fedora COPR projects, inspecting packages, and managing COPR repositories. It is built with **Rust, GTK4, and libadwaita**, following GNOME conventions.
-
-> **Development status:** The app has GNOME-style top navigation and its first live feature: searching the COPR project catalogue. Local repository management, package installation, and detailed project views are still in development.
+Copr Hub is a native Linux desktop application for discovering Fedora COPR projects, inspecting project metadata, and managing COPR repositories. It is built with **Rust, GTK4, and libadwaita**, following GNOME conventions.
 
 ## Current functionality
 
-- Search COPR projects through the public COPR API.
+- Search the public COPR API for projects.
 - Display project names, owners, descriptions, and optional homepage links.
-- Show empty-result, network-error, HTTP-error, and timeout feedback.
-- Keep network requests off the GTK main thread.
-- Use native GTK/libadwaita widgets and the active system theme, so Matugen palette changes can flow through the interface.
+- Open a project detail window from search results.
+- Show useful feedback for empty searches, empty results, timeouts, and network/API failures.
+- Run blocking network requests away from the GTK main thread.
+- Use native GTK/libadwaita widgets and the active system theme. Accent colors are not hard-coded, so Matugen palette changes can be reflected by the existing GTK theme.
 
-## Planned features
+## Roadmap
 
-- Open full project details, build status, Fedora targets, and package lists.
-- Inspect and manage enabled COPR repositories.
-- Preview package-manager actions before making system changes.
-- Show installed packages and recent operations.
-- Integrate with Fedora without running the entire application as root.
+- [ ] Fetch detailed project metadata, build targets, and package lists.
+- [ ] Read and manage enabled COPR repositories.
+- [ ] Show installed packages and their source repositories.
+- [ ] Add transaction previews and safe package-management integration.
+- [ ] Record recent operations and failures.
+- [ ] Add saved projects and favorites.
+- [ ] Improve accessibility, responsive layouts, and application packaging.
 
 ## Technology
 
@@ -29,7 +30,7 @@ Copr Hub is a native Linux desktop application for discovering Fedora COPR proje
 
 ## Build on Fedora
 
-Install the native development dependencies:
+Install native development dependencies:
 
 ```bash
 sudo dnf install gcc pkgconf-pkg-config gtk4-devel libadwaita-devel
@@ -39,11 +40,12 @@ Install Rust using [rustup](https://rustup.rs/), then run:
 
 ```bash
 cargo fmt --all -- --check
+cargo test
 cargo check
 cargo run
 ```
 
-For a strict local lint pass:
+Run Clippy with warnings treated as errors:
 
 ```bash
 cargo clippy --all-targets --all-features -- -D warnings
