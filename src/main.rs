@@ -1057,9 +1057,10 @@ fn build_activity_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     clear.connect_clicked({
         let list = list.clone();
         let feedback = feedback.clone();
+        let parent = parent.clone();
         move |_| {
             let dialog = gtk::MessageDialog::builder()
-                .transient_for(parent)
+                .transient_for(&parent)
                 .modal(true)
                 .message_type(gtk::MessageType::Warning)
                 .buttons(gtk::ButtonsType::None)
