@@ -1,4 +1,5 @@
 mod copr;
+mod system;
 
 use adw::prelude::*;
 use gtk::prelude::*;
@@ -24,15 +25,11 @@ fn build_ui(app: &adw::Application) {
     stack.set_vexpand(true);
 
     let discover = build_discover_page(&window);
-    let repositories = build_placeholder_page(
-        "folder-symbolic",
-        "Your repositories",
-        "COPR repositories enabled on this system will appear here.",
-    );
+    let repositories = build_repositories_page();
     let installed = build_placeholder_page(
         "package-x-generic-symbolic",
         "Installed packages",
-        "Packages installed from COPR repositories will appear here.",
+        "Installed packages and their source repositories will appear here.",
     );
     let activity = build_placeholder_page(
         "document-properties-symbolic",
@@ -183,6 +180,94 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     content.upcast()
 }
 
+fn build_repositories_page() -> gtk::Widget {
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
+    content.set_margin_top(24);
+    content.set_margin_bottom(24);
+    content.set_margin_start(24);
+    content.set_margin_end(24);
+
+    let heading = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    let title = gtk::Label::builder()
+        .label("COPR repositories")
+        .xalign(0.0)
+        .hexpand(true)
+        .build();
+    title.add_css_class("title-2");
+    let refresh = gtk::Button::with_label("Refresh");
+    refresh.set_icon_name("view-refresh-symbolic");
+    heading.append(&title);
+    heading.append(&refresh);
+    content.append(&heading);
+
+    let feedback = gtk::Label::builder()
+        .label("Reading repository configuration…")
+        .xalign(0.0)
+        .wrap(true)
+        .build();
+    feedback.add_css_class("dim-label");
+    content.append(&feedback);
+
+    let list = gtk::ListBox::new();
+    list.set_selection_mode(gtk::SelectionMode::None);
+    list.add_css_class("boxed-list");
+    content.append(&list);
+
+    refresh.connect_clicked({
+        let list = list.clone();
+        let feedback = feedback.clone();
+        move |_| refresh_repositories(&list, &feedback)
+    });
+    refresh_repositories(&list, &feedback);
+
+    content.upcast()
+}
+
+fn refresh_repositories(list: &gtk::ListBox, feedback: &gtk::Label) {
+    feedback.set_text("Reading COPR repository configuration…");
+    clear_list_box(list);
+
+    let list = list.clone();
+    let feedback = feedback.clone();
+    gtk::glib::MainContext::default().spawn_local(async move {
+        let response = gtk::gio::spawn_blocking(system::scan_copr_repositories).await;
+        clear_list_box(&list);
+
+        match response {
+            Ok(Ok(repositories)) if repositories.is_empty() => {
+                feedback.set_text(
+                    "No COPR repositories were found in /etc/yum.repos.d. Add a COPR repository with DNF to see it here.",
+                );
+            }
+            Ok(Ok(repositories)) => {
+                let enabled = repositories.iter().filter(|repo| repo.enabled).count();
+                feedback.set_text(&format!(
+                    "{} COPR repositories found · {} enabled",
+                    repositories.len(),
+                    enabled
+                ));
+
+                for repository in repositories {
+                    let status = if repository.enabled {
+                        "Enabled"
+                    } else {
+                        "Disabled"
+                    };
+                    let row = adw::ActionRow::builder()
+                        .title(repository.name.as_str())
+                        .subtitle(format!("{} · {}", repository.id, repository.file.display()))
+                        .build();
+                    row.add_prefix(&gtk::Image::from_icon_name("folder-symbolic"));
+                    row.add_suffix(&gtk::Label::new(Some(status)));
+                    list.append(&row);
+                }
+            }
+            Ok(Err(error)) => feedback.set_text(&error),
+            Err(error) => feedback.set_text(&format!("Could not inspect repositories: {error}")),
+        }
+    });
+}
+
 fn clear_list_box(list: &gtk::ListBox) {
     while let Some(child) = list.first_child() {
         list.remove(&child);
@@ -202,7 +287,10 @@ fn render_projects(
             feedback.set_text("No projects matched that search. Try a different name or owner.");
         }
         Ok(projects) => {
-            feedback.set_text(&format!("Found {} project(s). Select one for details.", projects.len()));
+            feedback.set_text(&format!(
+                "Found {} project(s). Select one for details.",
+                projects.len()
+            ));
             for project in projects {
                 let row = adw::ActionRow::builder()
                     .title(project.name.as_str())
@@ -245,9 +333,12 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
     let heading = adw::StatusPage::builder()
         .icon_name("package-x-generic-symbolic")
         .title(project.name.as_str())
-        .description(project.description.as_deref().unwrap_or(
-            "This project does not provide a description.",
-        ))
+        .description(
+            project
+                .description
+                .as_deref()
+                .unwrap_or("This project does not provide a description."),
+        )
         .build();
     content.append(&heading);
 
@@ -268,7 +359,9 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
     }
 
     let note = gtk::Label::builder()
-        .label("Build targets, package availability, and repository actions will be shown here as project inspection is expanded.")
+        .label(
+            "Build targets, package availability, and repository actions will be shown here as project inspection is expanded.",
+        )
         .wrap(true)
         .build();
     note.add_css_class("dim-label");

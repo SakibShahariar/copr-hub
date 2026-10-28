@@ -1,0 +1,150 @@
+use std::fs;
+use std::path::{Path, PathBuf};
+
+const REPOSITORY_DIRECTORY: &str = "/etc/yum.repos.d";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CoprRepository {
+    pub id: String,
+    pub name: String,
+    pub enabled: bool,
+    pub file: PathBuf,
+}
+
+pub fn scan_copr_repositories() -> Result<Vec<CoprRepository>, String> {
+    let directory = Path::new(REPOSITORY_DIRECTORY);
+    let entries = fs::read_dir(directory).map_err(|error| {
+        format!(
+            "Could not read {}: {error}",
+            directory.display()
+        )
+    })?;
+
+    let mut repositories = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|extension| extension.to_str()) != Some("repo") {
+            continue;
+        }
+
+        let Ok(contents) = fs::read_to_string(&path) else {
+            continue;
+        };
+        repositories.extend(parse_copr_repositories(&contents, &path));
+    }
+
+    repositories.sort_by(|left, right| left.id.cmp(&right.id));
+    Ok(repositories)
+}
+
+fn parse_copr_repositories(contents: &str, path: &Path) -> Vec<CoprRepository> {
+    let mut repositories = Vec::new();
+    let mut current_id: Option<String> = None;
+    let mut current_name = String::new();
+    let mut current_enabled = true;
+
+    let flush = |repositories: &mut Vec<CoprRepository>,
+                 id: &mut Option<String>,
+                 name: &mut String,
+                 enabled: &mut bool| {
+        if let Some(id) = id.take() {
+            repositories.push(CoprRepository {
+                id,
+                name: if name.trim().is_empty() {
+                    "COPR repository".to_string()
+                } else {
+                    name.trim().to_string()
+                },
+                enabled: *enabled,
+                file: path.to_path_buf(),
+            });
+        }
+        name.clear();
+        *enabled = true;
+    };
+
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.starts_with('[') && line.ends_with(']') {
+            flush(
+                &mut repositories,
+                &mut current_id,
+                &mut current_name,
+                &mut current_enabled,
+            );
+            let id = &line[1..line.len() - 1];
+            if id.starts_with("copr:") {
+                current_id = Some(id.to_string());
+            }
+            continue;
+        }
+
+        if current_id.is_none() {
+            continue;
+        }
+
+        if let Some((key, value)) = line.split_once('=') {
+            match key.trim() {
+                "name" => current_name = value.trim().to_string(),
+                "enabled" => {
+                    current_enabled = !matches!(value.trim(), "0" | "false" | "False");
+                }
+                _ => {}
+            }
+        }
+    }
+
+    flush(
+        &mut repositories,
+        &mut current_id,
+        &mut current_name,
+        &mut current_enabled,
+    );
+    repositories
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_enabled_and_disabled_copr_sections() {
+        let contents = r#"
+[copr:copr.fedorainfracloud.org:alice:editor]
+name=Alice's Editor
+enabled=1
+
+[fedora]
+name=Fedora
+enabled=1
+
+[copr:copr.fedorainfracloud.org:bob:theme]
+name=Bob's Theme
+enabled=0
+"#;
+
+        let repositories = parse_copr_repositories(contents, Path::new("/tmp/test.repo"));
+        assert_eq!(repositories.len(), 2);
+        assert_eq!(repositories[0].id, "copr:copr.fedorainfracloud.org:alice:editor");
+        assert!(repositories[0].enabled);
+        assert_eq!(repositories[0].name, "Alice's Editor");
+        assert!(!repositories[1].enabled);
+        assert_eq!(repositories[1].name, "Bob's Theme");
+    }
+
+    #[test]
+    fn defaults_repository_to_enabled_when_key_is_missing() {
+        let contents = "[copr:copr.fedorainfracloud.org:alice:demo]\nname=Demo\n";
+        let repositories = parse_copr_repositories(contents, Path::new("/tmp/test.repo"));
+        assert_eq!(repositories.len(), 1);
+        assert!(repositories[0].enabled);
+    }
+
+    #[test]
+    fn ignores_non_copr_sections() {
+        let contents = "[fedora]\nname=Fedora\n[copr:example:owner:project]\nname=Project\n";
+        let repositories = parse_copr_repositories(contents, Path::new("/tmp/test.repo"));
+        assert_eq!(repositories.len(), 1);
+        assert_eq!(repositories[0].name, "Project");
+    }
+}
