@@ -12,23 +12,6 @@ Copr Hub is a native Linux desktop application for discovering Fedora COPR proje
 - Run blocking network and filesystem operations away from the GTK main thread.
 - Use native GTK/libadwaita widgets and the active system theme. Accent colors are not hard-coded, allowing Matugen palette changes to flow through the existing GTK theme.
 
-## Roadmap
-
-- [ ] Fetch project build targets and package lists.
-- [ ] Add explicit, confirmed repository enable/disable actions through the system package manager.
-- [ ] Show installed packages and their source repositories.
-- [ ] Add transaction previews and safe package-management integration.
-- [ ] Record recent operations and failures.
-- [ ] Add saved projects and favorites.
-- [ ] Improve accessibility, responsive layouts, and application packaging.
-
-## Technology
-
-- Rust
-- GTK4
-- libadwaita
-- COPR API v3
-
 ## Build on Fedora
 
 Install native development dependencies:
@@ -46,11 +29,32 @@ cargo check
 cargo run
 ```
 
-Run Clippy with warnings treated as errors:
+For a strict lint pass:
 
 ```bash
 cargo clippy --all-targets --all-features -- -D warnings
 ```
+
+## Install the desktop launcher
+
+After building the release binary, copy it to a directory on your `PATH`, then install the desktop entry, icon, and AppStream metadata into their standard locations. The metadata files live in `data/`.
+
+## Roadmap
+
+- [ ] Fetch project build targets and package lists.
+- [ ] Add explicit, confirmed repository enable/disable actions through the system package manager.
+- [ ] Show installed packages and their source repositories.
+- [ ] Add transaction previews and safe package-management integration.
+- [ ] Record recent operations and failures.
+- [ ] Add saved projects and favorites.
+- [ ] Improve accessibility, responsive layouts, and application packaging.
+
+## Technology
+
+- Rust
+- GTK4
+- libadwaita
+- COPR API v3
 
 ## Project identity
 

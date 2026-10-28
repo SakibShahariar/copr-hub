@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Copr Hub
+Comment=Discover and inspect Fedora COPR projects
+Exec=copr-hub
+Icon=io.github.SakibShahariar.CoprHub
+Terminal=false
+Type=Application
+Categories=System;PackageManager;GTK;
+StartupNotify=true
+Keywords=Fedora;COPR;RPM;Packages;Repositories;

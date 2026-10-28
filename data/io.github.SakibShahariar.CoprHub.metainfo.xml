@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.SakibShahariar.CoprHub</id>
+  <name>Copr Hub</name>
+  <summary>Discover and inspect Fedora COPR projects</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>Copr Hub is a native GNOME application for searching community-built Fedora COPR projects, inspecting project information, and viewing configured COPR repositories.</p>
+  </description>
+  <launchable type="desktop-id">io.github.SakibShahariar.CoprHub.desktop</launchable>
+  <provides>
+    <binary>copr-hub</binary>
+  </provides>
+  <url type="homepage">https://github.com/SakibShahariar/copr-hub</url>
+  <developer id="io.github.SakibShahariar">
+    <name>Sakib Shahariar</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+</component>
