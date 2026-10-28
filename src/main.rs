@@ -133,6 +133,19 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     search_row.append(&search_button);
     content.append(&search_row);
 
+    let sort_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    let sort_label = gtk::Label::builder()
+        .label("Sort results")
+        .xalign(0.0)
+        .hexpand(true)
+        .build();
+    sort_label.add_css_class("dim-label");
+    let sort = gtk::DropDown::from_strings(&["COPR order", "Project name", "Owner"]);
+    sort.set_tooltip_text(Some("Sort the current search results"));
+    sort_row.append(&sort_label);
+    sort_row.append(&sort);
+    content.append(&sort_row);
+
     let feedback = gtk::Label::builder()
         .label("Search the COPR catalogue to find community projects.")
         .wrap(true)
@@ -142,6 +155,8 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     content.append(&feedback);
 
     let results = gtk::ListBox::new();
+    let latest_response: Rc<RefCell<Option<Result<Vec<copr::CoprProject>, String>>>> =
+        Rc::new(RefCell::new(None));
     results.set_selection_mode(gtk::SelectionMode::None);
     results.add_css_class("boxed-list");
     content.append(&results);
@@ -152,6 +167,8 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
         let feedback = feedback.clone();
         let search_button = search_button.clone();
         let parent = parent.clone();
+        let latest_response = latest_response.clone();
+        let sort = sort.clone();
         move || {
             let query = search.text().trim().to_string();
             if query.is_empty() {
@@ -171,6 +188,8 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
             let search_button = search_button.clone();
             let search = search.clone();
             let parent = parent.clone();
+            let latest_response = latest_response.clone();
+            let sort = sort.clone();
             gtk::glib::MainContext::default().spawn_local(async move {
                 let response =
                     gtk::gio::spawn_blocking(move || copr::search_projects(&query)).await;
@@ -185,7 +204,8 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
                     Err(error) => format!("Failed: {error}"),
                 };
                 let activity_result = activity::record("Project search", &activity_query, &summary);
-                render_projects(&parent, &results, &feedback, response);
+                *latest_response.borrow_mut() = Some(response.clone());
+                render_projects(&parent, &results, &feedback, response, sort.selected());
                 if let Err(error) = activity_result {
                     feedback.set_text(&format!(
                         "{} Activity history could not be saved: {error}",
@@ -201,6 +221,19 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
         move |_| perform_search()
     });
     search_button.connect_clicked(move |_| perform_search());
+
+    sort.connect_selected_notify({
+        let parent = parent.clone();
+        let results = results.clone();
+        let feedback = feedback.clone();
+        let latest_response = latest_response.clone();
+        let sort = sort.clone();
+        move |_| {
+            if let Some(response) = latest_response.borrow().clone() {
+                render_projects(&parent, &results, &feedback, response, sort.selected());
+            }
+        }
+    });
 
     let clamp = adw::Clamp::builder()
         .maximum_size(640)
@@ -570,6 +603,7 @@ fn render_projects(
     list: &gtk::ListBox,
     feedback: &gtk::Label,
     response: Result<Vec<copr::CoprProject>, String>,
+    sort_order: u32,
 ) {
     clear_list_box(list);
 
@@ -577,7 +611,22 @@ fn render_projects(
         Ok(projects) if projects.is_empty() => {
             feedback.set_text("No projects matched that search. Try a different name or owner.");
         }
-        Ok(projects) => {
+        Ok(mut projects) => {
+            match sort_order {
+                1 => projects.sort_by(|a, b| {
+                    a.name
+                        .to_ascii_lowercase()
+                        .cmp(&b.name.to_ascii_lowercase())
+                        .then_with(|| a.owner.to_ascii_lowercase().cmp(&b.owner.to_ascii_lowercase()))
+                }),
+                2 => projects.sort_by(|a, b| {
+                    a.owner
+                        .to_ascii_lowercase()
+                        .cmp(&b.owner.to_ascii_lowercase())
+                        .then_with(|| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()))
+                }),
+                _ => {}
+            }
             feedback.set_text(&format!(
                 "Found {} project(s). Select one for details.",
                 projects.len()
