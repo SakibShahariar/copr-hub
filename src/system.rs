@@ -288,7 +288,9 @@ mod tests {
 
     #[test]
     fn validates_copr_repository_ids_before_invoking_privileged_commands() {
-        assert!(is_valid_copr_repository_id("copr:copr.fedorainfracloud.org:alice:demo"));
+        assert!(is_valid_copr_repository_id(
+            "copr:copr.fedorainfracloud.org:alice:demo"
+        ));
         assert!(!is_valid_copr_repository_id("fedora"));
         assert!(!is_valid_copr_repository_id("copr:"));
         assert!(!is_valid_copr_repository_id("copr:demo;touch /tmp/bad"));
