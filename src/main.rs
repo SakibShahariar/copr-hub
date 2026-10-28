@@ -938,8 +938,13 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                         .as_deref()
                         .unwrap_or("release date unavailable");
                     let url = release.url.as_deref().unwrap_or("");
+                    let stale_notice = if upstream::release_is_stale(release.published_at.as_deref()) {
+                        " · Release is over one year old"
+                    } else {
+                        ""
+                    };
                     upstream_status.set_text(&format!(
-                        "Latest upstream stable release: {} ({}) · {}{}",
+                        "Latest upstream stable release: {} ({}) · {}{}{}",
                         release.version,
                         release.name,
                         date,
@@ -947,7 +952,8 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                             String::new()
                         } else {
                             format!(" · {url}")
-                        }
+                        },
+                        stale_notice
                     ));
                     Some(release)
                 }

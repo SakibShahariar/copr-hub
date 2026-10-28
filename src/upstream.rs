@@ -259,6 +259,59 @@ fn parse_numeric_version(value: &str, is_package_version: bool) -> Option<Vec<u6
         .collect()
 }
 
+fn date_to_epoch_days(value: &str) -> Option<i64> {
+    let mut parts = value.split('-');
+    let year = parts.next()?.parse::<i64>().ok()?;
+    let month = parts.next()?.parse::<i64>().ok()?;
+    let day = parts.next()?.get(..2)?.parse::<i64>().ok()?;
+    if parts.next().is_some() || !(1..=12).contains(&month) {
+        return None;
+    }
+
+    let leap_year = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let month_days = match month {
+        2 if leap_year => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    };
+    if !(1..=month_days).contains(&day) {
+        return None;
+    }
+
+    let adjusted_year = year - i64::from(month <= 2);
+    let era = adjusted_year.div_euclid(400);
+    let year_of_era = adjusted_year - era * 400;
+    let adjusted_month = month + if month > 2 { -3 } else { 9 };
+    let day_of_year = (153 * adjusted_month + 2) / 5 + day - 1;
+    let day_of_era =
+        year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    Some(era * 146_097 + day_of_era - 719_468)
+}
+
+fn release_is_older_than(
+    published_at: Option<&str>,
+    now_unix_seconds: u64,
+    threshold_days: u64,
+) -> Option<bool> {
+    let date = published_at?.get(..10)?;
+    let published_days = date_to_epoch_days(date)?;
+    let current_days = (now_unix_seconds / 86_400) as i64;
+    if published_days > current_days {
+        return Some(false);
+    }
+    Some((current_days - published_days) as u64 > threshold_days)
+}
+
+/// Returns true when a stable release date is known to be more than one year old.
+pub fn release_is_stale(published_at: Option<&str>) -> bool {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or(0);
+    release_is_older_than(published_at, now, 365).unwrap_or(false)
+}
+
 #[cfg(test)]
 mod tests {
     use super::repository_parts;
@@ -311,6 +364,30 @@ mod tests {
         );
         assert_eq!(
             compare_package_version(homepage, "2.0.0", "tool", "1:1.0.0-1"),
+            None
+        );
+    }
+
+    #[test]
+    fn identifies_old_release_dates_without_guessing_invalid_dates() {
+        use super::release_is_older_than;
+
+        let now = 1_800_000_000;
+        assert_eq!(
+            release_is_older_than(Some("2026-12-31T00:00:00Z"), now, 365),
+            Some(false)
+        );
+        assert_eq!(
+            release_is_older_than(Some("2025-01-01T00:00:00Z"), now, 365),
+            Some(true)
+        );
+        assert_eq!(release_is_older_than(None, now, 365), None);
+        assert_eq!(
+            release_is_older_than(Some("not-a-date"), now, 365),
+            None
+        );
+        assert_eq!(
+            release_is_older_than(Some("2025-02-30T00:00:00Z"), now, 365),
             None
         );
     }
