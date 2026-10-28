@@ -14,101 +14,123 @@ fn build_ui(app: &adw::Application) {
     let window = adw::ApplicationWindow::builder()
         .application(app)
         .title("Copr Hub")
-        .default_width(1000)
-        .default_height(700)
+        .default_width(1080)
+        .default_height(720)
         .build();
 
-    let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    let stack = adw::ViewStack::new();
+    stack.set_vexpand(true);
+
+    let discover = build_discover_page();
+    let repositories = build_placeholder_page(
+        "folder-symbolic",
+        "Your repositories",
+        "COPR repositories enabled on this system will appear here.",
+    );
+    let installed = build_placeholder_page(
+        "package-x-generic-symbolic",
+        "Installed packages",
+        "Packages installed from COPR repositories will appear here.",
+    );
+    let activity = build_placeholder_page(
+        "document-properties-symbolic",
+        "Recent activity",
+        "Repository changes and package operations will be recorded here.",
+    );
+
+    add_page(&stack, &discover, "discover", "Discover", "system-search-symbolic");
+    add_page(
+        &stack,
+        &repositories,
+        "repositories",
+        "Repositories",
+        "folder-symbolic",
+    );
+    add_page(
+        &stack,
+        &installed,
+        "installed",
+        "Installed",
+        "package-x-generic-symbolic",
+    );
+    add_page(
+        &stack,
+        &activity,
+        "activity",
+        "Activity",
+        "document-properties-symbolic",
+    );
+
+    let switcher_title = adw::ViewSwitcherTitle::builder()
+        .stack(&stack)
+        .title("Copr Hub")
+        .build();
 
     let header = adw::HeaderBar::new();
-    let title = gtk::Label::builder()
-        .label("Copr Hub")
-        .css_classes(["title"])
-        .build();
-    header.set_title_widget(Some(&title));
+    header.set_title_widget(Some(&switcher_title));
+
+    let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
     root.append(&header);
+    root.append(&stack);
 
-    let search = gtk::SearchEntry::builder()
-        .placeholder_text("Search COPR projects and packages")
-        .hexpand(true)
-        .margin_top(18)
-        .margin_bottom(12)
-        .margin_start(18)
-        .margin_end(18)
-        .build();
-    root.append(&search);
-
-    let navigation = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-    navigation.set_halign(gtk::Align::Center);
-    navigation.set_margin_bottom(12);
-
-    let status = adw::StatusPage::builder()
-        .icon_name("system-search-symbolic")
-        .title("Discover COPR projects")
-        .description(
-            "Search community-built Fedora packages and explore projects. \
-             Project discovery and repository management are coming next.",
-        )
-        .build();
-
-    for (label, icon, page_title, description) in [
-        (
-            "Discover",
-            "system-search-symbolic",
-            "Discover COPR projects",
-            "Search community-built Fedora packages and explore projects.",
-        ),
-        (
-            "Repositories",
-            "folder-symbolic",
-            "Your repositories",
-            "Enabled COPR repositories will appear here when repository management is implemented.",
-        ),
-        (
-            "Packages",
-            "package-x-generic-symbolic",
-            "Packages",
-            "Inspect package details and installation options from COPR projects.",
-        ),
-    ] {
-        let button = gtk::Button::builder()
-            .label(label)
-            .icon_name(icon)
-            .build();
-        button.add_css_class("flat");
-        let status_page = status.clone();
-        button.connect_clicked(move |_| {
-            status_page.set_icon_name(Some(icon));
-            status_page.set_title(page_title);
-            status_page.set_description(description);
-        });
-        navigation.append(&button);
-    }
-
-    root.append(&navigation);
-
-    search.connect_search_changed({
-        let status = status.clone();
-        move |entry| {
-            let query = entry.text();
-            if query.trim().is_empty() {
-                status.set_title("Discover COPR projects");
-                status.set_description(
-                    "Search community-built Fedora packages and explore projects. \
-                     Project discovery and repository management are coming next.",
-                );
-            } else {
-                status.set_title("COPR search");
-                status.set_description(&format!(
-                    "Search for “{}” will be available when COPR API integration is added.",
-                    query.trim()
-                ));
-            }
-        }
-    });
-
-    root.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
-    root.append(&status);
     window.set_content(Some(&root));
     window.present();
+}
+
+fn add_page(
+    stack: &adw::ViewStack,
+    child: &impl IsA<gtk::Widget>,
+    name: &str,
+    title: &str,
+    icon_name: &str,
+) {
+    let page = stack.add_titled(child, Some(name), title);
+    page.set_icon_name(Some(icon_name));
+}
+
+fn build_discover_page() -> gtk::Widget {
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 24);
+    content.set_margin_top(36);
+    content.set_margin_bottom(36);
+    content.set_margin_start(32);
+    content.set_margin_end(32);
+    content.set_halign(gtk::Align::Center);
+    content.set_valign(gtk::Align::Start);
+    content.set_hexpand(true);
+    content.set_width_request(560);
+
+    let hero = adw::StatusPage::builder()
+        .icon_name("system-software-install-symbolic")
+        .title("Find your next COPR project")
+        .description(
+            "Explore community-built software for Fedora. Search projects, inspect their packages, and decide what to add to your system.",
+        )
+        .build();
+    hero.set_hexpand(true);
+    content.append(&hero);
+
+    let search = gtk::SearchEntry::builder()
+        .placeholder_text("Search projects, packages, or owners")
+        .tooltip_text("Search the COPR project catalogue")
+        .hexpand(true)
+        .build();
+    content.append(&search);
+
+    let note = gtk::Label::builder()
+        .label("Project search is the next feature to be connected.")
+        .wrap(true)
+        .css_classes(["dim-label"])
+        .build();
+    content.append(&note);
+
+    content.upcast()
+}
+
+fn build_placeholder_page(icon_name: &str, title: &str, description: &str) -> gtk::Widget {
+    let page = adw::StatusPage::builder()
+        .icon_name(icon_name)
+        .title(title)
+        .description(description)
+        .build();
+    page.upcast()
 }
