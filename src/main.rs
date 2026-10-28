@@ -5,6 +5,8 @@ mod storage;
 mod system;
 
 use adw::prelude::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 fn main() {
     let app = adw::Application::builder()
@@ -227,6 +229,12 @@ fn build_installed_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     heading.append(&refresh);
     content.append(&heading);
 
+    let filter = gtk::SearchEntry::builder()
+        .placeholder_text("Filter by package, version, or repository")
+        .tooltip_text("Filter the installed COPR package list without making another DNF query")
+        .build();
+    content.append(&filter);
+
     let feedback = gtk::Label::builder()
         .label("Checking installed packages…")
         .xalign(0.0)
@@ -238,6 +246,34 @@ fn build_installed_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::SelectionMode::None);
     list.add_css_class("boxed-list");
+    let filter_query = Rc::new(RefCell::new(String::new()));
+    list.set_filter_func({
+        let filter_query = filter_query.clone();
+        move |row| {
+            let query = filter_query.borrow().trim().to_ascii_lowercase();
+            if query.is_empty() {
+                return true;
+            }
+            row.child().is_some_and(|child| {
+                child.widget_name().to_ascii_lowercase().contains(&query)
+            })
+        }
+    });
+    filter.connect_search_changed({
+        let filter_query = filter_query.clone();
+        let list = list.clone();
+        let feedback = feedback.clone();
+        move |entry| {
+            let query = entry.text().trim().to_string();
+            *filter_query.borrow_mut() = query.clone();
+            list.invalidate_filter();
+            if query.is_empty() {
+                feedback.set_text("Showing all installed COPR packages.");
+            } else {
+                feedback.set_text(&format!("Filtering installed packages by “{query}”."));
+            }
+        }
+    });
     content.append(&list);
 
     refresh.connect_clicked({
@@ -278,6 +314,10 @@ fn refresh_installed_packages(
                         .title(package.name.as_str())
                         .subtitle(format!("{} · {}", package.version, package.repository))
                         .build();
+                    row.set_widget_name(&format!(
+                        "{} {} {}",
+                        package.name, package.version, package.repository
+                    ));
                     row.add_prefix(&gtk::Image::from_icon_name("package-x-generic-symbolic"));
                     let remove = gtk::Button::with_label("Remove");
                     remove.set_valign(gtk::Align::Center);
