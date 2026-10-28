@@ -12,8 +12,9 @@ Copr Hub is a native Linux desktop application for discovering Fedora COPR proje
 - Enable or disable a COPR repository after explicit confirmation, using `pkexec` and DNF's config-manager rather than running the application as root.
 - List installed packages whose recorded source repository is a COPR repository, using DNF's read-only `repoquery` command.
 - Install packages from project details and remove installed COPR packages after explicit confirmation. DNF runs through `pkexec`; the app itself never runs as root.
-- Record recent project searches, saved-project changes, package operations, and successful repository changes in a local activity history capped at 100 entries, with local timestamps shown in the Activity tab.
-- Show feedback for empty results, timeouts, and network/API failures.
+- Record recent project searches, saved-project changes, package operations, and successful repository changes in a local activity history capped at 100 entries, with local timestamps shown in the Activity tab; clear the history explicitly after confirmation.
+- Show feedback for empty results, timeouts, rate limits, missing projects, server outages, and other network/API failures.
+- Open project homepage links only when COPR metadata provides an HTTP or HTTPS URL.
 - Run blocking network, filesystem, and package-manager operations away from the GTK main thread.
 - Use native GTK/libadwaita widgets and the active system theme. Accent colors are not hard-coded, allowing Matugen palette changes to flow through the existing GTK theme.
 - Include a desktop entry, SVG icon, AppStream metadata, and per-user install/uninstall scripts.
