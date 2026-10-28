@@ -28,8 +28,8 @@ fn build_ui(app: &adw::Application) {
     let discover = build_discover_page(&window);
     let repositories = build_repositories_page(&window);
     let installed = build_installed_page(&window);
-    let saved = build_saved_page(&window);
-    let activity = build_activity_page(&window);
+    let saved = build_saved_page(&window, &stack);
+    let activity = build_activity_page(&window, &stack);
 
     add_page(
         &stack,
@@ -920,7 +920,7 @@ fn confirm_package_operation<F: Fn() + Clone + 'static>(
     dialog.present();
 }
 
-fn build_saved_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
+fn build_saved_page(parent: &adw::ApplicationWindow, stack: &adw::ViewStack) -> gtk::Widget {
     let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
     content.set_margin_top(24);
     content.set_margin_bottom(24);
@@ -960,6 +960,17 @@ fn build_saved_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
         move |_| refresh_saved_projects(&parent, &list, &feedback)
     });
     refresh_saved_projects(parent, &list, &feedback);
+    stack.connect_visible_child_name_notify({
+        let parent = parent.clone();
+        let list = list.clone();
+        let feedback = feedback.clone();
+        let stack = stack.clone();
+        move |_| {
+            if stack.visible_child_name().as_deref() == Some("saved") {
+                refresh_saved_projects(&parent, &list, &feedback);
+            }
+        }
+    });
 
     scroll_page(&content)
 }
@@ -999,7 +1010,7 @@ fn refresh_saved_projects(
     }
 }
 
-fn build_activity_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
+fn build_activity_page(parent: &adw::ApplicationWindow, stack: &adw::ViewStack) -> gtk::Widget {
     let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
     content.set_margin_top(24);
     content.set_margin_bottom(24);
@@ -1076,6 +1087,16 @@ fn build_activity_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
         }
     });
     refresh_activity(&list, &feedback);
+    stack.connect_visible_child_name_notify({
+        let list = list.clone();
+        let feedback = feedback.clone();
+        let stack = stack.clone();
+        move |_| {
+            if stack.visible_child_name().as_deref() == Some("activity") {
+                refresh_activity(&list, &feedback);
+            }
+        }
+    });
 
     scroll_page(&content)
 }
