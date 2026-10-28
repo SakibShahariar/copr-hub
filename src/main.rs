@@ -152,6 +152,7 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
         move || {
             let query = search.text().trim().to_string();
             if query.is_empty() {
+                clear_list_box(&results);
                 feedback.set_text("Enter a COPR project name to search.");
                 return;
             }
