@@ -3,7 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 
 fn favorites_path() -> PathBuf {
-    glib::user_data_dir()
+    gtk::glib::user_data_dir()
         .join("copr-hub")
         .join("favorites.json")
 }

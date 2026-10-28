@@ -455,6 +455,7 @@ fn confirm_repository_toggle(
 
             feedback.set_text("Applying repository change…");
             let repository_id = repository.id.clone();
+            let activity_repository_id = repository.id.clone();
             let list = list.clone();
             let feedback = feedback.clone();
             let parent = parent.clone();
@@ -467,7 +468,7 @@ fn confirm_repository_toggle(
                     Ok(Ok(())) => {
                         let _ = activity::record(
                             "Repository configuration",
-                            &repository.id,
+                            &activity_repository_id,
                             &format!("Repository {action_past}"),
                         );
                         feedback.set_text(&format!("Repository {action_past} successfully."));
