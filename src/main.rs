@@ -545,6 +545,26 @@ fn render_projects(
     }
 }
 
+fn is_web_url(value: &str) -> bool {
+    reqwest::Url::parse(value)
+        .map(|url| matches!(url.scheme(), "http" | "https"))
+        .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod url_tests {
+    use super::is_web_url;
+
+    #[test]
+    fn only_http_and_https_homepages_are_linked() {
+        assert!(is_web_url("https://example.com/project"));
+        assert!(is_web_url("http://example.com"));
+        assert!(!is_web_url("javascript:alert(1)"));
+        assert!(!is_web_url("file:///etc/passwd"));
+        assert!(!is_web_url("not a url"));
+    }
+}
+
 fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprProject) {
     let window = adw::Window::builder()
         .transient_for(parent)
@@ -632,7 +652,7 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
     copr_link.set_halign(gtk::Align::Center);
     content.append(&copr_link);
 
-    if let Some(homepage) = project.homepage.as_deref().filter(|url| !url.is_empty()) {
+    if let Some(homepage) = project.homepage.as_deref().filter(|url| is_web_url(url)) {
         let link = gtk::LinkButton::with_label(homepage, "Open project homepage");
         link.set_halign(gtk::Align::Center);
         content.append(&link);
