@@ -160,6 +160,51 @@ pub fn fetch_project_monitor(owner: &str, project: &str) -> Result<ProjectMonito
     Ok(monitor)
 }
 
+/// Summarize reported build states for each Fedora chroot in stable target order.
+pub fn build_target_health_summary(packages: &[MonitoredPackage]) -> String {
+    use std::collections::BTreeMap;
+
+    // Counts are succeeded, failed, in-progress, and other/unknown states.
+    let mut targets: BTreeMap<String, [usize; 4]> = BTreeMap::new();
+    for package in packages {
+        for (target, build) in &package.chroots {
+            let counts = targets.entry(target.clone()).or_default();
+            match build.state.as_deref().unwrap_or("unknown").to_ascii_lowercase().as_str() {
+                "succeeded" | "success" => counts[0] += 1,
+                "failed" | "error" => counts[1] += 1,
+                "pending" | "waiting" | "starting" | "running" | "building" => counts[2] += 1,
+                _ => counts[3] += 1,
+            }
+        }
+    }
+
+    if targets.is_empty() {
+        return "No per-target build states were reported".to_string();
+    }
+
+    targets
+        .into_iter()
+        .take(5)
+        .map(|(target, counts)| {
+            let mut parts = Vec::new();
+            if counts[0] > 0 {
+                parts.push(format!("{} succeeded", counts[0]));
+            }
+            if counts[1] > 0 {
+                parts.push(format!("{} failed", counts[1]));
+            }
+            if counts[2] > 0 {
+                parts.push(format!("{} in progress", counts[2]));
+            }
+            if counts[3] > 0 {
+                parts.push(format!("{} other/unknown", counts[3]));
+            }
+            format!("{target}: {}", parts.join(", "))
+        })
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
+
 pub fn build_freshness_message(build: Option<&ProjectBuildSummary>, now: i64) -> String {
     let Some(build) = build else {
         return "Recent build age is unavailable; COPR did not provide build timestamps."
@@ -236,6 +281,31 @@ mod tests {
         };
         assert!(build_freshness_message(Some(&missing), now).contains("age unavailable"));
         assert!(build_freshness_message(None, now).contains("unavailable"));
+    }
+
+    #[test]
+    fn build_target_health_groups_states_by_target_and_handles_unknowns() {
+        let packages: Vec<MonitoredPackage> = serde_json::from_str(
+            r#"[
+                {"name":"one","chroots":{
+                    "fedora-44-x86_64":{"state":"succeeded"},
+                    "fedora-43-x86_64":{"state":"failed"}
+                }},
+                {"name":"two","chroots":{
+                    "fedora-44-x86_64":{"state":"running"},
+                    "fedora-43-x86_64":{"state":"unknown"}
+                }}
+            ]"#,
+        )
+        .unwrap();
+
+        let summary = build_target_health_summary(&packages);
+        assert!(summary.contains("fedora-43-x86_64: 1 failed, 1 other/unknown"));
+        assert!(summary.contains("fedora-44-x86_64: 1 succeeded, 1 in progress"));
+        assert_eq!(
+            build_target_health_summary(&[]),
+            "No per-target build states were reported"
+        );
     }
 
     #[test]
