@@ -1213,7 +1213,12 @@ fn render_project_monitor(
                 });
                 let has_active_target = targets.iter().any(|(_, build)| {
                     matches!(
-                        build.state.as_deref().unwrap_or("unknown").to_ascii_lowercase().as_str(),
+                        build
+                            .state
+                            .as_deref()
+                            .unwrap_or("unknown")
+                            .to_ascii_lowercase()
+                            .as_str(),
                         "pending" | "waiting" | "starting" | "running" | "building"
                     )
                 });
