@@ -376,7 +376,7 @@ enabled=1
 
     #[test]
     fn ignores_malformed_installed_package_rows() {
-        let output = "missing-version\\t\\tcopr:copr.fedorainfracloud.org:alice:demo\\nmissing-repo\\t1.0-1\\t\\nmissing-columns\\nvalid\\t1.0-1\\tcopr:copr.fedorainfracloud.org:alice:demo\\n";
+        let output = "missing-version\t\tcopr:copr.fedorainfracloud.org:alice:demo\nmissing-repo\t1.0-1\t\nmissing-columns\nvalid\t1.0-1\tcopr:copr.fedorainfracloud.org:alice:demo\n";
         let packages = parse_installed_copr_packages(output);
         assert_eq!(packages.len(), 1);
         assert_eq!(packages[0].name, "valid");
