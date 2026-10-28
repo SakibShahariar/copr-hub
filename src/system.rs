@@ -79,7 +79,7 @@ fn parse_enabled_overrides(contents: &str) -> HashMap<String, bool> {
         }
 
         if let (Some(id), Some((key, value))) = (current_id.as_ref(), line.split_once('=')) {
-            if key.trim() == "enabled" {
+            if key.trim().eq_ignore_ascii_case("enabled") {
                 overrides.insert(id.clone(), parse_enabled_value(value));
             }
         }
@@ -136,8 +136,10 @@ fn parse_copr_repositories(contents: &str, path: &Path) -> Vec<CoprRepository> {
 
         if let Some((key, value)) = line.split_once('=') {
             match key.trim() {
-                "name" => current_name = value.trim().to_string(),
-                "enabled" => {
+                key if key.trim().eq_ignore_ascii_case("name") => {
+                    current_name = value.trim().to_string()
+                }
+                key if key.trim().eq_ignore_ascii_case("enabled") => {
                     current_enabled = parse_enabled_value(value);
                 }
                 _ => {}
@@ -312,6 +314,21 @@ enabled=1
         for value in ["1", "true", "TRUE", "yes", "on", "unexpected"] {
             assert!(parse_enabled_value(value), "{value} should remain enabled");
         }
+    }
+
+    #[test]
+    fn repository_option_names_are_case_insensitive() {
+        let contents = "[copr:copr.fedorainfracloud.org:alice:demo]\\nNAME=Demo\\nENABLED=OFF\\n";
+        let repositories = parse_copr_repositories(contents, Path::new("/tmp/test.repo"));
+        assert_eq!(repositories.len(), 1);
+        assert_eq!(repositories[0].name, "Demo");
+        assert!(!repositories[0].enabled);
+
+        let overrides = parse_enabled_overrides(contents);
+        assert_eq!(
+            overrides.get("copr:copr.fedorainfracloud.org:alice:demo"),
+            Some(&false)
+        );
     }
 
     #[test]
