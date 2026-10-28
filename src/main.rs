@@ -2,6 +2,7 @@ mod activity;
 mod copr;
 mod favorites;
 mod system;
+mod storage;
 
 use adw::prelude::*;
 
