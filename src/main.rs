@@ -40,7 +40,13 @@ fn build_ui(app: &adw::Application) {
         "Repository changes and package operations will be recorded here.",
     );
 
-    add_page(&stack, &discover, "discover", "Discover", "system-search-symbolic");
+    add_page(
+        &stack,
+        &discover,
+        "discover",
+        "Discover",
+        "system-search-symbolic",
+    );
     add_page(&stack, &repositories, "repositories", "Repositories", "folder-symbolic");
     add_page(&stack, &installed, "installed", "Installed", "package-x-generic-symbolic");
     add_page(&stack, &activity, "activity", "Activity", "document-properties-symbolic");
