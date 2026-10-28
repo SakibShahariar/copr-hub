@@ -188,7 +188,10 @@ pub fn set_copr_repository_enabled(repository_id: &str, enabled: bool) -> Result
 
 
 pub fn set_package_installed(package_name: &str, install: bool) -> Result<(), String> {
-    if package_name.is_empty()
+    if !package_name
+        .chars()
+        .next()
+        .is_some_and(|character| character.is_ascii_alphanumeric())
         || !package_name
             .chars()
             .all(|character| character.is_ascii_alphanumeric() || "+._-".contains(character))
