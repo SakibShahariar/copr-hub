@@ -365,6 +365,15 @@ fn refresh_repositories(
     list: &gtk::ListBox,
     feedback: &gtk::Label,
 ) {
+    refresh_repositories_with_notice(parent, list, feedback, None);
+}
+
+fn refresh_repositories_with_notice(
+    parent: &adw::ApplicationWindow,
+    list: &gtk::ListBox,
+    feedback: &gtk::Label,
+    notice: Option<String>,
+) {
     feedback.set_text("Reading COPR repository configuration…");
     clear_list_box(list);
 
@@ -379,6 +388,11 @@ fn refresh_repositories(
                 clear_list_box(&list);
                 feedback.set_text("The background repository scan failed unexpectedly.");
             }
+        }
+
+        if let Some(notice) = notice {
+            let current_feedback = feedback.text();
+            feedback.set_text(&format!("{current_feedback}\n{notice}"));
         }
     });
 }
@@ -488,13 +502,14 @@ fn confirm_repository_toggle(
                 .await;
                 match result {
                     Ok(Ok(())) => {
-                        let _ = activity::record(
+                        let notice = activity::record(
                             "Repository configuration",
                             &activity_repository_id,
                             &format!("Repository {action_past}"),
-                        );
-                        feedback.set_text(&format!("Repository {action_past} successfully."));
-                        refresh_repositories(&parent, &list, &feedback);
+                        )
+                        .err()
+                        .map(|error| format!("Activity history could not be saved: {error}"));
+                        refresh_repositories_with_notice(&parent, &list, &feedback, notice);
                     }
                     Ok(Err(error)) => feedback.set_text(&error),
                     Err(_) => feedback.set_text("The repository operation failed unexpectedly."),
