@@ -19,7 +19,9 @@ pub fn scan_copr_repositories() -> Result<Vec<CoprRepository>, String> {
         .map_err(|error| format!("Could not read {}: {error}", directory.display()))?;
 
     let mut repositories = Vec::new();
-    for entry in entries.flatten() {
+    let mut entries: Vec<_> = entries.flatten().collect();
+    entries.sort_by_key(|entry| entry.path());
+    for entry in entries {
         let path = entry.path();
         if path.extension().and_then(|extension| extension.to_str()) != Some("repo") {
             continue;
@@ -34,7 +36,9 @@ pub fn scan_copr_repositories() -> Result<Vec<CoprRepository>, String> {
     let mut overrides = HashMap::new();
     let override_directory = Path::new("/etc/dnf/repos.override.d");
     if let Ok(entries) = fs::read_dir(override_directory) {
-        for entry in entries.flatten() {
+        let mut entries: Vec<_> = entries.flatten().collect();
+        entries.sort_by_key(|entry| entry.path());
+        for entry in entries {
             let path = entry.path();
             if path.extension().and_then(|extension| extension.to_str()) != Some("repo") {
                 continue;
