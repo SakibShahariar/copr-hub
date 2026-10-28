@@ -589,7 +589,11 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
     details.append(&owner);
     content.append(&details);
 
-    let saved = favorites::is_saved(project).unwrap_or(false);
+    let saved_state = favorites::is_saved(project);
+    let (saved, initial_error) = match saved_state {
+        Ok(saved) => (saved, None),
+        Err(error) => (false, Some(error)),
+    };
     let save_button = gtk::Button::with_label(if saved {
         "Remove from saved"
     } else {
@@ -597,7 +601,8 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
     });
     save_button.set_halign(gtk::Align::Center);
     save_button.add_css_class("flat");
-    let save_feedback = gtk::Label::new(None);
+    save_button.set_sensitive(initial_error.is_none());
+    let save_feedback = gtk::Label::new(initial_error.as_deref());
     save_feedback.add_css_class("dim-label");
     save_button.connect_clicked({
         let project = project.clone();
@@ -615,7 +620,7 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                 } else {
                     "Project removed from saved projects."
                 });
-                let _ = activity::record(
+                if let Err(error) = activity::record(
                     "Saved projects",
                     &format!("{}/{}", project.owner, project.name),
                     if saved {
@@ -623,7 +628,11 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                     } else {
                         "Project removed"
                     },
-                );
+                ) {
+                    save_feedback.set_text(&format!(
+                        "Project state changed, but activity history could not be updated: {error}"
+                    ));
+                }
             }
             Err(error) => save_feedback.set_text(&error),
         }
