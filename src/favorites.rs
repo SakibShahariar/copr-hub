@@ -1,5 +1,6 @@
 use crate::copr::CoprProject;
 use std::fs;
+use crate::storage;
 use std::path::PathBuf;
 
 fn favorites_path() -> PathBuf {
@@ -45,13 +46,10 @@ pub fn toggle(project: &CoprProject) -> Result<bool, String> {
     let saved = projects
         .iter()
         .any(|item| item.owner == project.owner && item.name == project.name);
-    let temporary_path = path.with_extension("json.tmp");
     let contents = serde_json::to_vec_pretty(&projects)
         .map_err(|error| format!("Could not encode saved projects: {error}"))?;
-    fs::write(&temporary_path, contents)
+    storage::atomic_write(&path, &contents)
         .map_err(|error| format!("Could not save project list: {error}"))?;
-    fs::rename(&temporary_path, &path)
-        .map_err(|error| format!("Could not update saved projects: {error}"))?;
     Ok(saved)
 }
 
