@@ -66,13 +66,15 @@ fn build_ui(app: &adw::Application) {
         "document-properties-symbolic",
     );
 
-    let switcher_title = adw::ViewSwitcherTitle::builder()
+    // Keep section navigation in the header, like GNOME Software and Bazaar.
+    // Wide policy keeps the page labels visible instead of collapsing into a sidebar.
+    let switcher = adw::ViewSwitcher::builder()
         .stack(&stack)
-        .title("Copr Hub")
+        .policy(adw::ViewSwitcherPolicy::Wide)
         .build();
 
     let header = adw::HeaderBar::new();
-    header.set_title_widget(Some(&switcher_title));
+    header.set_title_widget(Some(&switcher));
 
     let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
     root.append(&header);
