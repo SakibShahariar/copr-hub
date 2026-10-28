@@ -836,6 +836,16 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
     status.add_css_class("dim-label");
     content.append(&status);
 
+    let intelligence = gtk::Label::builder()
+        .label("Update intelligence will appear when COPR build data and upstream release metadata are available.")
+        .xalign(0.0)
+        .wrap(true)
+        .selectable(true)
+        .build();
+    intelligence.add_css_class("card");
+    intelligence.add_css_class("caption");
+    content.append(&intelligence);
+
     let upstream_status = gtk::Label::builder()
         .label("Checking for a latest upstream release when the project homepage points to GitHub or GitLab…")
         .xalign(0.0)
@@ -896,6 +906,7 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
         let parent = parent.clone();
         let packages = packages.clone();
         let status = status.clone();
+        let intelligence = intelligence.clone();
         let homepage = homepage_for_comparison.clone();
         gtk::glib::MainContext::default().spawn_local(async move {
             let response =
@@ -912,6 +923,7 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                     &parent,
                     &packages,
                     &status,
+                    &intelligence,
                     response,
                     release.as_ref(),
                     homepage.as_deref(),
@@ -927,6 +939,7 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
         let parent = parent.clone();
         let packages = packages.clone();
         let status = status.clone();
+        let intelligence = intelligence.clone();
         let homepage_for_comparison = Some(homepage.clone());
         gtk::glib::MainContext::default().spawn_local(async move {
             let response =
@@ -990,10 +1003,81 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
     }
 }
 
+fn update_intelligence_summary(
+    packages: &[copr::MonitoredPackage],
+    homepage: Option<&str>,
+    release: Option<&upstream::UpstreamRelease>,
+    latest_build: Option<&copr::ProjectBuildSummary>,
+    now: i64,
+) -> String {
+    let mut newer_packages = 0;
+    let mut failed_targets = 0;
+    let mut active_targets = 0;
+
+    for package in packages {
+        let has_newer_release = release.zip(homepage).is_some_and(|(release, homepage)| {
+            package.chroots.values().any(|build| {
+                build.pkg_version.as_deref().is_some_and(|version| {
+                    upstream::compare_package_version(
+                        homepage,
+                        &release.version,
+                        &package.name,
+                        version,
+                    ) == Some(std::cmp::Ordering::Greater)
+                })
+            })
+        });
+        if has_newer_release {
+            newer_packages += 1;
+        }
+
+        for build in package.chroots.values() {
+            match build
+                .state
+                .as_deref()
+                .unwrap_or("unknown")
+                .to_ascii_lowercase()
+                .as_str()
+            {
+                "failed" | "error" => failed_targets += 1,
+                "pending" | "waiting" | "starting" | "running" | "building" => {
+                    active_targets += 1;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let update_summary = if homepage.is_some() && release.is_some() {
+        format!("{newer_packages} package(s) with a newer matched upstream release")
+    } else {
+        "upstream update comparison unavailable".to_string()
+    };
+    let build_age = copr::build_freshness_message(
+        latest_build,
+        u64::try_from(now).unwrap_or(0),
+    );
+    let stale_release = release
+        .filter(|release| upstream::release_is_stale(release.published_at.as_deref()))
+        .map(|_| " · upstream release is over one year old")
+        .unwrap_or("");
+    let stale_build = if build_age.starts_with("No recent project build") {
+        " · latest project build is at least 90 days old"
+    } else {
+        ""
+    };
+
+    format!(
+        "Update intelligence: {update_summary} · {failed_targets} failed build target(s) · {active_targets} in-progress target(s){}{}. Signals are informational, not a security assessment.",
+        stale_build, stale_release
+    )
+}
+
 fn render_project_monitor(
     parent: &adw::Window,
     list: &gtk::ListBox,
     status: &gtk::Label,
+    intelligence: &gtk::Label,
     response: Result<copr::ProjectMonitor, String>,
     upstream_release: Option<&upstream::UpstreamRelease>,
     homepage: Option<&str>,
@@ -1017,6 +1101,15 @@ fn render_project_monitor(
                     .unwrap_or(0),
             );
             let target_health = copr::build_target_health_summary(&monitor.packages);
+            intelligence.set_text(&update_intelligence_summary(
+                &monitor.packages,
+                homepage,
+                upstream_release,
+                monitor.latest_build.as_ref(),
+                gtk::glib::DateTime::now_local()
+                    .map(|date| date.to_unix())
+                    .unwrap_or(0),
+            ));
             status.set_text(&format!(
                 "{} packages · {} package build-target entries. {} Build health by target: {}. Build status is informational, not a security assessment.",
                 monitor.packages.len(),
@@ -1520,7 +1613,43 @@ fn refresh_activity(list: &gtk::ListBox, feedback: &gtk::Label) {
 
 #[cfg(test)]
 mod url_tests {
-    use super::is_web_url;
+    use super::{is_web_url, update_intelligence_summary};
+    use crate::{copr, upstream};
+
+    #[test]
+    fn update_intelligence_counts_newer_packages_and_build_failures() {
+        let packages: Vec<copr::MonitoredPackage> = serde_json::from_str(
+            r#"[{"name":"tool","chroots":{
+                "fedora-44-x86_64":{"state":"failed","pkg_version":"1.2.0-1.fc44"},
+                "fedora-43-x86_64":{"state":"running","pkg_version":"1.2.0-1.fc43"}
+            }}]"#,
+        )
+        .unwrap();
+        let release = upstream::UpstreamRelease {
+            version: "1.3.0".into(),
+            name: "Tool 1.3.0".into(),
+            published_at: Some("2026-09-01T00:00:00Z".into()),
+            url: None,
+        };
+        let summary = update_intelligence_summary(
+            &packages,
+            Some("https://github.com/demo/tool"),
+            Some(&release),
+            None,
+            1_800_000_000,
+        );
+
+        assert!(summary.contains("1 package(s) with a newer matched upstream release"));
+        assert!(summary.contains("1 failed build target(s)"));
+        assert!(summary.contains("1 in-progress target(s)"));
+    }
+
+    #[test]
+    fn update_intelligence_does_not_guess_when_release_data_is_missing() {
+        let summary = update_intelligence_summary(&[], None, None, None, 1_800_000_000);
+        assert!(summary.contains("upstream update comparison unavailable"));
+        assert!(summary.contains("0 failed build target(s)"));
+    }
 
     #[test]
     fn only_http_and_https_homepages_are_linked() {
