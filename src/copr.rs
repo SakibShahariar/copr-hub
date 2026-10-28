@@ -162,7 +162,8 @@ pub fn fetch_project_monitor(owner: &str, project: &str) -> Result<ProjectMonito
 
 pub fn build_freshness_message(build: Option<&ProjectBuildSummary>, now: i64) -> String {
     let Some(build) = build else {
-        return "Recent build age is unavailable; COPR did not provide build timestamps.".to_string();
+        return "Recent build age is unavailable; COPR did not provide build timestamps."
+            .to_string();
     };
     let timestamp = build.ended_on.or(build.submitted_on);
     let Some(timestamp) = timestamp.filter(|timestamp| *timestamp > 0) else {
@@ -213,14 +214,26 @@ mod tests {
     #[test]
     fn build_freshness_distinguishes_recent_stale_and_missing_timestamps() {
         let now = 2_000_000_000_i64;
-        let recent = ProjectBuildSummary { state: Some("succeeded".into()), ended_on: Some(now - 7 * 86_400), submitted_on: None };
+        let recent = ProjectBuildSummary {
+            state: Some("succeeded".into()),
+            ended_on: Some(now - 7 * 86_400),
+            submitted_on: None,
+        };
         assert!(build_freshness_message(Some(&recent), now).contains("7 days ago"));
         assert!(!build_freshness_message(Some(&recent), now).contains("No recent"));
-        let stale = ProjectBuildSummary { state: Some("failed".into()), ended_on: Some(now - 100 * 86_400), submitted_on: None };
+        let stale = ProjectBuildSummary {
+            state: Some("failed".into()),
+            ended_on: Some(now - 100 * 86_400),
+            submitted_on: None,
+        };
         let message = build_freshness_message(Some(&stale), now);
         assert!(message.contains("No recent project build"));
         assert!(message.contains("failed"));
-        let missing = ProjectBuildSummary { state: None, ended_on: None, submitted_on: None };
+        let missing = ProjectBuildSummary {
+            state: None,
+            ended_on: None,
+            submitted_on: None,
+        };
         assert!(build_freshness_message(Some(&missing), now).contains("age unavailable"));
         assert!(build_freshness_message(None, now).contains("unavailable"));
     }
