@@ -55,6 +55,13 @@ pub fn scan_copr_repositories() -> Result<Vec<CoprRepository>, String> {
     Ok(repositories)
 }
 
+fn parse_enabled_value(value: &str) -> bool {
+    !matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "0" | "false" | "no" | "off"
+    )
+}
+
 fn parse_enabled_overrides(contents: &str) -> HashMap<String, bool> {
     let mut overrides = HashMap::new();
     let mut current_id: Option<String> = None;
@@ -73,7 +80,7 @@ fn parse_enabled_overrides(contents: &str) -> HashMap<String, bool> {
 
         if let (Some(id), Some((key, value))) = (current_id.as_ref(), line.split_once('=')) {
             if key.trim() == "enabled" {
-                overrides.insert(id.clone(), !matches!(value.trim(), "0" | "false" | "False"));
+                overrides.insert(id.clone(), parse_enabled_value(value));
             }
         }
     }
@@ -131,7 +138,7 @@ fn parse_copr_repositories(contents: &str, path: &Path) -> Vec<CoprRepository> {
             match key.trim() {
                 "name" => current_name = value.trim().to_string(),
                 "enabled" => {
-                    current_enabled = !matches!(value.trim(), "0" | "false" | "False");
+                    current_enabled = parse_enabled_value(value);
                 }
                 _ => {}
             }
@@ -292,6 +299,27 @@ enabled=1
             Some(&false)
         );
         assert!(!overrides.contains_key("fedora"));
+    }
+
+    #[test]
+    fn parses_common_boolean_spellings_case_insensitively() {
+        for value in ["0", "false", "FALSE", "False", "no", "NO", "off", "OFF"] {
+            assert!(!parse_enabled_value(value), "{value} should disable a repository");
+        }
+        for value in ["1", "true", "TRUE", "yes", "on", "unexpected"] {
+            assert!(parse_enabled_value(value), "{value} should remain enabled");
+        }
+    }
+
+    #[test]
+    fn repository_files_and_overrides_share_boolean_parsing() {
+        let contents = "[copr:copr.fedorainfracloud.org:alice:demo]\\nenabled=FALSE\\n";
+        let repositories = parse_copr_repositories(contents, Path::new("/tmp/test.repo"));
+        assert_eq!(repositories.len(), 1);
+        assert!(!repositories[0].enabled);
+
+        let overrides = parse_enabled_overrides(contents);
+        assert_eq!(overrides.get("copr:copr.fedorainfracloud.org:alice:demo"), Some(&false));
     }
 
     #[test]
