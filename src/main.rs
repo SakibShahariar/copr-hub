@@ -595,7 +595,11 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                 let _ = activity::record(
                     "Saved projects",
                     &format!("{}/{}", project.owner, project.name),
-                    if saved { "Project saved" } else { "Project removed" },
+                    if saved {
+                        "Project saved"
+                    } else {
+                        "Project removed"
+                    },
                 );
             }
             Err(error) => save_feedback.set_text(&error),
@@ -790,7 +794,6 @@ fn confirm_package_operation<F: Fn() + Clone + 'static>(
     });
     dialog.present();
 }
-
 
 fn build_saved_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     let content = gtk::Box::new(gtk::Orientation::Vertical, 12);

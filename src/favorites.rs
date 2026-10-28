@@ -3,7 +3,9 @@ use std::fs;
 use std::path::PathBuf;
 
 fn favorites_path() -> PathBuf {
-    glib::user_data_dir().join("copr-hub").join("favorites.json")
+    glib::user_data_dir()
+        .join("copr-hub")
+        .join("favorites.json")
 }
 
 pub fn load() -> Result<Vec<CoprProject>, String> {
@@ -17,9 +19,9 @@ pub fn load() -> Result<Vec<CoprProject>, String> {
 }
 
 pub fn is_saved(project: &CoprProject) -> Result<bool, String> {
-    Ok(load()?.iter().any(|saved| {
-        saved.owner == project.owner && saved.name == project.name
-    }))
+    Ok(load()?
+        .iter()
+        .any(|saved| saved.owner == project.owner && saved.name == project.name))
 }
 
 pub fn toggle(project: &CoprProject) -> Result<bool, String> {
