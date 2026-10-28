@@ -717,6 +717,28 @@ fn render_project_monitor(
                     "{} targets",
                     targets.len()
                 ))));
+
+                let target_details: Vec<(String, String, Option<String>)> = targets
+                    .iter()
+                    .map(|(target, build)| {
+                        (
+                            (*target).to_string(),
+                            build.state.as_deref().unwrap_or("unknown").to_string(),
+                            build.pkg_version.clone(),
+                        )
+                    })
+                    .collect();
+                let details_button = gtk::Button::with_label("Build details");
+                details_button.set_valign(gtk::Align::Center);
+                details_button.add_css_class("flat");
+                details_button.connect_clicked({
+                    let parent = parent.clone();
+                    let package_name = package.name.clone();
+                    let target_details = target_details.clone();
+                    move |_| show_build_targets(&parent, &package_name, &target_details)
+                });
+                row.add_suffix(&details_button);
+
                 let install = gtk::Button::with_label("Install");
                 install.set_valign(gtk::Align::Center);
                 install.add_css_class("suggested-action");
@@ -742,6 +764,74 @@ fn render_project_monitor(
             "Could not load project build information: {error}"
         )),
     }
+}
+
+fn show_build_targets(
+    parent: &adw::Window,
+    package_name: &str,
+    targets: &[(String, String, Option<String>)],
+) {
+    let dialog = adw::Window::builder()
+        .transient_for(parent)
+        .modal(true)
+        .title(format!("{package_name} build targets"))
+        .default_width(520)
+        .default_height(480)
+        .build();
+
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
+    content.set_margin_top(20);
+    content.set_margin_bottom(20);
+    content.set_margin_start(20);
+    content.set_margin_end(20);
+
+    let heading = gtk::Label::builder()
+        .label(format!("{} build target(s)", targets.len()))
+        .xalign(0.0)
+        .build();
+    heading.add_css_class("title-2");
+    content.append(&heading);
+
+    let note = gtk::Label::builder()
+        .label("Build states are reported by COPR and do not indicate whether a package is trustworthy.")
+        .wrap(true)
+        .xalign(0.0)
+        .build();
+    note.add_css_class("dim-label");
+    content.append(&note);
+
+    let list = gtk::ListBox::new();
+    list.set_selection_mode(gtk::SelectionMode::None);
+    list.add_css_class("boxed-list");
+    for (target, state, version) in targets {
+        let subtitle = version
+            .as_deref()
+            .map(|version| format!("{state} · {version}"))
+            .unwrap_or_else(|| state.clone());
+        let row = adw::ActionRow::builder()
+            .title(target.as_str())
+            .subtitle(subtitle)
+            .build();
+        row.add_prefix(&gtk::Image::from_icon_name("package-x-generic-symbolic"));
+        list.append(&row);
+    }
+
+    let scroll = gtk::ScrolledWindow::builder()
+        .vexpand(true)
+        .child(&list)
+        .build();
+    content.append(&scroll);
+
+    let close = gtk::Button::with_label("Close");
+    close.set_halign(gtk::Align::End);
+    close.connect_clicked({
+        let dialog = dialog.clone();
+        move |_| dialog.close()
+    });
+    content.append(&close);
+
+    dialog.set_content(Some(&content));
+    dialog.present();
 }
 
 fn confirm_package_operation<F: Fn() + Clone + 'static>(
