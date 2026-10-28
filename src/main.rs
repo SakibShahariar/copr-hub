@@ -3,6 +3,7 @@ mod copr;
 mod favorites;
 mod storage;
 mod system;
+mod upstream;
 
 use adw::prelude::*;
 use std::cell::RefCell;
@@ -835,6 +836,15 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
     status.add_css_class("dim-label");
     content.append(&status);
 
+    let upstream_status = gtk::Label::builder()
+        .label("Checking for a latest upstream release when the project homepage points to GitHub or GitLab…")
+        .xalign(0.0)
+        .wrap(true)
+        .selectable(true)
+        .build();
+    upstream_status.add_css_class("dim-label");
+    content.append(&upstream_status);
+
     let package_filter = gtk::SearchEntry::builder()
         .placeholder_text("Filter packages in this project")
         .tooltip_text("Filter the loaded package list locally")
@@ -864,6 +874,32 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
         .build();
     window.set_content(Some(&scroll));
     window.present();
+
+    if let Some(homepage) = project.homepage.clone() {
+        let upstream_status = upstream_status.clone();
+        gtk::glib::MainContext::default().spawn_local(async move {
+            let response = gtk::gio::spawn_blocking(move || upstream::latest_release(&homepage)).await;
+            match response {
+                Ok(Ok(Some(release))) => {
+                    let date = release.published_at.as_deref().unwrap_or("release date unavailable");
+                    let url = release.url.as_deref().unwrap_or("");
+                    upstream_status.set_text(&format!(
+                        "Latest upstream stable release: {} · {}{}",
+                        release.name,
+                        date,
+                        if url.is_empty() { String::new() } else { format!(" · {url}") }
+                    ));
+                }
+                Ok(Ok(None)) => upstream_status.set_text(
+                    "Upstream release tracking unavailable: the project homepage is not a recognized GitHub or GitLab repository URL."
+                ),
+                Ok(Err(error)) => upstream_status.set_text(&format!("Could not check upstream releases: {error}")),
+                Err(_) => upstream_status.set_text("The background upstream release lookup failed unexpectedly."),
+            }
+        });
+    } else {
+        upstream_status.set_text("Upstream release tracking unavailable: COPR does not provide a project homepage.");
+    }
 
     let owner = project.owner.clone();
     let name = project.name.clone();
