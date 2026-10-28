@@ -1027,9 +1027,12 @@ fn build_activity_page() -> gtk::Widget {
         .hexpand(true)
         .build();
     title.add_css_class("title-2");
+    let clear = gtk::Button::with_label("Clear history");
+    clear.add_css_class("destructive-action");
     let refresh = gtk::Button::with_label("Refresh");
     refresh.set_icon_name("view-refresh-symbolic");
     heading.append(&title);
+    heading.append(&clear);
     heading.append(&refresh);
     content.append(&heading);
 
@@ -1050,6 +1053,39 @@ fn build_activity_page() -> gtk::Widget {
         let list = list.clone();
         let feedback = feedback.clone();
         move |_| refresh_activity(&list, &feedback)
+    });
+    clear.connect_clicked({
+        let list = list.clone();
+        let feedback = feedback.clone();
+        move |_| {
+            let dialog = gtk::MessageDialog::builder()
+                .modal(true)
+                .message_type(gtk::MessageType::Warning)
+                .buttons(gtk::ButtonsType::None)
+                .text("Clear activity history?")
+                .secondary_text("This permanently removes the local activity log. Saved projects will not be affected.")
+                .build();
+            dialog.add_button("Cancel", gtk::ResponseType::Cancel);
+            dialog.add_button("Clear history", gtk::ResponseType::Accept);
+            dialog.connect_response({
+                let list = list.clone();
+                let feedback = feedback.clone();
+                move |dialog, response| {
+                    dialog.close();
+                    if response != gtk::ResponseType::Accept {
+                        return;
+                    }
+                    match activity::clear() {
+                        Ok(()) => {
+                            feedback.set_text("Activity history cleared.");
+                            refresh_activity(&list, &feedback);
+                        }
+                        Err(error) => feedback.set_text(&error),
+                    }
+                }
+            });
+            dialog.present();
+        }
     });
     refresh_activity(&list, &feedback);
 
