@@ -5,7 +5,7 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 PREFIX="${HOME}/.local"
 APP_ID="io.github.SakibShahariar.CoprHub"
 
-cd "$ROOT"
+cd "$ROOT" || exit 1
 cargo build --release
 
 install -Dm755 "target/release/copr-hub" "$PREFIX/bin/copr-hub"

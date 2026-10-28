@@ -21,7 +21,7 @@ jobs:
       - name: Install GTK development libraries
         run: |
           sudo apt-get update
-          sudo apt-get install --yes libgtk-4-dev libadwaita-1-dev pkg-config appstream desktop-file-utils libxml2-utils
+          sudo apt-get install --yes libgtk-4-dev libadwaita-1-dev pkg-config appstream desktop-file-utils libxml2-utils shellcheck
 
       - name: Install stable Rust
         uses: dtolnay/rust-toolchain@stable
@@ -33,6 +33,9 @@ jobs:
 
       - name: Check installer scripts
         run: sh -n scripts/install-local.sh scripts/uninstall-local.sh
+
+      - name: Lint shell scripts
+        run: shellcheck scripts/install-local.sh scripts/uninstall-local.sh
 
       - name: Validate desktop integration metadata
         run: |
