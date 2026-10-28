@@ -254,9 +254,8 @@ fn build_installed_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
             if query.is_empty() {
                 return true;
             }
-            row.child().is_some_and(|child| {
-                child.widget_name().to_ascii_lowercase().contains(&query)
-            })
+            row.child()
+                .is_some_and(|child| child.widget_name().to_ascii_lowercase().contains(&query))
         }
     });
     filter.connect_search_changed({
