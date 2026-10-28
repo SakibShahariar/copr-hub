@@ -878,24 +878,35 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
     if let Some(homepage) = project.homepage.clone() {
         let upstream_status = upstream_status.clone();
         gtk::glib::MainContext::default().spawn_local(async move {
-            let response = gtk::gio::spawn_blocking(move || upstream::latest_release(&homepage)).await;
+            let response =
+                gtk::gio::spawn_blocking(move || upstream::latest_release(&homepage)).await;
             match response {
                 Ok(Ok(Some(release))) => {
-                    let date = release.published_at.as_deref().unwrap_or("release date unavailable");
+                    let date = release
+                        .published_at
+                        .as_deref()
+                        .unwrap_or("release date unavailable");
                     let url = release.url.as_deref().unwrap_or("");
                     upstream_status.set_text(&format!(
                         "Latest upstream stable release: {} ({}) · {}{}",
                         release.version,
                         release.name,
                         date,
-                        if url.is_empty() { String::new() } else { format!(" · {url}") }
+                        if url.is_empty() {
+                            String::new()
+                        } else {
+                            format!(" · {url}")
+                        }
                     ));
                 }
                 Ok(Ok(None)) => upstream_status.set_text(
-                    "No stable upstream release metadata is available for this project homepage."
+                    "No stable upstream release metadata is available for this project homepage.",
                 ),
-                Ok(Err(error)) => upstream_status.set_text(&format!("Could not check upstream releases: {error}")),
-                Err(_) => upstream_status.set_text("The background upstream release lookup failed unexpectedly."),
+                Ok(Err(error)) => {
+                    upstream_status.set_text(&format!("Could not check upstream releases: {error}"))
+                }
+                Err(_) => upstream_status
+                    .set_text("The background upstream release lookup failed unexpectedly."),
             }
         });
     } else {
