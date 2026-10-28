@@ -212,12 +212,17 @@ fn parse_installed_copr_packages(output: &str) -> Vec<InstalledCoprPackage> {
         .collect()
 }
 
-pub fn set_copr_repository_enabled(repository_id: &str, enabled: bool) -> Result<(), String> {
-    if !repository_id.starts_with("copr:")
-        || !repository_id
+fn is_valid_copr_repository_id(repository_id: &str) -> bool {
+    repository_id
+        .strip_prefix("copr:")
+        .is_some_and(|suffix| !suffix.is_empty())
+        && repository_id
             .chars()
             .all(|character| character.is_ascii_alphanumeric() || ":._-".contains(character))
-    {
+}
+
+pub fn set_copr_repository_enabled(repository_id: &str, enabled: bool) -> Result<(), String> {
+    if !is_valid_copr_repository_id(repository_id) {
         return Err("The repository identifier is not a valid COPR repository ID.".to_string());
     }
 
@@ -280,6 +285,15 @@ pub fn set_package_installed(package_name: &str, install: bool) -> Result<(), St
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn validates_copr_repository_ids_before_invoking_privileged_commands() {
+        assert!(is_valid_copr_repository_id("copr:copr.fedorainfracloud.org:alice:demo"));
+        assert!(!is_valid_copr_repository_id("fedora"));
+        assert!(!is_valid_copr_repository_id("copr:"));
+        assert!(!is_valid_copr_repository_id("copr:demo;touch /tmp/bad"));
+        assert!(!is_valid_copr_repository_id("copr:demo/../../bad"));
+    }
 
     #[test]
     fn rejects_package_names_with_option_or_shell_characters() {
