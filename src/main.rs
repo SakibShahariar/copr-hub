@@ -29,7 +29,7 @@ fn build_ui(app: &adw::Application) {
     let repositories = build_repositories_page(&window);
     let installed = build_installed_page(&window);
     let saved = build_saved_page(&window);
-    let activity = build_activity_page();
+    let activity = build_activity_page(&window);
 
     add_page(
         &stack,
@@ -1013,7 +1013,7 @@ fn refresh_saved_projects(
     }
 }
 
-fn build_activity_page() -> gtk::Widget {
+fn build_activity_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
     content.set_margin_top(24);
     content.set_margin_bottom(24);
@@ -1059,6 +1059,7 @@ fn build_activity_page() -> gtk::Widget {
         let feedback = feedback.clone();
         move |_| {
             let dialog = gtk::MessageDialog::builder()
+                .transient_for(parent)
                 .modal(true)
                 .message_type(gtk::MessageType::Warning)
                 .buttons(gtk::ButtonsType::None)
