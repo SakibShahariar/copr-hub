@@ -614,6 +614,14 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
     content.append(&save_button);
     content.append(&save_feedback);
 
+    let copr_url = format!(
+        "https://copr.fedorainfracloud.org/coprs/{}/{}/",
+        project.owner, project.name
+    );
+    let copr_link = gtk::LinkButton::with_label(&copr_url, "Open on COPR");
+    copr_link.set_halign(gtk::Align::Center);
+    content.append(&copr_link);
+
     if let Some(homepage) = project.homepage.as_deref().filter(|url| !url.is_empty()) {
         let link = gtk::LinkButton::with_label(homepage, "Open project homepage");
         link.set_halign(gtk::Align::Center);
