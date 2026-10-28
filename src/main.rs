@@ -355,7 +355,11 @@ fn render_repositories(
                 row.add_prefix(&gtk::Image::from_icon_name("folder-symbolic"));
                 row.add_suffix(&gtk::Label::new(Some(status)));
 
-                let action = if repository.enabled { "Disable" } else { "Enable" };
+                let action = if repository.enabled {
+                    "Disable"
+                } else {
+                    "Enable"
+                };
                 let toggle = gtk::Button::with_label(action);
                 toggle.set_valign(gtk::Align::Center);
                 toggle.add_css_class("flat");
@@ -365,12 +369,7 @@ fn render_repositories(
                     let list = list.clone();
                     let feedback = feedback.clone();
                     move |_| {
-                        confirm_repository_toggle(
-                            &parent,
-                            &repository,
-                            &list,
-                            &feedback,
-                        );
+                        confirm_repository_toggle(&parent, &repository, &list, &feedback);
                     }
                 });
                 row.add_suffix(&toggle);
