@@ -17,4 +17,4 @@ if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database "$PREFIX/share/applications" >/dev/null 2>&1 || true
 fi
 
-printf 'Copr Hub installed for %s. Ensure %s/bin is on PATH.\n' "$USER" "$PREFIX"
+printf 'Copr Hub installed. Ensure %s/bin is on PATH.\n' "$PREFIX"
