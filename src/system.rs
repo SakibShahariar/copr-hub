@@ -280,8 +280,12 @@ mod tests {
 
     #[test]
     fn parses_dnf5_repository_enabled_overrides() {
-        let contents =
-            "[copr:copr.fedorainfracloud.org:alice:demo]\\nenabled=0\\n[fedora]\\nenabled=1\\n";
+        let contents = r#"
+[copr:copr.fedorainfracloud.org:alice:demo]
+enabled=0
+[fedora]
+enabled=1
+"#;
         let overrides = parse_enabled_overrides(contents);
         assert_eq!(
             overrides.get("copr:copr.fedorainfracloud.org:alice:demo"),
