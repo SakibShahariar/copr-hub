@@ -56,6 +56,47 @@ pub fn toggle(project: &CoprProject) -> Result<bool, String> {
     Ok(saved)
 }
 
+/// Export the locally saved projects as a portable JSON backup.
+pub fn export_to(path: &std::path::Path) -> Result<usize, String> {
+    let projects = load()?;
+    let contents = serde_json::to_vec_pretty(&projects)
+        .map_err(|error| format!("Could not encode saved projects: {error}"))?;
+    fs::write(path, contents).map_err(|error| format!("Could not export saved projects: {error}"))?;
+    Ok(projects.len())
+}
+
+/// Import a JSON backup, merging by owner/project identity without duplicating entries.
+pub fn import_from(path: &std::path::Path) -> Result<usize, String> {
+    let contents = fs::read_to_string(path)
+        .map_err(|error| format!("Could not read the selected backup: {error}"))?;
+    let imported: Vec<CoprProject> = serde_json::from_str(&contents)
+        .map_err(|error| format!("This is not a valid Copr Hub saved-project backup: {error}"))?;
+    if imported.iter().any(|project| project.name.trim().is_empty() || project.owner.trim().is_empty()) {
+        return Err("The backup contains a project without a name or owner.".to_string());
+    }
+
+    let path = favorites_path();
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Could not determine the saved-projects directory.".to_string())?;
+    fs::create_dir_all(parent)
+        .map_err(|error| format!("Could not create saved-projects directory: {error}"))?;
+
+    let mut projects = load()?;
+    let mut added = 0;
+    for project in imported {
+        if !projects.iter().any(|saved| saved.owner == project.owner && saved.name == project.name) {
+            projects.push(project);
+            added += 1;
+        }
+    }
+    let contents = serde_json::to_vec_pretty(&projects)
+        .map_err(|error| format!("Could not encode merged saved projects: {error}"))?;
+    storage::atomic_write(&path, &contents)
+        .map_err(|error| format!("Could not save imported projects: {error}"))?;
+    Ok(added)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
