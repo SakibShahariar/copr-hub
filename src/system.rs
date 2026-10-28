@@ -310,13 +310,17 @@ mod tests {
 
     #[test]
     fn command_failure_details_include_both_streams_and_bound_output() {
-        let details = command_failure_details(" permission denied ", "transaction failed", "fallback");
+        let details =
+            command_failure_details(" permission denied ", "transaction failed", "fallback");
         assert!(details.contains("Error: permission denied"));
         assert!(details.contains("Output: transaction failed"));
 
         let long_output = "x".repeat(MAX_COMMAND_DETAILS_CHARS + 100);
         let details = command_failure_details(&long_output, "", "fallback");
-        assert!(details.chars().count() <= MAX_COMMAND_DETAILS_CHARS + "… (output truncated)".chars().count());
+        assert!(
+            details.chars().count()
+                <= MAX_COMMAND_DETAILS_CHARS + "… (output truncated)".chars().count()
+        );
         assert!(details.ends_with("… (output truncated)"));
     }
 

@@ -157,8 +157,7 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     content.append(&feedback);
 
     let results = gtk::ListBox::new();
-    let latest_response: Rc<RefCell<Option<ProjectSearchResponse>>> =
-        Rc::new(RefCell::new(None));
+    let latest_response: Rc<RefCell<Option<ProjectSearchResponse>>> = Rc::new(RefCell::new(None));
     results.set_selection_mode(gtk::SelectionMode::None);
     results.add_css_class("boxed-list");
     content.append(&results);
