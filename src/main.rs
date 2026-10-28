@@ -941,12 +941,3 @@ fn refresh_activity(list: &gtk::ListBox, feedback: &gtk::Label) {
         Err(error) => feedback.set_text(&error),
     }
 }
-
-fn build_placeholder_page(icon_name: &str, title: &str, description: &str) -> gtk::Widget {
-    let page = adw::StatusPage::builder()
-        .icon_name(icon_name)
-        .title(title)
-        .description(description)
-        .build();
-    page.upcast()
-}
