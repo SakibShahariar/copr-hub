@@ -318,7 +318,7 @@ enabled=1
 
     #[test]
     fn repository_option_names_are_case_insensitive() {
-        let contents = "[copr:copr.fedorainfracloud.org:alice:demo]\\nNAME=Demo\\nENABLED=OFF\\n";
+        let contents = "[copr:copr.fedorainfracloud.org:alice:demo]\nNAME=Demo\nENABLED=OFF\n";
         let repositories = parse_copr_repositories(contents, Path::new("/tmp/test.repo"));
         assert_eq!(repositories.len(), 1);
         assert_eq!(repositories[0].name, "Demo");
