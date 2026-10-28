@@ -938,7 +938,7 @@ fn render_project_monitor(
             let freshness = copr::build_freshness_message(
                 monitor.latest_build.as_ref(),
                 gtk::glib::DateTime::now_local()
-                    .and_then(|date| date.to_unix())
+                    .map(|date| date.to_unix())
                     .unwrap_or(0),
             );
             status.set_text(&format!(
