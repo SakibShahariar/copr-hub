@@ -1,5 +1,6 @@
 mod activity;
 mod copr;
+mod favorites;
 mod system;
 
 use adw::prelude::*;
@@ -27,6 +28,7 @@ fn build_ui(app: &adw::Application) {
     let discover = build_discover_page(&window);
     let repositories = build_repositories_page(&window);
     let installed = build_installed_page(&window);
+    let saved = build_saved_page(&window);
     let activity = build_activity_page();
 
     add_page(
@@ -50,6 +52,7 @@ fn build_ui(app: &adw::Application) {
         "Installed",
         "package-x-generic-symbolic",
     );
+    add_page(&stack, &saved, "saved", "Saved", "starred-symbolic");
     add_page(
         &stack,
         &activity,
@@ -563,6 +566,44 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
     details.append(&owner);
     content.append(&details);
 
+    let saved = favorites::is_saved(project).unwrap_or(false);
+    let save_button = gtk::Button::with_label(if saved {
+        "Remove from saved"
+    } else {
+        "Save project"
+    });
+    save_button.set_halign(gtk::Align::Center);
+    save_button.add_css_class("flat");
+    let save_feedback = gtk::Label::new(None);
+    save_feedback.add_css_class("dim-label");
+    save_button.connect_clicked({
+        let project = project.clone();
+        let save_button = save_button.clone();
+        let save_feedback = save_feedback.clone();
+        move |_| match favorites::toggle(&project) {
+            Ok(saved) => {
+                save_button.set_label(if saved {
+                    "Remove from saved"
+                } else {
+                    "Save project"
+                });
+                save_feedback.set_text(if saved {
+                    "Project saved locally."
+                } else {
+                    "Project removed from saved projects."
+                });
+                let _ = activity::record(
+                    "Saved projects",
+                    &format!("{}/{}", project.owner, project.name),
+                    if saved { "Project saved" } else { "Project removed" },
+                );
+            }
+            Err(error) => save_feedback.set_text(&error),
+        }
+    });
+    content.append(&save_button);
+    content.append(&save_feedback);
+
     if let Some(homepage) = project.homepage.as_deref().filter(|url| !url.is_empty()) {
         let link = gtk::LinkButton::with_label(homepage, "Open project homepage");
         link.set_halign(gtk::Align::Center);
@@ -748,6 +789,86 @@ fn confirm_package_operation<F: Fn() + Clone + 'static>(
         }
     });
     dialog.present();
+}
+
+
+fn build_saved_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
+    content.set_margin_top(24);
+    content.set_margin_bottom(24);
+    content.set_margin_start(24);
+    content.set_margin_end(24);
+
+    let heading = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    let title = gtk::Label::builder()
+        .label("Saved projects")
+        .xalign(0.0)
+        .hexpand(true)
+        .build();
+    title.add_css_class("title-2");
+    let refresh = gtk::Button::with_label("Refresh");
+    refresh.set_icon_name("view-refresh-symbolic");
+    heading.append(&title);
+    heading.append(&refresh);
+    content.append(&heading);
+
+    let feedback = gtk::Label::builder()
+        .label("Saved projects are stored locally on this user account.")
+        .xalign(0.0)
+        .wrap(true)
+        .build();
+    feedback.add_css_class("dim-label");
+    content.append(&feedback);
+
+    let list = gtk::ListBox::new();
+    list.set_selection_mode(gtk::SelectionMode::None);
+    list.add_css_class("boxed-list");
+    content.append(&list);
+
+    refresh.connect_clicked({
+        let parent = parent.clone();
+        let list = list.clone();
+        let feedback = feedback.clone();
+        move |_| refresh_saved_projects(&parent, &list, &feedback)
+    });
+    refresh_saved_projects(parent, &list, &feedback);
+
+    content.upcast()
+}
+
+fn refresh_saved_projects(
+    parent: &adw::ApplicationWindow,
+    list: &gtk::ListBox,
+    feedback: &gtk::Label,
+) {
+    clear_list_box(list);
+    match favorites::load() {
+        Ok(projects) if projects.is_empty() => {
+            feedback.set_text("No saved projects yet. Save a project from its details window.");
+        }
+        Ok(projects) => {
+            feedback.set_text(&format!("{} saved project(s)", projects.len()));
+            for project in projects {
+                let row = adw::ActionRow::builder()
+                    .title(project.name.as_str())
+                    .subtitle(format!(
+                        "@{} · {}",
+                        project.owner,
+                        project.description.as_deref().unwrap_or("No description")
+                    ))
+                    .activatable(true)
+                    .build();
+                row.add_prefix(&gtk::Image::from_icon_name("starred-symbolic"));
+                row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
+                row.connect_activated({
+                    let parent = parent.clone();
+                    move |_| show_project_details(&parent, &project)
+                });
+                list.append(&row);
+            }
+        }
+        Err(error) => feedback.set_text(&error),
+    }
 }
 
 fn build_activity_page() -> gtk::Widget {

@@ -6,7 +6,7 @@ const COPR_API_BASE: &str = "https://copr.fedorainfracloud.org/api_3";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 const SEARCH_LIMIT: &str = "25";
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct CoprProject {
     #[serde(alias = "projectname")]
     pub name: String,
