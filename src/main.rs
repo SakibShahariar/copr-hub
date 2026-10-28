@@ -2,7 +2,6 @@ mod copr;
 mod system;
 
 use adw::prelude::*;
-use gtk::prelude::*;
 
 fn main() {
     let app = adw::Application::builder()
@@ -166,12 +165,16 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
                 let response =
                     gtk::gio::spawn_blocking(move || copr::search_projects(&query)).await;
                 search_button.set_sensitive(true);
+                let response = match response {
+                    Ok(result) => result,
+                    Err(_) => Err("The background search task failed unexpectedly.".to_string()),
+                };
                 render_projects(&parent, &results, &feedback, response);
             });
         }
     };
 
-    search.connect_search_activated({
+    search.connect_activate({
         let perform_search = perform_search.clone();
         move |_| perform_search()
     });
@@ -263,7 +266,7 @@ fn refresh_repositories(list: &gtk::ListBox, feedback: &gtk::Label) {
                 }
             }
             Ok(Err(error)) => feedback.set_text(&error),
-            Err(error) => feedback.set_text(&format!("Could not inspect repositories: {error}")),
+            Err(_) => feedback.set_text("The background repository scan failed unexpectedly."),
         }
     });
 }
@@ -386,6 +389,10 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
     gtk::glib::MainContext::default().spawn_local(async move {
         let response =
             gtk::gio::spawn_blocking(move || copr::fetch_project_monitor(&owner, &name)).await;
+        let response = match response {
+            Ok(result) => result,
+            Err(_) => Err("The background project lookup failed unexpectedly.".to_string()),
+        };
         render_project_monitor(&packages, &status, response);
     });
 }
