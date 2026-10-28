@@ -95,7 +95,10 @@ pub fn latest_release(homepage: &str) -> Result<Option<UpstreamRelease>, String>
             .map_err(|error| format!("Could not read GitLab release metadata: {error}"))?;
         let url = release._links.and_then(|links| links.self_url);
         return Ok(Some(UpstreamRelease {
-            name: release.name.filter(|name| !name.trim().is_empty()).unwrap_or(release.tag_name),
+            name: release
+                .name
+                .filter(|name| !name.trim().is_empty())
+                .unwrap_or(release.tag_name),
             published_at: release.released_at,
             url,
         }));
@@ -118,7 +121,10 @@ pub fn latest_release(homepage: &str) -> Result<Option<UpstreamRelease>, String>
         return Ok(None);
     }
     Ok(Some(UpstreamRelease {
-        name: release.name.filter(|name| !name.trim().is_empty()).unwrap_or(release.tag_name),
+        name: release
+            .name
+            .filter(|name| !name.trim().is_empty())
+            .unwrap_or(release.tag_name),
         published_at: release.published_at,
         url: release.html_url,
     }))
@@ -145,6 +151,9 @@ mod tests {
         assert_eq!(repository_parts("https://example.com/owner/project"), None);
         assert_eq!(repository_parts("file:///etc/passwd"), None);
         assert_eq!(repository_parts("https://github.com/owner"), None);
-        assert_eq!(repository_parts("https://github.com/owner/project/-/tree/main"), Some(("owner".into(), "project".into(), false)));
+        assert_eq!(
+            repository_parts("https://github.com/owner/project/-/tree/main"),
+            Some(("owner".into(), "project".into(), false))
+        );
     }
 }

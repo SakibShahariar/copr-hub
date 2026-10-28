@@ -898,7 +898,9 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
             }
         });
     } else {
-        upstream_status.set_text("Upstream release tracking unavailable: COPR does not provide a project homepage.");
+        upstream_status.set_text(
+            "Upstream release tracking unavailable: COPR does not provide a project homepage.",
+        );
     }
 
     let owner = project.owner.clone();
