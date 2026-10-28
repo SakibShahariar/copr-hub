@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const REPOSITORY_DIRECTORY: &str = "/etc/yum.repos.d";
+const MAX_COMMAND_DETAILS_CHARS: usize = 1200;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoprRepository {
@@ -243,12 +244,12 @@ pub fn set_copr_repository_enabled(repository_id: &str, enabled: bool) -> Result
         return Ok(());
     }
 
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    if stderr.is_empty() {
-        Err("DNF could not change the repository. Authentication may have been cancelled, or the DNF config-manager plugin may be unavailable.".to_string())
-    } else {
-        Err(format!("DNF could not change the repository: {stderr}"))
-    }
+    let details = command_failure_details(
+        &String::from_utf8_lossy(&output.stderr),
+        &String::from_utf8_lossy(&output.stdout),
+        "Authentication may have been cancelled, or the DNF config-manager plugin may be unavailable.",
+    );
+    Err(format!("DNF could not change the repository: {details}"))
 }
 
 pub fn set_package_installed(package_name: &str, install: bool) -> Result<(), String> {
@@ -273,22 +274,59 @@ pub fn set_package_installed(package_name: &str, install: bool) -> Result<(), St
         return Ok(());
     }
 
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let details = if !stderr.is_empty() {
-        stderr
-    } else if !stdout.is_empty() {
-        stdout
-    } else {
-        "Authentication may have been cancelled, or DNF could not complete the transaction."
-            .to_string()
-    };
+    let details = command_failure_details(
+        &String::from_utf8_lossy(&output.stderr),
+        &String::from_utf8_lossy(&output.stdout),
+        "Authentication may have been cancelled, or DNF could not complete the transaction.",
+    );
     Err(format!("DNF could not {action} {package_name}: {details}"))
+}
+
+fn command_failure_details(stderr: &str, stdout: &str, fallback: &str) -> String {
+    let mut details = Vec::new();
+    if !stderr.trim().is_empty() {
+        details.push(format!("Error: {}", stderr.trim()));
+    }
+    if !stdout.trim().is_empty() {
+        details.push(format!("Output: {}", stdout.trim()));
+    }
+
+    let details = if details.is_empty() {
+        fallback.to_string()
+    } else {
+        details.join("\n")
+    };
+
+    let mut bounded: String = details.chars().take(MAX_COMMAND_DETAILS_CHARS).collect();
+    if details.chars().count() > MAX_COMMAND_DETAILS_CHARS {
+        bounded.push_str("… (output truncated)");
+    }
+    bounded
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn command_failure_details_include_both_streams_and_bound_output() {
+        let details = command_failure_details(" permission denied ", "transaction failed", "fallback");
+        assert!(details.contains("Error: permission denied"));
+        assert!(details.contains("Output: transaction failed"));
+
+        let long_output = "x".repeat(MAX_COMMAND_DETAILS_CHARS + 100);
+        let details = command_failure_details(&long_output, "", "fallback");
+        assert!(details.chars().count() <= MAX_COMMAND_DETAILS_CHARS + "… (output truncated)".chars().count());
+        assert!(details.ends_with("… (output truncated)"));
+    }
+
+    #[test]
+    fn command_failure_details_use_fallback_when_streams_are_empty() {
+        assert_eq!(
+            command_failure_details("  ", "\n", "Authentication was cancelled."),
+            "Authentication was cancelled."
+        );
+    }
 
     #[test]
     fn validates_copr_repository_ids_before_invoking_privileged_commands() {
