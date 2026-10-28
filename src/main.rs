@@ -685,8 +685,6 @@ fn render_project_monitor(
     }
 }
 
-
-
 fn confirm_package_operation<F: Fn() + Clone + 'static>(
     parent: &impl IsA<gtk::Window>,
     package_name: String,
@@ -717,7 +715,10 @@ fn confirm_package_operation<F: Fn() + Clone + 'static>(
                 return;
             }
 
-            feedback.set_text(&format!("Waiting for DNF to {action_lower} {package_name}…", action_lower = action.to_lowercase()));
+            feedback.set_text(&format!(
+                "Waiting for DNF to {action_lower} {package_name}…",
+                action_lower = action.to_lowercase()
+            ));
             let package_name = package_name.clone();
             let feedback = feedback.clone();
             let on_success = on_success.clone();
@@ -739,7 +740,9 @@ fn confirm_package_operation<F: Fn() + Clone + 'static>(
                         on_success();
                     }
                     Ok(Err(error)) => feedback.set_text(&error),
-                    Err(_) => feedback.set_text("The background package operation failed unexpectedly."),
+                    Err(_) => {
+                        feedback.set_text("The background package operation failed unexpectedly.")
+                    }
                 }
             });
         }

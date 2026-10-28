@@ -186,7 +186,6 @@ pub fn set_copr_repository_enabled(repository_id: &str, enabled: bool) -> Result
     }
 }
 
-
 pub fn set_package_installed(package_name: &str, install: bool) -> Result<(), String> {
     if !package_name
         .chars()
