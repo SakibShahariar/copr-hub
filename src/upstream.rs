@@ -197,7 +197,6 @@ fn fetch_release(
     }))
 }
 
-
 /// Compare a numeric upstream tag with a package version only when the repository
 /// slug matches the package name. Unsupported version schemes return None.
 pub fn compare_package_version(

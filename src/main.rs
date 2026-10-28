@@ -885,8 +885,7 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
     let homepage_for_comparison = homepage.clone();
     let monitor_state: Rc<RefCell<Option<Result<copr::ProjectMonitor, String>>>> =
         Rc::new(RefCell::new(None));
-    let release_state: Rc<RefCell<Option<upstream::UpstreamRelease>>> =
-        Rc::new(RefCell::new(None));
+    let release_state: Rc<RefCell<Option<upstream::UpstreamRelease>>> = Rc::new(RefCell::new(None));
 
     let owner = project.owner.clone();
     let name = project.name.clone();
@@ -983,7 +982,6 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
             }
         });
     }
-
 }
 
 fn render_project_monitor(
@@ -1029,19 +1027,17 @@ fn render_project_monitor(
                         let state = build.state.as_deref().unwrap_or("unknown");
                         match build.pkg_version.as_deref() {
                             Some(version) => {
-                                let freshness = upstream_release
-                                    .zip(homepage)
-                                    .and_then(|(release, homepage)| {
+                                let freshness = upstream_release.zip(homepage).and_then(
+                                    |(release, homepage)| {
                                         upstream::compare_package_version(
                                             homepage,
                                             &release.version,
                                             &package.name,
                                             version,
                                         )
-                                    });
-                                let indicator = if freshness
-                                    == Some(std::cmp::Ordering::Greater)
-                                {
+                                    },
+                                );
+                                let indicator = if freshness == Some(std::cmp::Ordering::Greater) {
                                     " · upstream release newer"
                                 } else {
                                     ""
