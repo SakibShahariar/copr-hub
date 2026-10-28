@@ -26,7 +26,7 @@ struct ProjectListResponse {
     projects: Vec<CoprProject>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ProjectMonitor {
     #[serde(default)]
     pub packages: Vec<MonitoredPackage>,
@@ -50,14 +50,14 @@ struct BuildListResponse {
     builds: Vec<ProjectBuildSummary>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct MonitoredPackage {
     pub name: String,
     #[serde(default)]
     pub chroots: HashMap<String, ChrootBuild>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ChrootBuild {
     #[serde(default)]
     pub state: Option<String>,
