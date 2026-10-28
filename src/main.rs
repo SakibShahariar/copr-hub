@@ -648,7 +648,12 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
     packages.add_css_class("boxed-list");
     content.append(&packages);
 
-    window.set_content(Some(&content));
+    let scroll = gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .vscrollbar_policy(gtk::PolicyType::Automatic)
+        .child(&content)
+        .build();
+    window.set_content(Some(&scroll));
     window.present();
 
     let owner = project.owner.clone();
