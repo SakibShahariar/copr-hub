@@ -884,7 +884,8 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                     let date = release.published_at.as_deref().unwrap_or("release date unavailable");
                     let url = release.url.as_deref().unwrap_or("");
                     upstream_status.set_text(&format!(
-                        "Latest upstream stable release: {} · {}{}",
+                        "Latest upstream stable release: {} ({}) · {}{}",
+                        release.version,
                         release.name,
                         date,
                         if url.is_empty() { String::new() } else { format!(" · {url}") }
