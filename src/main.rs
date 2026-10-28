@@ -94,10 +94,8 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     content.set_margin_bottom(32);
     content.set_margin_start(32);
     content.set_margin_end(32);
-    content.set_halign(gtk::Align::Center);
     content.set_valign(gtk::Align::Start);
     content.set_hexpand(true);
-    content.set_width_request(640);
 
     let hero = adw::StatusPage::builder()
         .icon_name("system-software-install-symbolic")
@@ -182,7 +180,11 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     });
     search_button.connect_clicked(move |_| perform_search());
 
-    content.upcast()
+    let clamp = adw::Clamp::builder()
+        .maximum_size(640)
+        .child(&content)
+        .build();
+    clamp.upcast()
 }
 
 fn build_installed_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
