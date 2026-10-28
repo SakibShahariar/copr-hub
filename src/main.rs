@@ -1,3 +1,5 @@
+mod copr;
+
 use adw::prelude::*;
 use gtk::prelude::*;
 
@@ -39,27 +41,9 @@ fn build_ui(app: &adw::Application) {
     );
 
     add_page(&stack, &discover, "discover", "Discover", "system-search-symbolic");
-    add_page(
-        &stack,
-        &repositories,
-        "repositories",
-        "Repositories",
-        "folder-symbolic",
-    );
-    add_page(
-        &stack,
-        &installed,
-        "installed",
-        "Installed",
-        "package-x-generic-symbolic",
-    );
-    add_page(
-        &stack,
-        &activity,
-        "activity",
-        "Activity",
-        "document-properties-symbolic",
-    );
+    add_page(&stack, &repositories, "repositories", "Repositories", "folder-symbolic");
+    add_page(&stack, &installed, "installed", "Installed", "package-x-generic-symbolic");
+    add_page(&stack, &activity, "activity", "Activity", "document-properties-symbolic");
 
     let switcher_title = adw::ViewSwitcherTitle::builder()
         .stack(&stack)
@@ -89,41 +73,125 @@ fn add_page(
 }
 
 fn build_discover_page() -> gtk::Widget {
-    let content = gtk::Box::new(gtk::Orientation::Vertical, 24);
-    content.set_margin_top(36);
-    content.set_margin_bottom(36);
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 20);
+    content.set_margin_top(32);
+    content.set_margin_bottom(32);
     content.set_margin_start(32);
     content.set_margin_end(32);
     content.set_halign(gtk::Align::Center);
     content.set_valign(gtk::Align::Start);
     content.set_hexpand(true);
-    content.set_width_request(560);
+    content.set_width_request(640);
 
     let hero = adw::StatusPage::builder()
         .icon_name("system-software-install-symbolic")
         .title("Find your next COPR project")
         .description(
-            "Explore community-built software for Fedora. Search projects, inspect their packages, and decide what to add to your system.",
+            "Explore community-built software for Fedora. Search projects, inspect their details, and decide what to add to your system.",
         )
         .build();
     hero.set_hexpand(true);
     content.append(&hero);
 
+    let search_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    search_row.set_hexpand(true);
+
     let search = gtk::SearchEntry::builder()
         .placeholder_text("Search projects, packages, or owners")
-        .tooltip_text("Search the COPR project catalogue")
+        .tooltip_text("Enter a query and press Enter to search COPR")
         .hexpand(true)
         .build();
-    content.append(&search);
+    let search_button = gtk::Button::with_label("Search");
+    search_button.add_css_class("suggested-action");
+    search_row.append(&search);
+    search_row.append(&search_button);
+    content.append(&search_row);
 
-    let note = gtk::Label::builder()
-        .label("Project search is the next feature to be connected.")
+    let feedback = gtk::Label::builder()
+        .label("Search the COPR catalogue to find community projects.")
         .wrap(true)
-        .css_classes(["dim-label"])
+        .xalign(0.0)
         .build();
-    content.append(&note);
+    feedback.add_css_class("dim-label");
+    content.append(&feedback);
+
+    let results = gtk::ListBox::new();
+    results.set_selection_mode(gtk::SelectionMode::None);
+    results.add_css_class("boxed-list");
+    content.append(&results);
+
+    let perform_search = {
+        let search = search.clone();
+        let results = results.clone();
+        let feedback = feedback.clone();
+        move || {
+            let query = search.text().trim().to_string();
+            if query.is_empty() {
+                feedback.set_text("Enter a project, package, or owner to search.");
+                return;
+            }
+
+            feedback.set_text("Searching COPR…");
+            clear_list_box(&results);
+
+            let results = results.clone();
+            let feedback = feedback.clone();
+            gtk::glib::MainContext::default().spawn_local(async move {
+                let response =
+                    gtk::gio::spawn_blocking(move || copr::search_projects(&query)).await;
+                render_projects(&results, &feedback, response);
+            });
+        }
+    };
+
+    search.connect_search_activated({
+        let perform_search = perform_search.clone();
+        move |_| perform_search()
+    });
+    search_button.connect_clicked(move |_| perform_search());
 
     content.upcast()
+}
+
+fn clear_list_box(list: &gtk::ListBox) {
+    while let Some(child) = list.first_child() {
+        list.remove(&child);
+    }
+}
+
+fn render_projects(
+    list: &gtk::ListBox,
+    feedback: &gtk::Label,
+    response: Result<Vec<copr::CoprProject>, String>,
+) {
+    clear_list_box(list);
+
+    match response {
+        Ok(projects) if projects.is_empty() => {
+            feedback.set_text("No projects matched that search. Try a different name or owner.");
+        }
+        Ok(projects) => {
+            feedback.set_text(&format!("Found {} project(s).", projects.len()));
+            for project in projects {
+                let row = adw::ActionRow::builder()
+                    .title(project.name.as_str())
+                    .subtitle(
+                        project
+                            .description
+                            .as_deref()
+                            .unwrap_or("No project description provided"),
+                    )
+                    .build();
+                row.add_prefix(&gtk::Image::from_icon_name("package-x-generic-symbolic"));
+                row.add_suffix(&gtk::Label::new(Some(&format!("@{}", project.owner))));
+                if let Some(homepage) = project.homepage.as_deref().filter(|url| !url.is_empty()) {
+                    row.set_tooltip_text(Some(homepage));
+                }
+                list.append(&row);
+            }
+        }
+        Err(error) => feedback.set_text(&format!("Search failed: {error}")),
+    }
 }
 
 fn build_placeholder_page(icon_name: &str, title: &str, description: &str) -> gtk::Widget {
