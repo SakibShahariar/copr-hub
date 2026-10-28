@@ -428,6 +428,12 @@ fn build_repositories_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     heading.append(&refresh);
     content.append(&heading);
 
+    let filter = gtk::SearchEntry::builder()
+        .placeholder_text("Filter repositories by name, ID, or file")
+        .tooltip_text("Filter the loaded repository list locally")
+        .build();
+    content.append(&filter);
+
     let feedback = gtk::Label::builder()
         .label("Reading repository configuration…")
         .xalign(0.0)
@@ -439,6 +445,17 @@ fn build_repositories_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::SelectionMode::None);
     list.add_css_class("boxed-list");
+    list.set_filter_func({
+        let filter = filter.clone();
+        move |row| {
+            let query = filter.text().trim().to_ascii_lowercase();
+            query.is_empty() || row.widget_name().to_ascii_lowercase().contains(&query)
+        }
+    });
+    filter.connect_search_changed({
+        let list = list.clone();
+        move |_| list.invalidate_filter()
+    });
     content.append(&list);
 
     refresh.connect_clicked({
@@ -520,6 +537,12 @@ fn render_repositories(
                     .title(repository.name.as_str())
                     .subtitle(format!("{} · {}", repository.id, repository.file.display()))
                     .build();
+                row.set_widget_name(&format!(
+                    "{} {} {}",
+                    repository.name,
+                    repository.id,
+                    repository.file.display()
+                ));
                 row.add_prefix(&gtk::Image::from_icon_name("folder-symbolic"));
                 row.add_suffix(&gtk::Label::new(Some(status)));
 
