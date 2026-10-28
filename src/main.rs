@@ -320,8 +320,8 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
         .transient_for(parent)
         .modal(true)
         .title(project.name.as_str())
-        .default_width(560)
-        .default_height(420)
+        .default_width(600)
+        .default_height(560)
         .build();
 
     let content = gtk::Box::new(gtk::Orientation::Vertical, 16);
@@ -358,17 +358,91 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
         content.append(&link);
     }
 
-    let note = gtk::Label::builder()
-        .label(
-            "Build targets, package availability, and repository actions will be shown here as project inspection is expanded.",
-        )
+    let section_title = gtk::Label::builder()
+        .label("Packages and build targets")
+        .xalign(0.0)
+        .build();
+    section_title.add_css_class("title-3");
+    content.append(&section_title);
+
+    let status = gtk::Label::builder()
+        .label("Loading COPR build information…")
+        .xalign(0.0)
         .wrap(true)
         .build();
-    note.add_css_class("dim-label");
-    content.append(&note);
+    status.add_css_class("dim-label");
+    content.append(&status);
+
+    let packages = gtk::ListBox::new();
+    packages.set_selection_mode(gtk::SelectionMode::None);
+    packages.add_css_class("boxed-list");
+    content.append(&packages);
 
     window.set_content(Some(&content));
     window.present();
+
+    let owner = project.owner.clone();
+    let name = project.name.clone();
+    gtk::glib::MainContext::default().spawn_local(async move {
+        let response =
+            gtk::gio::spawn_blocking(move || copr::fetch_project_monitor(&owner, &name)).await;
+        render_project_monitor(&packages, &status, response);
+    });
+}
+
+fn render_project_monitor(
+    list: &gtk::ListBox,
+    status: &gtk::Label,
+    response: Result<copr::ProjectMonitor, String>,
+) {
+    clear_list_box(list);
+
+    match response {
+        Ok(monitor) if monitor.packages.is_empty() => {
+            status.set_text("COPR did not report any packages for this project.");
+        }
+        Ok(monitor) => {
+            let target_count = monitor
+                .packages
+                .iter()
+                .map(|package| package.chroots.len())
+                .sum::<usize>();
+            status.set_text(&format!(
+                "{} packages · {} package build-target entries. Build status is informational, not a security assessment.",
+                monitor.packages.len(),
+                target_count
+            ));
+
+            for package in monitor.packages {
+                let mut targets: Vec<_> = package.chroots.iter().collect();
+                targets.sort_by_key(|(name, _)| *name);
+                let summary = targets
+                    .iter()
+                    .take(3)
+                    .map(|(target, build)| {
+                        let state = build.state.as_deref().unwrap_or("unknown");
+                        match build.pkg_version.as_deref() {
+                            Some(version) => format!("{target}: {state} ({version})"),
+                            None => format!("{target}: {state}"),
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" · ");
+                let row = adw::ActionRow::builder()
+                    .title(package.name.as_str())
+                    .subtitle(if summary.is_empty() {
+                        "No build-target information reported".to_string()
+                    } else {
+                        summary
+                    })
+                    .build();
+                row.add_prefix(&gtk::Image::from_icon_name("package-x-generic-symbolic"));
+                row.add_suffix(&gtk::Label::new(Some(&format!("{} targets", targets.len()))));
+                list.append(&row);
+            }
+        }
+        Err(error) => status.set_text(&format!("Could not load project build information: {error}")),
+    }
 }
 
 fn build_placeholder_page(icon_name: &str, title: &str, description: &str) -> gtk::Widget {
