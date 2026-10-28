@@ -13,12 +13,8 @@ pub struct CoprRepository {
 
 pub fn scan_copr_repositories() -> Result<Vec<CoprRepository>, String> {
     let directory = Path::new(REPOSITORY_DIRECTORY);
-    let entries = fs::read_dir(directory).map_err(|error| {
-        format!(
-            "Could not read {}: {error}",
-            directory.display()
-        )
-    })?;
+    let entries = fs::read_dir(directory)
+        .map_err(|error| format!("Could not read {}: {error}", directory.display()))?;
 
     let mut repositories = Vec::new();
     for entry in entries.flatten() {
@@ -125,7 +121,10 @@ enabled=0
 
         let repositories = parse_copr_repositories(contents, Path::new("/tmp/test.repo"));
         assert_eq!(repositories.len(), 2);
-        assert_eq!(repositories[0].id, "copr:copr.fedorainfracloud.org:alice:editor");
+        assert_eq!(
+            repositories[0].id,
+            "copr:copr.fedorainfracloud.org:alice:editor"
+        );
         assert!(repositories[0].enabled);
         assert_eq!(repositories[0].name, "Alice's Editor");
         assert!(!repositories[1].enabled);
