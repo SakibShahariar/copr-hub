@@ -169,7 +169,13 @@ pub fn build_target_health_summary(packages: &[MonitoredPackage]) -> String {
     for package in packages {
         for (target, build) in &package.chroots {
             let counts = targets.entry(target.clone()).or_default();
-            match build.state.as_deref().unwrap_or("unknown").to_ascii_lowercase().as_str() {
+            match build
+                .state
+                .as_deref()
+                .unwrap_or("unknown")
+                .to_ascii_lowercase()
+                .as_str()
+            {
                 "succeeded" | "success" => counts[0] += 1,
                 "failed" | "error" => counts[1] += 1,
                 "pending" | "waiting" | "starting" | "running" | "building" => counts[2] += 1,
