@@ -182,8 +182,14 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
                     Ok(projects) => format!("{} result(s)", projects.len()),
                     Err(error) => format!("Failed: {error}"),
                 };
-                let _ = activity::record("Project search", &activity_query, &summary);
+                let activity_result = activity::record("Project search", &activity_query, &summary);
                 render_projects(&parent, &results, &feedback, response);
+                if let Err(error) = activity_result {
+                    feedback.set_text(&format!(
+                        "{} Activity history could not be saved: {error}",
+                        feedback.text()
+                    ));
+                }
             });
         }
     };
@@ -911,12 +917,16 @@ fn confirm_package_operation<F: Fn() + Clone + 'static>(
                 match result {
                     Ok(Ok(())) => {
                         let action_past = if install { "installed" } else { "removed" };
-                        let _ = activity::record(
+                        match activity::record(
                             "Package operation",
                             &operation_name,
                             &format!("Package {action_past} successfully"),
-                        );
-                        feedback.set_text(&format!("Package {action_past} successfully."));
+                        ) {
+                            Ok(()) => feedback.set_text(&format!("Package {action_past} successfully.")),
+                            Err(error) => feedback.set_text(&format!(
+                                "Package {action_past} successfully, but activity history could not be saved: {error}"
+                            )),
+                        }
                         on_success();
                     }
                     Ok(Err(error)) => feedback.set_text(&error),
