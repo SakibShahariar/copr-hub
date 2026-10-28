@@ -25,11 +25,7 @@ fn build_ui(app: &adw::Application) {
 
     let discover = build_discover_page(&window);
     let repositories = build_repositories_page();
-    let installed = build_placeholder_page(
-        "package-x-generic-symbolic",
-        "Installed packages",
-        "Installed packages and their source repositories will appear here.",
-    );
+    let installed = build_installed_page();
     let activity = build_placeholder_page(
         "document-properties-symbolic",
         "Recent activity",
@@ -181,6 +177,83 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     search_button.connect_clicked(move |_| perform_search());
 
     content.upcast()
+}
+
+
+fn build_installed_page() -> gtk::Widget {
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
+    content.set_margin_top(24);
+    content.set_margin_bottom(24);
+    content.set_margin_start(24);
+    content.set_margin_end(24);
+
+    let heading = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    let title = gtk::Label::builder()
+        .label("Installed COPR packages")
+        .xalign(0.0)
+        .hexpand(true)
+        .build();
+    title.add_css_class("title-2");
+    let refresh = gtk::Button::with_label("Refresh");
+    refresh.set_icon_name("view-refresh-symbolic");
+    heading.append(&title);
+    heading.append(&refresh);
+    content.append(&heading);
+
+    let feedback = gtk::Label::builder()
+        .label("Checking installed packages…")
+        .xalign(0.0)
+        .wrap(true)
+        .build();
+    feedback.add_css_class("dim-label");
+    content.append(&feedback);
+
+    let list = gtk::ListBox::new();
+    list.set_selection_mode(gtk::SelectionMode::None);
+    list.add_css_class("boxed-list");
+    content.append(&list);
+
+    refresh.connect_clicked({
+        let list = list.clone();
+        let feedback = feedback.clone();
+        move |_| refresh_installed_packages(&list, &feedback)
+    });
+    refresh_installed_packages(&list, &feedback);
+
+    content.upcast()
+}
+
+fn refresh_installed_packages(list: &gtk::ListBox, feedback: &gtk::Label) {
+    feedback.set_text("Querying DNF for installed COPR packages…");
+    clear_list_box(list);
+
+    let list = list.clone();
+    let feedback = feedback.clone();
+    gtk::glib::MainContext::default().spawn_local(async move {
+        let response = gtk::gio::spawn_blocking(system::list_installed_copr_packages).await;
+        clear_list_box(&list);
+
+        match response {
+            Ok(Ok(packages)) if packages.is_empty() => {
+                feedback.set_text(
+                    "No installed packages from COPR repositories were reported by DNF.",
+                );
+            }
+            Ok(Ok(packages)) => {
+                feedback.set_text(&format!("{} installed COPR package(s)", packages.len()));
+                for package in packages {
+                    let row = adw::ActionRow::builder()
+                        .title(package.name.as_str())
+                        .subtitle(format!("{} · {}", package.version, package.repository))
+                        .build();
+                    row.add_prefix(&gtk::Image::from_icon_name("package-x-generic-symbolic"));
+                    list.append(&row);
+                }
+            }
+            Ok(Err(error)) => feedback.set_text(&error),
+            Err(_) => feedback.set_text("The background package query failed unexpectedly."),
+        }
+    });
 }
 
 fn build_repositories_page() -> gtk::Widget {

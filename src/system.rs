@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 const REPOSITORY_DIRECTORY: &str = "/etc/yum.repos.d";
 
@@ -99,9 +100,77 @@ fn parse_copr_repositories(contents: &str, path: &Path) -> Vec<CoprRepository> {
     repositories
 }
 
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InstalledCoprPackage {
+    pub name: String,
+    pub version: String,
+    pub repository: String,
+}
+
+pub fn list_installed_copr_packages() -> Result<Vec<InstalledCoprPackage>, String> {
+    let output = Command::new("dnf")
+        .args([
+            "repoquery",
+            "--installed",
+            "--queryformat",
+            "%{name}\t%{evr}\t%{from_repo}",
+        ])
+        .output()
+        .map_err(|error| {
+            format!("Could not start DNF to inspect installed packages: {error}")
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(if stderr.is_empty() {
+            "DNF could not query installed packages. Check that DNF5 is installed.".to_string()
+        } else {
+            format!("DNF could not query installed packages: {stderr}")
+        });
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut packages = parse_installed_copr_packages(&stdout);
+    packages.sort_by(|left, right| left.name.cmp(&right.name));
+    Ok(packages)
+}
+
+fn parse_installed_copr_packages(output: &str) -> Vec<InstalledCoprPackage> {
+    output
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.splitn(3, '\t');
+            let name = fields.next()?.trim();
+            let version = fields.next()?.trim();
+            let repository = fields.next()?.trim();
+            if name.is_empty() || repository.is_empty() {
+                return None;
+            }
+            if !repository.to_ascii_lowercase().contains("copr:") {
+                return None;
+            }
+            Some(InstalledCoprPackage {
+                name: name.to_string(),
+                version: version.to_string(),
+                repository: repository.to_string(),
+            })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn filters_installed_packages_to_copr_sources() {
+        let output = "demo\t1.2-1.fc44\tcopr:copr.fedorainfracloud.org:alice:demo\nbase\t2.0-1.fc44\tfedora\n";
+        let packages = parse_installed_copr_packages(output);
+        assert_eq!(packages.len(), 1);
+        assert_eq!(packages[0].name, "demo");
+        assert_eq!(packages[0].version, "1.2-1.fc44");
+    }
 
     #[test]
     fn parses_enabled_and_disabled_copr_sections() {
