@@ -201,7 +201,7 @@ fn parse_installed_copr_packages(output: &str) -> Vec<InstalledCoprPackage> {
             let name = fields.next()?.trim();
             let version = fields.next()?.trim();
             let repository = fields.next()?.trim();
-            if name.is_empty() || repository.is_empty() {
+            if name.is_empty() || version.is_empty() || repository.is_empty() {
                 return None;
             }
             if !repository.to_ascii_lowercase().starts_with("copr:") {
@@ -372,6 +372,14 @@ enabled=1
         assert_eq!(packages.len(), 1);
         assert_eq!(packages[0].name, "demo");
         assert_eq!(packages[0].version, "1.2-1.fc44");
+    }
+
+    #[test]
+    fn ignores_malformed_installed_package_rows() {
+        let output = "missing-version\\t\\tcopr:copr.fedorainfracloud.org:alice:demo\\nmissing-repo\\t1.0-1\\t\\nmissing-columns\\nvalid\\t1.0-1\\tcopr:copr.fedorainfracloud.org:alice:demo\\n";
+        let packages = parse_installed_copr_packages(output);
+        assert_eq!(packages.len(), 1);
+        assert_eq!(packages[0].name, "valid");
     }
 
     #[test]
