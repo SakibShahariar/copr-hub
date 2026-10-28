@@ -1,12 +1,15 @@
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 static TEMP_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
-/// Replace a file atomically without sharing a predictable temporary filename
-/// between concurrent writes from multiple application instances.
+/// Replace a file atomically using a private temporary file.
+///
+/// User data files are created with owner-only permissions so that activity
+/// history and saved projects are not readable by other local accounts.
 pub fn atomic_write(path: &Path, contents: &[u8]) -> io::Result<()> {
     let parent = path.parent().ok_or_else(|| {
         io::Error::new(
@@ -30,6 +33,7 @@ pub fn atomic_write(path: &Path, contents: &[u8]) -> io::Result<()> {
         match OpenOptions::new()
             .write(true)
             .create_new(true)
+            .mode(0o600)
             .open(&candidate)
         {
             Ok(file) => {
@@ -62,19 +66,25 @@ pub fn atomic_write(path: &Path, contents: &[u8]) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::unix::fs::PermissionsExt;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    #[test]
-    fn atomically_replaces_existing_file_contents() {
+    fn test_directory(label: &str) -> std::path::PathBuf {
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
         let directory = std::env::temp_dir().join(format!(
-            "copr-hub-storage-test-{}-{unique}",
+            "copr-hub-storage-{label}-{}-{unique}",
             std::process::id()
         ));
         fs::create_dir_all(&directory).unwrap();
+        directory
+    }
+
+    #[test]
+    fn atomically_replaces_existing_file_contents() {
+        let directory = test_directory("replace");
         let path = directory.join("data.json");
 
         fs::write(&path, b"old").unwrap();
@@ -91,16 +101,36 @@ mod tests {
     }
 
     #[test]
+    fn user_data_files_have_owner_only_permissions() {
+        let directory = test_directory("permissions");
+        let path = directory.join("private.json");
+
+        atomic_write(&path, b"private data").unwrap();
+
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn replacement_restores_private_permissions() {
+        let directory = test_directory("replacement-permissions");
+        let path = directory.join("data.json");
+
+        fs::write(&path, b"old").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+        atomic_write(&path, b"new").unwrap();
+
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
     fn concurrent_writes_use_independent_temporary_files() {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let directory = std::env::temp_dir().join(format!(
-            "copr-hub-storage-concurrent-test-{}-{unique}",
-            std::process::id()
-        ));
-        fs::create_dir_all(&directory).unwrap();
+        let directory = test_directory("concurrent");
         let path = directory.join("data.json");
 
         let writers: Vec<_> = (0..8)

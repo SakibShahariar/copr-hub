@@ -65,7 +65,7 @@ Uninstalling preserves local saved projects and activity history.
 - Activity history: `$XDG_DATA_HOME/copr-hub/activity.json` (usually `~/.local/share/copr-hub/activity.json`).
 - Saved projects: `$XDG_DATA_HOME/copr-hub/favorites.json`.
 
-These files remain local to the current user account and are not uploaded.
+These files remain local to the current user account and are not uploaded. The app writes them atomically with owner-only (`0600`) file permissions, including when replacing an older file with broader permissions.
 
 ## Project identity
 
