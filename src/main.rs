@@ -797,7 +797,10 @@ fn refresh_activity(list: &gtk::ListBox, feedback: &gtk::Label) {
             feedback.set_text("No activity recorded yet. Project searches and repository changes will appear here.");
         }
         Ok(entries) => {
-            feedback.set_text(&format!("{} recent event(s) · stored locally", entries.len()));
+            feedback.set_text(&format!(
+                "{} recent event(s) · stored locally",
+                entries.len()
+            ));
             for entry in entries {
                 let row = adw::ActionRow::builder()
                     .title(format!("{} — {}", entry.action, entry.target))

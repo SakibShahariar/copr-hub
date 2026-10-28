@@ -14,9 +14,7 @@ pub struct ActivityEntry {
 }
 
 fn history_path() -> PathBuf {
-    glib::user_data_dir()
-        .join("copr-hub")
-        .join("activity.json")
+    glib::user_data_dir().join("copr-hub").join("activity.json")
 }
 
 pub fn load() -> Result<Vec<ActivityEntry>, String> {
