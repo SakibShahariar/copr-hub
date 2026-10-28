@@ -63,20 +63,24 @@ fn request_error(error: reqwest::Error) -> String {
     }
 }
 
-fn service_response_error(error: reqwest::Error, operation: &str) -> String {
-    match error.status() {
-        Some(reqwest::StatusCode::TOO_MANY_REQUESTS) => {
+fn service_status_message(status: reqwest::StatusCode, operation: &str) -> String {
+    match status {
+        reqwest::StatusCode::TOO_MANY_REQUESTS => {
             "COPR is receiving too many requests. Wait a moment and try again.".to_string()
         }
-        Some(reqwest::StatusCode::NOT_FOUND) => {
-            format!("COPR could not find the requested {operation}.")
-        }
-        Some(status) if status.is_server_error() => {
+        reqwest::StatusCode::NOT_FOUND => format!("COPR could not find the requested {operation}."),
+        status if status.is_server_error() => {
             format!("COPR is temporarily unavailable (HTTP {status}). Try again later.")
         }
-        Some(status) => format!("COPR rejected the {operation} request (HTTP {status})."),
-        None => format!("The COPR service request failed: {error}"),
+        status => format!("COPR rejected the {operation} request (HTTP {status})."),
     }
+}
+
+fn service_response_error(error: reqwest::Error, operation: &str) -> String {
+    error
+        .status()
+        .map(|status| service_status_message(status, operation))
+        .unwrap_or_else(|| format!("The COPR service request failed: {error}"))
 }
 
 pub fn search_projects(pattern: &str) -> Result<Vec<CoprProject>, String> {
@@ -117,6 +121,18 @@ pub fn fetch_project_monitor(owner: &str, project: &str) -> Result<ProjectMonito
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn service_status_messages_cover_common_api_failures() {
+        assert!(service_status_message(reqwest::StatusCode::TOO_MANY_REQUESTS, "search")
+            .contains("too many requests"));
+        assert!(service_status_message(reqwest::StatusCode::NOT_FOUND, "project")
+            .contains("could not find"));
+        assert!(service_status_message(reqwest::StatusCode::BAD_GATEWAY, "search")
+            .contains("temporarily unavailable"));
+        assert!(service_status_message(reqwest::StatusCode::FORBIDDEN, "search")
+            .contains("HTTP 403"));
+    }
 
     #[test]
     fn empty_search_does_not_make_a_request() {
