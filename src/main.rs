@@ -1,3 +1,4 @@
+mod activity;
 mod copr;
 mod system;
 
@@ -26,11 +27,7 @@ fn build_ui(app: &adw::Application) {
     let discover = build_discover_page(&window);
     let repositories = build_repositories_page(&window);
     let installed = build_installed_page();
-    let activity = build_placeholder_page(
-        "document-properties-symbolic",
-        "Recent activity",
-        "Repository changes and package operations will be recorded here.",
-    );
+    let activity = build_activity_page();
 
     add_page(
         &stack,
@@ -153,6 +150,7 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
             search_button.set_sensitive(false);
             clear_list_box(&results);
 
+            let activity_query = query.clone();
             let results = results.clone();
             let feedback = feedback.clone();
             let search_button = search_button.clone();
@@ -165,6 +163,11 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
                     Ok(result) => result,
                     Err(_) => Err("The background search task failed unexpectedly.".to_string()),
                 };
+                let summary = match &response {
+                    Ok(projects) => format!("{} result(s)", projects.len()),
+                    Err(error) => format!("Failed: {error}"),
+                };
+                let _ = activity::record("Project search", &activity_query, &summary);
                 render_projects(&parent, &results, &feedback, response);
             });
         }
@@ -425,6 +428,11 @@ fn confirm_repository_toggle(
                 .await;
                 match result {
                     Ok(Ok(())) => {
+                        let _ = activity::record(
+                            "Repository configuration",
+                            &repository.id,
+                            &format!("Repository {action_past}"),
+                        );
                         feedback.set_text(&format!("Repository {action_past} successfully."));
                         refresh_repositories(&parent, &list, &feedback);
                     }
@@ -620,6 +628,71 @@ fn render_project_monitor(
         Err(error) => status.set_text(&format!(
             "Could not load project build information: {error}"
         )),
+    }
+}
+
+
+fn build_activity_page() -> gtk::Widget {
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
+    content.set_margin_top(24);
+    content.set_margin_bottom(24);
+    content.set_margin_start(24);
+    content.set_margin_end(24);
+
+    let heading = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    let title = gtk::Label::builder()
+        .label("Recent activity")
+        .xalign(0.0)
+        .hexpand(true)
+        .build();
+    title.add_css_class("title-2");
+    let refresh = gtk::Button::with_label("Refresh");
+    refresh.set_icon_name("view-refresh-symbolic");
+    heading.append(&title);
+    heading.append(&refresh);
+    content.append(&heading);
+
+    let feedback = gtk::Label::builder()
+        .label("Activity history is stored locally on this user account.")
+        .xalign(0.0)
+        .wrap(true)
+        .build();
+    feedback.add_css_class("dim-label");
+    content.append(&feedback);
+
+    let list = gtk::ListBox::new();
+    list.set_selection_mode(gtk::SelectionMode::None);
+    list.add_css_class("boxed-list");
+    content.append(&list);
+
+    refresh.connect_clicked({
+        let list = list.clone();
+        let feedback = feedback.clone();
+        move |_| refresh_activity(&list, &feedback)
+    });
+    refresh_activity(&list, &feedback);
+
+    content.upcast()
+}
+
+fn refresh_activity(list: &gtk::ListBox, feedback: &gtk::Label) {
+    clear_list_box(list);
+    match activity::load() {
+        Ok(entries) if entries.is_empty() => {
+            feedback.set_text("No activity recorded yet. Project searches and repository changes will appear here.");
+        }
+        Ok(entries) => {
+            feedback.set_text(&format!("{} recent event(s) · stored locally", entries.len()));
+            for entry in entries {
+                let row = adw::ActionRow::builder()
+                    .title(format!("{} — {}", entry.action, entry.target))
+                    .subtitle(entry.summary)
+                    .build();
+                row.add_prefix(&gtk::Image::from_icon_name("document-properties-symbolic"));
+                list.append(&row);
+            }
+        }
+        Err(error) => feedback.set_text(&error),
     }
 }
 
