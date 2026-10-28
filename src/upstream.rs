@@ -1,7 +1,15 @@
 use serde::Deserialize;
-use std::time::Duration;
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+const CACHE_TTL: Duration = Duration::from_secs(15 * 60);
+const CACHE_CAPACITY: usize = 128;
+
+type ReleaseCache = Mutex<HashMap<String, (Instant, Option<UpstreamRelease>)>>;
+
+static RELEASE_CACHE: OnceLock<ReleaseCache> = OnceLock::new();
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct UpstreamRelease {
@@ -89,6 +97,40 @@ pub fn latest_release(homepage: &str) -> Result<Option<UpstreamRelease>, String>
     let Some((owner, repo, is_gitlab)) = repository_parts(homepage) else {
         return Ok(None);
     };
+    let key = format!("{}:{owner}/{repo}", if is_gitlab { "gitlab" } else { "github" });
+    let cache = RELEASE_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+
+    if let Ok(cache) = cache.lock() {
+        if let Some((stored_at, release)) = cache.get(&key) {
+            if stored_at.elapsed() < CACHE_TTL {
+                return Ok(release.clone());
+            }
+        }
+    }
+
+    let result = fetch_release(&owner, &repo, is_gitlab);
+    if let Ok(release) = &result {
+        if let Ok(mut cache) = cache.lock() {
+            if cache.len() >= CACHE_CAPACITY && !cache.contains_key(&key) {
+                if let Some(oldest_key) = cache
+                    .iter()
+                    .min_by_key(|(_, (stored_at, _))| *stored_at)
+                    .map(|(key, _)| key.clone())
+                {
+                    cache.remove(&oldest_key);
+                }
+            }
+            cache.insert(key, (Instant::now(), release.clone()));
+        }
+    }
+    result
+}
+
+fn fetch_release(
+    owner: &str,
+    repo: &str,
+    is_gitlab: bool,
+) -> Result<Option<UpstreamRelease>, String> {
     let client = client()?;
     if is_gitlab {
         let project_path = format!("{owner}/{repo}");
