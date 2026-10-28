@@ -159,6 +159,36 @@ fn parse_installed_copr_packages(output: &str) -> Vec<InstalledCoprPackage> {
         .collect()
 }
 
+pub fn set_copr_repository_enabled(repository_id: &str, enabled: bool) -> Result<(), String> {
+    if !repository_id.starts_with("copr:")
+        || !repository_id
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || ":._-".contains(character))
+    {
+        return Err("The repository identifier is not a valid COPR repository ID.".to_string());
+    }
+
+    let setting = format!(
+        "{repository_id}.enabled={}",
+        if enabled { "1" } else { "0" }
+    );
+    let output = Command::new("pkexec")
+        .args(["dnf", "config-manager", "setopt", &setting])
+        .output()
+        .map_err(|error| format!("Could not start the privileged DNF helper: {error}"))?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    if stderr.is_empty() {
+        Err("DNF could not change the repository. Authentication may have been cancelled, or the DNF config-manager plugin may be unavailable.".to_string())
+    } else {
+        Err(format!("DNF could not change the repository: {stderr}"))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

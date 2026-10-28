@@ -24,7 +24,7 @@ fn build_ui(app: &adw::Application) {
     stack.set_vexpand(true);
 
     let discover = build_discover_page(&window);
-    let repositories = build_repositories_page();
+    let repositories = build_repositories_page(&window);
     let installed = build_installed_page();
     let activity = build_placeholder_page(
         "document-properties-symbolic",
@@ -256,7 +256,7 @@ fn refresh_installed_packages(list: &gtk::ListBox, feedback: &gtk::Label) {
     });
 }
 
-fn build_repositories_page() -> gtk::Widget {
+fn build_repositories_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
     content.set_margin_top(24);
     content.set_margin_bottom(24);
@@ -292,56 +292,152 @@ fn build_repositories_page() -> gtk::Widget {
     refresh.connect_clicked({
         let list = list.clone();
         let feedback = feedback.clone();
-        move |_| refresh_repositories(&list, &feedback)
+        let parent = parent.clone();
+        move |_| refresh_repositories(&parent, &list, &feedback)
     });
-    refresh_repositories(&list, &feedback);
+    refresh_repositories(parent, &list, &feedback);
 
     content.upcast()
 }
 
-fn refresh_repositories(list: &gtk::ListBox, feedback: &gtk::Label) {
+fn refresh_repositories(
+    parent: &adw::ApplicationWindow,
+    list: &gtk::ListBox,
+    feedback: &gtk::Label,
+) {
     feedback.set_text("Reading COPR repository configuration…");
     clear_list_box(list);
 
+    let parent = parent.clone();
     let list = list.clone();
     let feedback = feedback.clone();
     gtk::glib::MainContext::default().spawn_local(async move {
         let response = gtk::gio::spawn_blocking(system::scan_copr_repositories).await;
-        clear_list_box(&list);
-
         match response {
-            Ok(Ok(repositories)) if repositories.is_empty() => {
-                feedback.set_text(
-                    "No COPR repositories were found in /etc/yum.repos.d. Add a COPR repository with DNF to see it here.",
-                );
+            Ok(result) => render_repositories(&parent, &list, &feedback, result),
+            Err(_) => {
+                clear_list_box(&list);
+                feedback.set_text("The background repository scan failed unexpectedly.");
             }
-            Ok(Ok(repositories)) => {
-                let enabled = repositories.iter().filter(|repo| repo.enabled).count();
-                feedback.set_text(&format!(
-                    "{} COPR repositories found · {} enabled",
-                    repositories.len(),
-                    enabled
-                ));
-
-                for repository in repositories {
-                    let status = if repository.enabled {
-                        "Enabled"
-                    } else {
-                        "Disabled"
-                    };
-                    let row = adw::ActionRow::builder()
-                        .title(repository.name.as_str())
-                        .subtitle(format!("{} · {}", repository.id, repository.file.display()))
-                        .build();
-                    row.add_prefix(&gtk::Image::from_icon_name("folder-symbolic"));
-                    row.add_suffix(&gtk::Label::new(Some(status)));
-                    list.append(&row);
-                }
-            }
-            Ok(Err(error)) => feedback.set_text(&error),
-            Err(_) => feedback.set_text("The background repository scan failed unexpectedly."),
         }
     });
+}
+
+fn render_repositories(
+    parent: &adw::ApplicationWindow,
+    list: &gtk::ListBox,
+    feedback: &gtk::Label,
+    response: Result<Vec<system::CoprRepository>, String>,
+) {
+    clear_list_box(list);
+    match response {
+        Ok(repositories) if repositories.is_empty() => {
+            feedback.set_text(
+                "No COPR repositories were found in /etc/yum.repos.d. Add a COPR repository with DNF to see it here.",
+            );
+        }
+        Ok(repositories) => {
+            let enabled = repositories.iter().filter(|repo| repo.enabled).count();
+            feedback.set_text(&format!(
+                "{} COPR repositories found · {} enabled",
+                repositories.len(),
+                enabled
+            ));
+
+            for repository in repositories {
+                let status = if repository.enabled {
+                    "Enabled"
+                } else {
+                    "Disabled"
+                };
+                let row = adw::ActionRow::builder()
+                    .title(repository.name.as_str())
+                    .subtitle(format!("{} · {}", repository.id, repository.file.display()))
+                    .build();
+                row.add_prefix(&gtk::Image::from_icon_name("folder-symbolic"));
+                row.add_suffix(&gtk::Label::new(Some(status)));
+
+                let action = if repository.enabled { "Disable" } else { "Enable" };
+                let toggle = gtk::Button::with_label(action);
+                toggle.set_valign(gtk::Align::Center);
+                toggle.add_css_class("flat");
+                toggle.connect_clicked({
+                    let parent = parent.clone();
+                    let repository = repository.clone();
+                    let list = list.clone();
+                    let feedback = feedback.clone();
+                    move |_| {
+                        confirm_repository_toggle(
+                            &parent,
+                            &repository,
+                            &list,
+                            &feedback,
+                        );
+                    }
+                });
+                row.add_suffix(&toggle);
+                list.append(&row);
+            }
+        }
+        Err(error) => feedback.set_text(&error),
+    }
+}
+
+fn confirm_repository_toggle(
+    parent: &adw::ApplicationWindow,
+    repository: &system::CoprRepository,
+    list: &gtk::ListBox,
+    feedback: &gtk::Label,
+) {
+    let enabling = !repository.enabled;
+    let action = if enabling { "Enable" } else { "Disable" };
+    let action_past = if enabling { "enabled" } else { "disabled" };
+    let dialog = gtk::MessageDialog::builder()
+        .transient_for(parent)
+        .modal(true)
+        .message_type(gtk::MessageType::Question)
+        .buttons(gtk::ButtonsType::None)
+        .text(format!("{action} {}?", repository.name))
+        .secondary_text(
+            "This changes system-wide DNF repository configuration. You will be asked to authenticate.",
+        )
+        .build();
+    dialog.add_button("Cancel", gtk::ResponseType::Cancel);
+    dialog.add_button(action, gtk::ResponseType::Accept);
+
+    dialog.connect_response({
+        let parent = parent.clone();
+        let repository = repository.clone();
+        let list = list.clone();
+        let feedback = feedback.clone();
+        move |dialog, response| {
+            dialog.close();
+            if response != gtk::ResponseType::Accept {
+                return;
+            }
+
+            feedback.set_text(&format!("{action}ing repository…"));
+            let repository_id = repository.id.clone();
+            let list = list.clone();
+            let feedback = feedback.clone();
+            let parent = parent.clone();
+            gtk::glib::MainContext::default().spawn_local(async move {
+                let result = gtk::gio::spawn_blocking(move || {
+                    system::set_copr_repository_enabled(&repository_id, enabling)
+                })
+                .await;
+                match result {
+                    Ok(Ok(())) => {
+                        feedback.set_text(&format!("Repository {action_past} successfully."));
+                        refresh_repositories(&parent, &list, &feedback);
+                    }
+                    Ok(Err(error)) => feedback.set_text(&error),
+                    Err(_) => feedback.set_text("The repository operation failed unexpectedly."),
+                }
+            });
+        }
+    });
+    dialog.present();
 }
 
 fn clear_list_box(list: &gtk::ListBox) {
