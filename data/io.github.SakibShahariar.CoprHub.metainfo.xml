@@ -13,7 +13,7 @@
     <binary>copr-hub</binary>
   </provides>
   <url type="homepage">https://github.com/SakibShahariar/copr-hub</url>
-  <developer>
+  <developer id="io.github.sakibshahariar">
     <name>Sakib Shahariar</name>
   </developer>
   <content_rating type="oars-1.1"/>
