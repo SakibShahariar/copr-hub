@@ -200,7 +200,7 @@ fn parse_installed_copr_packages(output: &str) -> Vec<InstalledCoprPackage> {
             if name.is_empty() || repository.is_empty() {
                 return None;
             }
-            if !repository.to_ascii_lowercase().contains("copr:") {
+            if !repository.to_ascii_lowercase().starts_with("copr:") {
                 return None;
             }
             Some(InstalledCoprPackage {
@@ -361,7 +361,7 @@ enabled=1
 
     #[test]
     fn filters_installed_packages_to_copr_sources() {
-        let output = "demo\t1.2-1.fc44\tcopr:copr.fedorainfracloud.org:alice:demo\nbase\t2.0-1.fc44\tfedora\n";
+        let output = "demo\t1.2-1.fc44\tcopr:copr.fedorainfracloud.org:alice:demo\nbase\t2.0-1.fc44\tfedora\nfalse-positive\t1.0-1\tnotcopr:example\n";
         let packages = parse_installed_copr_packages(output);
         assert_eq!(packages.len(), 1);
         assert_eq!(packages[0].name, "demo");
