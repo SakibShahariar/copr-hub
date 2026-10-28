@@ -4,7 +4,7 @@ Copr Hub is a native Linux desktop application for discovering Fedora COPR proje
 
 ## Current functionality
 
-- Search the public COPR API for projects by name.
+- Search the public COPR API for projects by name, then sort the current results by project name or owner without repeating the network request.
 - Display project names, owners, descriptions, and optional homepage links.
 - Open project details with package names, build targets, reported build states, and package versions; inspect every build target for a package in a dedicated details window.
 - Save and unsave projects locally, then revisit them from the Saved tab; Saved and Activity refresh automatically when opened.

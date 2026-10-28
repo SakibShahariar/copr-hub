@@ -617,7 +617,11 @@ fn render_projects(
                     a.name
                         .to_ascii_lowercase()
                         .cmp(&b.name.to_ascii_lowercase())
-                        .then_with(|| a.owner.to_ascii_lowercase().cmp(&b.owner.to_ascii_lowercase()))
+                        .then_with(|| {
+                            a.owner
+                                .to_ascii_lowercase()
+                                .cmp(&b.owner.to_ascii_lowercase())
+                        })
                 }),
                 2 => projects.sort_by(|a, b| {
                     a.owner
