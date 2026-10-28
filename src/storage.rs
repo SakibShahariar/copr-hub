@@ -86,6 +86,42 @@ mod tests {
     }
 
     #[test]
+    fn concurrent_writes_use_independent_temporary_files() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!(
+            "copr-hub-storage-concurrent-test-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("data.json");
+
+        let writers: Vec<_> = (0..8)
+            .map(|index| {
+                let path = path.clone();
+                std::thread::spawn(move || {
+                    atomic_write(&path, format!("writer-{index}").as_bytes()).unwrap();
+                })
+            })
+            .collect();
+        for writer in writers {
+            writer.join().unwrap();
+        }
+
+        let final_contents = fs::read_to_string(&path).unwrap();
+        assert!(final_contents.starts_with("writer-"));
+        assert_eq!(
+            fs::read_dir(&directory).unwrap().count(),
+            1,
+            "concurrent writes should not leave temporary files behind"
+        );
+
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
     fn rejects_paths_without_a_file_name() {
         assert_eq!(
             atomic_write(Path::new(""), b"data").unwrap_err().kind(),
