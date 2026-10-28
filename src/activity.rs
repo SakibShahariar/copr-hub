@@ -29,6 +29,24 @@ pub fn load() -> Result<Vec<ActivityEntry>, String> {
     }
 }
 
+pub fn clear() -> Result<(), String> {
+    let path = history_path();
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Could not determine the activity history directory.".to_string())?;
+    fs::create_dir_all(parent)
+        .map_err(|error| format!("Could not create activity history directory: {error}"))?;
+
+    let temporary_path = path.with_extension("json.tmp");
+    let contents = serde_json::to_vec_pretty(&Vec::<ActivityEntry>::new())
+        .map_err(|error| format!("Could not encode empty activity history: {error}"))?;
+    fs::write(&temporary_path, contents)
+        .map_err(|error| format!("Could not clear activity history: {error}"))?;
+    fs::rename(&temporary_path, &path)
+        .map_err(|error| format!("Could not update activity history: {error}"))?;
+    Ok(())
+}
+
 pub fn record(action: &str, target: &str, summary: &str) -> Result<(), String> {
     let path = history_path();
     let parent = path
