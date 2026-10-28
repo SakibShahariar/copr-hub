@@ -77,6 +77,15 @@ fn build_ui(app: &adw::Application) {
     window.present();
 }
 
+fn scroll_page(child: &impl IsA<gtk::Widget>) -> gtk::Widget {
+    let scroll = gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .vscrollbar_policy(gtk::PolicyType::Automatic)
+        .child(child)
+        .build();
+    scroll.upcast()
+}
+
 fn add_page(
     stack: &adw::ViewStack,
     child: &impl IsA<gtk::Widget>,
@@ -187,7 +196,7 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
         .maximum_size(640)
         .child(&content)
         .build();
-    clamp.upcast()
+    scroll_page(&clamp)
 }
 
 fn build_installed_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
@@ -231,7 +240,7 @@ fn build_installed_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     });
     refresh_installed_packages(parent, &list, &feedback);
 
-    content.upcast()
+    scroll_page(&content)
 }
 
 fn refresh_installed_packages(
@@ -340,7 +349,7 @@ fn build_repositories_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     });
     refresh_repositories(parent, &list, &feedback);
 
-    content.upcast()
+    scroll_page(&content)
 }
 
 fn refresh_repositories(
@@ -945,7 +954,7 @@ fn build_saved_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     });
     refresh_saved_projects(parent, &list, &feedback);
 
-    content.upcast()
+    scroll_page(&content)
 }
 
 fn refresh_saved_projects(
@@ -1023,7 +1032,7 @@ fn build_activity_page() -> gtk::Widget {
     });
     refresh_activity(&list, &feedback);
 
-    content.upcast()
+    scroll_page(&content)
 }
 
 fn format_activity_timestamp(timestamp: u64) -> String {
