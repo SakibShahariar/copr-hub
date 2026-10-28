@@ -855,8 +855,13 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
     upstream_status.add_css_class("dim-label");
     content.append(&upstream_status);
 
+    let package_filter_mode =
+        gtk::DropDown::from_strings(&["All packages", "Upstream updates", "Failed builds", "In progress"]);
+    package_filter_mode.set_tooltip_text("Show packages by update or build status");
+    content.append(&package_filter_mode);
+
     let package_filter = gtk::SearchEntry::builder()
-        .placeholder_text("Filter packages in this project")
+        .placeholder_text("Search packages, versions, targets, or build states")
         .tooltip_text("Filter the loaded package list locally")
         .build();
     content.append(&package_filter);
@@ -866,12 +871,20 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
     packages.add_css_class("boxed-list");
     packages.set_filter_func({
         let package_filter = package_filter.clone();
+        let package_filter_mode = package_filter_mode.clone();
         move |row| {
-            let query = package_filter.text().trim().to_ascii_lowercase();
-            query.is_empty() || row.widget_name().to_ascii_lowercase().contains(&query)
+            package_matches_filter(
+                &row.widget_name(),
+                &package_filter.text(),
+                package_filter_mode.selected(),
+            )
         }
     });
     package_filter.connect_search_changed({
+        let packages = packages.clone();
+        move |_| packages.invalidate_filter()
+    });
+    package_filter_mode.connect_selected_notify({
         let packages = packages.clone();
         move |_| packages.invalidate_filter()
     });
@@ -1002,6 +1015,18 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
             }
         });
     }
+}
+
+fn package_matches_filter(metadata: &str, query: &str, mode: u32) -> bool {
+    let metadata = metadata.to_ascii_lowercase();
+    let query = query.trim().to_ascii_lowercase();
+    let matches_mode = match mode {
+        1 => metadata.contains("[upstream-update]"),
+        2 => metadata.contains("[failed-build]"),
+        3 => metadata.contains("[active-build]"),
+        _ => true,
+    };
+    matches_mode && (query.is_empty() || metadata.contains(&query))
 }
 
 fn update_intelligence_summary(
@@ -1156,7 +1181,6 @@ fn render_project_monitor(
                         summary
                     })
                     .build();
-                row.set_widget_name(&package.name);
                 row.add_prefix(&gtk::Image::from_icon_name("package-x-generic-symbolic"));
                 let has_newer_upstream = targets.iter().any(|(_, build)| {
                     build.pkg_version.as_deref().and_then(|version| {
@@ -1172,6 +1196,38 @@ fn render_project_monitor(
                             })
                     }) == Some(std::cmp::Ordering::Greater)
                 });
+                let has_failed_target = targets.iter().any(|(_, build)| {
+                    matches!(
+                        build.state.as_deref().unwrap_or("unknown").to_ascii_lowercase().as_str(),
+                        "failed" | "error"
+                    )
+                });
+                let has_active_target = targets.iter().any(|(_, build)| {
+                    matches!(
+                        build.state.as_deref().unwrap_or("unknown").to_ascii_lowercase().as_str(),
+                        "pending" | "waiting" | "starting" | "running" | "building"
+                    )
+                });
+                let mut searchable_metadata = format!("{} {}", package.name, summary);
+                for (_, build) in &targets {
+                    searchable_metadata.push(' ');
+                    searchable_metadata.push_str(build.state.as_deref().unwrap_or("unknown"));
+                    if let Some(version) = build.pkg_version.as_deref() {
+                        searchable_metadata.push(' ');
+                        searchable_metadata.push_str(version);
+                    }
+                }
+                if has_newer_upstream {
+                    searchable_metadata.push_str(" [upstream-update]");
+                }
+                if has_failed_target {
+                    searchable_metadata.push_str(" [failed-build]");
+                }
+                if has_active_target {
+                    searchable_metadata.push_str(" [active-build]");
+                }
+                row.set_widget_name(&searchable_metadata);
+
                 if has_newer_upstream {
                     let label = gtk::Label::new(Some("Upstream newer"));
                     label.add_css_class("warning");
@@ -1611,7 +1667,7 @@ fn refresh_activity(list: &gtk::ListBox, feedback: &gtk::Label) {
 
 #[cfg(test)]
 mod url_tests {
-    use super::{is_web_url, update_intelligence_summary};
+    use super::{is_web_url, package_matches_filter, update_intelligence_summary};
     use crate::{copr, upstream};
 
     #[test]
@@ -1647,6 +1703,20 @@ mod url_tests {
         let summary = update_intelligence_summary(&[], None, None, None, 1_800_000_000);
         assert!(summary.contains("upstream update comparison unavailable"));
         assert!(summary.contains("0 failed build target(s)"));
+    }
+
+    #[test]
+    fn package_filters_match_status_and_search_metadata() {
+        let metadata = "tool fedora-44 failed 1.2.0 [upstream-update] [failed-build]";
+        assert!(package_matches_filter(metadata, "", 0));
+        assert!(package_matches_filter(metadata, "TOOL", 0));
+        assert!(package_matches_filter(metadata, "fedora-44", 0));
+        assert!(package_matches_filter(metadata, "", 1));
+        assert!(package_matches_filter(metadata, "tool", 1));
+        assert!(!package_matches_filter(metadata, "", 2 + 1));
+        assert!(package_matches_filter(metadata, "", 2));
+        assert!(!package_matches_filter(metadata, "other", 0));
+        assert!(!package_matches_filter(metadata, "", 3));
     }
 
     #[test]
