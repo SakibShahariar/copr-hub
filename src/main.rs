@@ -1,8 +1,8 @@
 mod activity;
 mod copr;
 mod favorites;
-mod system;
 mod storage;
+mod system;
 
 use adw::prelude::*;
 

@@ -9,7 +9,10 @@ static TEMP_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 /// between concurrent writes from multiple application instances.
 pub fn atomic_write(path: &Path, contents: &[u8]) -> io::Result<()> {
     let parent = path.parent().ok_or_else(|| {
-        io::Error::new(io::ErrorKind::InvalidInput, "target path has no parent directory")
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "target path has no parent directory",
+        )
     })?;
     let file_name = path.file_name().ok_or_else(|| {
         io::Error::new(io::ErrorKind::InvalidInput, "target path has no file name")
@@ -38,7 +41,9 @@ pub fn atomic_write(path: &Path, contents: &[u8]) -> io::Result<()> {
         }
     };
 
-    let write_result = temporary_file.write_all(contents).and_then(|()| temporary_file.sync_all());
+    let write_result = temporary_file
+        .write_all(contents)
+        .and_then(|()| temporary_file.sync_all());
     drop(temporary_file);
 
     if let Err(error) = write_result {

@@ -1,6 +1,6 @@
 use crate::copr::CoprProject;
-use std::fs;
 use crate::storage;
+use std::fs;
 use std::path::PathBuf;
 
 fn favorites_path() -> PathBuf {
