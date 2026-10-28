@@ -53,17 +53,36 @@ fn repository_parts(homepage: &str) -> Option<(String, String, bool)> {
     if host != "github.com" && !is_gitlab {
         return None;
     }
-    let mut segments = url.path_segments()?;
-    let owner = segments.next()?.trim();
-    let repo = segments.next()?.trim_end_matches(".git").trim();
-    if owner.is_empty()
-        || repo.is_empty()
-        || matches!(owner, "." | "..")
-        || matches!(repo, "." | "..")
+    let segments: Vec<_> = url
+        .path_segments()?
+        .filter(|segment| !segment.is_empty())
+        .take_while(|segment| *segment != "-")
+        .map(str::to_string)
+        .collect();
+    let (namespace, project) = if is_gitlab {
+        if segments.len() < 2 {
+            return None;
+        }
+        let project = segments.last()?.trim_end_matches(".git").trim();
+        let namespace = segments[..segments.len() - 1].join("/");
+        (namespace, project.to_string())
+    } else {
+        if segments.len() < 2 {
+            return None;
+        }
+        (
+            segments[0].trim().to_string(),
+            segments[1].trim_end_matches(".git").trim().to_string(),
+        )
+    };
+    if namespace.is_empty()
+        || project.is_empty()
+        || namespace.split('/').any(|part| matches!(part, "." | ".."))
+        || matches!(project.as_str(), "." | "..")
     {
         return None;
     }
-    Some((owner.to_string(), repo.to_string(), is_gitlab))
+    Some((namespace, project, is_gitlab))
 }
 
 pub fn latest_release(homepage: &str) -> Result<Option<UpstreamRelease>, String> {
@@ -146,6 +165,14 @@ mod tests {
         assert_eq!(
             repository_parts("https://gitlab.com/group/project.git"),
             Some(("group".into(), "project".into(), true))
+        );
+        assert_eq!(
+            repository_parts("https://gitlab.com/group/subgroup/project"),
+            Some(("group/subgroup".into(), "project".into(), true))
+        );
+        assert_eq!(
+            repository_parts("https://gitlab.com/group/subgroup/project/-/tree/main"),
+            Some(("group/subgroup".into(), "project".into(), true))
         );
     }
 
