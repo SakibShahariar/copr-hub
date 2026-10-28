@@ -60,6 +60,10 @@ pub fn atomic_write(path: &Path, contents: &[u8]) -> io::Result<()> {
         return Err(error);
     }
 
+    // Persist the directory entry update as well as the file contents so a
+    // successful return is less likely to be lost after an abrupt power loss.
+    fs::File::open(parent)?.sync_all()?;
+
     Ok(())
 }
 
