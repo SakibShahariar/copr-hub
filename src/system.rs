@@ -100,7 +100,6 @@ fn parse_copr_repositories(contents: &str, path: &Path) -> Vec<CoprRepository> {
     repositories
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InstalledCoprPackage {
     pub name: String,
@@ -117,9 +116,7 @@ pub fn list_installed_copr_packages() -> Result<Vec<InstalledCoprPackage>, Strin
             "%{name}\t%{evr}\t%{from_repo}",
         ])
         .output()
-        .map_err(|error| {
-            format!("Could not start DNF to inspect installed packages: {error}")
-        })?;
+        .map_err(|error| format!("Could not start DNF to inspect installed packages: {error}"))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();

@@ -179,7 +179,6 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     content.upcast()
 }
 
-
 fn build_installed_page() -> gtk::Widget {
     let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
     content.set_margin_top(24);
@@ -235,9 +234,8 @@ fn refresh_installed_packages(list: &gtk::ListBox, feedback: &gtk::Label) {
 
         match response {
             Ok(Ok(packages)) if packages.is_empty() => {
-                feedback.set_text(
-                    "No installed packages from COPR repositories were reported by DNF.",
-                );
+                feedback
+                    .set_text("No installed packages from COPR repositories were reported by DNF.");
             }
             Ok(Ok(packages)) => {
                 feedback.set_text(&format!("{} installed COPR package(s)", packages.len()));
