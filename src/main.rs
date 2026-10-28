@@ -8,6 +8,8 @@ use adw::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+type ProjectSearchResponse = Result<Vec<copr::CoprProject>, String>;
+
 fn main() {
     let app = adw::Application::builder()
         .application_id("io.github.SakibShahariar.CoprHub")
@@ -155,7 +157,7 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     content.append(&feedback);
 
     let results = gtk::ListBox::new();
-    let latest_response: Rc<RefCell<Option<Result<Vec<copr::CoprProject>, String>>>> =
+    let latest_response: Rc<RefCell<Option<ProjectSearchResponse>>> =
         Rc::new(RefCell::new(None));
     results.set_selection_mode(gtk::SelectionMode::None);
     results.add_css_class("boxed-list");
