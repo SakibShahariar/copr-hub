@@ -31,6 +31,9 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
 
+      - name: Check installer scripts
+        run: sh -n scripts/install-local.sh scripts/uninstall-local.sh
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
