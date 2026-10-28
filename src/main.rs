@@ -437,17 +437,6 @@ fn build_repositories_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::SelectionMode::None);
     list.add_css_class("boxed-list");
-    list.set_filter_func({
-        let filter = filter.clone();
-        move |row| {
-            let query = filter.text().trim().to_ascii_lowercase();
-            query.is_empty() || row.widget_name().to_ascii_lowercase().contains(&query)
-        }
-    });
-    filter.connect_search_changed({
-        let list = list.clone();
-        move |_| list.invalidate_filter()
-    });
     content.append(&list);
 
     refresh.connect_clicked({
@@ -1123,6 +1112,17 @@ fn build_saved_page(parent: &adw::ApplicationWindow, stack: &adw::ViewStack) -> 
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::SelectionMode::None);
     list.add_css_class("boxed-list");
+    list.set_filter_func({
+        let filter = filter.clone();
+        move |row| {
+            let query = filter.text().trim().to_ascii_lowercase();
+            query.is_empty() || row.widget_name().to_ascii_lowercase().contains(&query)
+        }
+    });
+    filter.connect_search_changed({
+        let list = list.clone();
+        move |_| list.invalidate_filter()
+    });
     content.append(&list);
 
     refresh.connect_clicked({
