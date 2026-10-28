@@ -25,6 +25,17 @@ pub fn is_saved(project: &CoprProject) -> Result<bool, String> {
         .any(|saved| saved.owner == project.owner && saved.name == project.name))
 }
 
+fn merge_projects(projects: &mut Vec<CoprProject>, imported: impl IntoIterator<Item = CoprProject>) -> usize {
+    let mut added = 0;
+    for project in imported {
+        if !projects.iter().any(|saved| saved.owner == project.owner && saved.name == project.name) {
+            projects.push(project);
+            added += 1;
+        }
+    }
+    added
+}
+
 fn toggle_in_list(projects: &mut Vec<CoprProject>, project: &CoprProject) -> bool {
     let already_saved = projects
         .iter()
@@ -83,13 +94,7 @@ pub fn import_from(path: &std::path::Path) -> Result<usize, String> {
         .map_err(|error| format!("Could not create saved-projects directory: {error}"))?;
 
     let mut projects = load()?;
-    let mut added = 0;
-    for project in imported {
-        if !projects.iter().any(|saved| saved.owner == project.owner && saved.name == project.name) {
-            projects.push(project);
-            added += 1;
-        }
-    }
+    let added = merge_projects(&mut projects, imported);
     let contents = serde_json::to_vec_pretty(&projects)
         .map_err(|error| format!("Could not encode merged saved projects: {error}"))?;
     storage::atomic_write(&path, &contents)
@@ -108,6 +113,26 @@ mod tests {
             description: None,
             homepage: None,
         }
+    }
+
+    #[test]
+    fn importing_merges_new_projects_without_duplicates() {
+        let existing = project("alice", "demo");
+        let mut projects = vec![existing.clone()];
+        let added = merge_projects(
+            &mut projects,
+            vec![
+                existing,
+                project("bob", "demo"),
+                project("bob", "demo"),
+                project("carol", "tool"),
+            ],
+        );
+
+        assert_eq!(added, 2);
+        assert_eq!(projects.len(), 3);
+        assert!(projects.iter().any(|item| item.owner == "bob" && item.name == "demo"));
+        assert!(projects.iter().any(|item| item.owner == "carol" && item.name == "tool"));
     }
 
     #[test]
