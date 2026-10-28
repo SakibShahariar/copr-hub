@@ -812,9 +812,26 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
     status.add_css_class("dim-label");
     content.append(&status);
 
+    let package_filter = gtk::SearchEntry::builder()
+        .placeholder_text("Filter packages in this project")
+        .tooltip_text("Filter the loaded package list locally")
+        .build();
+    content.append(&package_filter);
+
     let packages = gtk::ListBox::new();
     packages.set_selection_mode(gtk::SelectionMode::None);
     packages.add_css_class("boxed-list");
+    packages.set_filter_func({
+        let package_filter = package_filter.clone();
+        move |row| {
+            let query = package_filter.text().trim().to_ascii_lowercase();
+            query.is_empty() || row.widget_name().to_ascii_lowercase().contains(&query)
+        }
+    });
+    package_filter.connect_search_changed({
+        let packages = packages.clone();
+        move |_| packages.invalidate_filter()
+    });
     content.append(&packages);
 
     let scroll = gtk::ScrolledWindow::builder()
@@ -886,6 +903,7 @@ fn render_project_monitor(
                         summary
                     })
                     .build();
+                row.set_widget_name(&package.name);
                 row.add_prefix(&gtk::Image::from_icon_name("package-x-generic-symbolic"));
                 row.add_suffix(&gtk::Label::new(Some(&format!(
                     "{} targets",
