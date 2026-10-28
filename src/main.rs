@@ -422,7 +422,7 @@ fn render_project_monitor(
 
             for package in monitor.packages {
                 let mut targets: Vec<_> = package.chroots.iter().collect();
-                targets.sort_by_key(|(name, _)| *name);
+                targets.sort_by(|(left, _), (right, _)| left.cmp(right));
                 let summary = targets
                     .iter()
                     .take(3)
@@ -444,11 +444,16 @@ fn render_project_monitor(
                     })
                     .build();
                 row.add_prefix(&gtk::Image::from_icon_name("package-x-generic-symbolic"));
-                row.add_suffix(&gtk::Label::new(Some(&format!("{} targets", targets.len()))));
+                row.add_suffix(&gtk::Label::new(Some(&format!(
+                    "{} targets",
+                    targets.len()
+                ))));
                 list.append(&row);
             }
         }
-        Err(error) => status.set_text(&format!("Could not load project build information: {error}")),
+        Err(error) => status.set_text(&format!(
+            "Could not load project build information: {error}"
+        )),
     }
 }
 
