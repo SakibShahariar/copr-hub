@@ -416,7 +416,7 @@ fn confirm_repository_toggle(
                 return;
             }
 
-            feedback.set_text(&format!("{action}ing repository…"));
+            feedback.set_text("Applying repository change…");
             let repository_id = repository.id.clone();
             let list = list.clone();
             let feedback = feedback.clone();
@@ -591,7 +591,7 @@ fn render_project_monitor(
 
             for package in monitor.packages {
                 let mut targets: Vec<_> = package.chroots.iter().collect();
-                targets.sort_by(|(left, _), (right, _)| left.cmp(right));
+                targets.sort_by_key(|(left, _)| *left);
                 let summary = targets
                     .iter()
                     .take(3)
