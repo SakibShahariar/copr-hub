@@ -124,14 +124,21 @@ mod tests {
 
     #[test]
     fn service_status_messages_cover_common_api_failures() {
-        assert!(service_status_message(reqwest::StatusCode::TOO_MANY_REQUESTS, "search")
-            .contains("too many requests"));
-        assert!(service_status_message(reqwest::StatusCode::NOT_FOUND, "project")
-            .contains("could not find"));
-        assert!(service_status_message(reqwest::StatusCode::BAD_GATEWAY, "search")
-            .contains("temporarily unavailable"));
-        assert!(service_status_message(reqwest::StatusCode::FORBIDDEN, "search")
-            .contains("HTTP 403"));
+        assert!(
+            service_status_message(reqwest::StatusCode::TOO_MANY_REQUESTS, "search")
+                .contains("too many requests")
+        );
+        assert!(
+            service_status_message(reqwest::StatusCode::NOT_FOUND, "project")
+                .contains("could not find")
+        );
+        assert!(
+            service_status_message(reqwest::StatusCode::BAD_GATEWAY, "search")
+                .contains("temporarily unavailable")
+        );
+        assert!(
+            service_status_message(reqwest::StatusCode::FORBIDDEN, "search").contains("HTTP 403")
+        );
     }
 
     #[test]
