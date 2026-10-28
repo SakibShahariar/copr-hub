@@ -97,7 +97,10 @@ pub fn latest_release(homepage: &str) -> Result<Option<UpstreamRelease>, String>
     let Some((owner, repo, is_gitlab)) = repository_parts(homepage) else {
         return Ok(None);
     };
-    let key = format!("{}:{owner}/{repo}", if is_gitlab { "gitlab" } else { "github" });
+    let key = format!(
+        "{}:{owner}/{repo}",
+        if is_gitlab { "gitlab" } else { "github" }
+    );
     let cache = RELEASE_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
 
     if let Ok(cache) = cache.lock() {
