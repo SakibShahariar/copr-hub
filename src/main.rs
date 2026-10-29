@@ -1362,6 +1362,49 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
     let monitor_state: Rc<RefCell<Option<Result<copr::ProjectMonitor, String>>>> =
         Rc::new(RefCell::new(None));
     let release_state: Rc<RefCell<Option<upstream::UpstreamRelease>>> = Rc::new(RefCell::new(None));
+    let project_for_snapshot = project.clone();
+
+    if let Some(snapshot) = snapshots::load(&project_for_snapshot) {
+        if let Some(release) = snapshot.upstream_release.clone() {
+            *release_state.borrow_mut() = Some(release);
+        }
+        if let Some(monitor) = snapshot.monitor.clone() {
+            *monitor_state.borrow_mut() = Some(Ok(monitor.clone()));
+            render_project_monitor(
+                &window,
+                &packages,
+                &status,
+                &intelligence,
+                &matrix,
+                Ok(monitor),
+                release_state
+                    .borrow()
+                    .as_ref()
+                    .zip(homepage_for_comparison.as_deref()),
+            );
+            let cache_note = snapshots::cache_age_label(snapshot.monitor_fetched_at_unix);
+            let stale_note = if snapshots::cache_is_stale(snapshot.monitor_fetched_at_unix) {
+                " · STALE SNAPSHOT"
+            } else {
+                " · cached snapshot"
+            };
+            status.set_text(&format!("{} · Offline-capable data: {cache_note}{stale_note}", status.text()));
+        }
+        if let Some(release) = snapshot.upstream_release.as_ref() {
+            upstream_status.set_text(&format!(
+                "Cached upstream release: {} ({}) · {} · {}{}",
+                release.version,
+                release.name,
+                release.published_at.as_deref().unwrap_or("release date unavailable"),
+                snapshots::cache_age_label(snapshot.upstream_fetched_at_unix),
+                if snapshots::cache_is_stale(snapshot.upstream_fetched_at_unix) {
+                    " · STALE SNAPSHOT"
+                } else {
+                    " · cached"
+                }
+            ));
+        }
+    }
 
     let owner = project.owner.clone();
     let name = project.name.clone();
@@ -1375,12 +1418,58 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
         let intelligence = intelligence.clone();
         let homepage = homepage_for_comparison.clone();
         let matrix = matrix.clone();
+        let project_data = project_for_snapshot.clone();
         gtk::glib::MainContext::default().spawn_local(async move {
-            let response =
-                gtk::gio::spawn_blocking(move || copr::fetch_project_monitor(&owner, &name)).await;
-            let response = match response {
-                Ok(result) => result,
-                Err(_) => Err("The background project lookup failed unexpectedly.".to_string()),
+            let fetch_owner = owner.clone();
+            let fetch_name = name.clone();
+            let result = gtk::gio::spawn_blocking(move || {
+                copr::fetch_project_monitor(&fetch_owner, &fetch_name)
+            })
+            .await;
+            let (response, cache_note) = match result {
+                Ok(Ok(monitor)) => {
+                    let _ = snapshots::save_monitor(&project_data, monitor.clone());
+                    (Ok(monitor), None)
+                }
+                Ok(Err(error)) => {
+                    let cached = snapshots::load(&project_data)
+                        .and_then(|snapshot| snapshot.monitor.map(|monitor| {
+                            let note = format!(
+                                "Live refresh failed: {error} · showing offline snapshot: {}{}",
+                                snapshots::cache_age_label(snapshot.monitor_fetched_at_unix),
+                                if snapshots::cache_is_stale(snapshot.monitor_fetched_at_unix) {
+                                    " · STALE"
+                                } else {
+                                    ""
+                                }
+                            );
+                            (monitor, note)
+                        }));
+                    match cached {
+                        Some((monitor, note)) => (Ok(monitor), Some(note)),
+                        None => (Err(error), None),
+                    }
+                }
+                Err(_) => {
+                    let error = "The background project lookup failed unexpectedly.".to_string();
+                    let cached = snapshots::load(&project_data)
+                        .and_then(|snapshot| snapshot.monitor.map(|monitor| {
+                            let note = format!(
+                                "Live refresh failed · showing offline snapshot: {}{}",
+                                snapshots::cache_age_label(snapshot.monitor_fetched_at_unix),
+                                if snapshots::cache_is_stale(snapshot.monitor_fetched_at_unix) {
+                                    " · STALE"
+                                } else {
+                                    ""
+                                }
+                            );
+                            (monitor, note)
+                        }));
+                    match cached {
+                        Some((monitor, note)) => (Ok(monitor), Some(note)),
+                        None => (Err(error), None),
+                    }
+                }
             };
             *monitor_state.borrow_mut() = Some(response);
             let response = monitor_state.borrow().clone();
@@ -1395,6 +1484,9 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                     response,
                     release.as_ref().zip(homepage.as_deref()),
                 );
+                if let Some(note) = cache_note {
+                    status.set_text(&format!("{} · {note}", status.text()));
+                }
             }
         });
     }
@@ -1409,6 +1501,7 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
         let intelligence = intelligence.clone();
         let homepage_for_comparison = Some(homepage.clone());
         let matrix = matrix.clone();
+        let project_data = project_for_snapshot.clone();
         gtk::glib::MainContext::default().spawn_local(async move {
             let response =
                 gtk::gio::spawn_blocking(move || upstream::latest_release(&homepage)).await;
@@ -1429,6 +1522,9 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                     } else {
                         ""
                     };
+                    if !release.stale_cache {
+                        let _ = snapshots::save_release(&project_data, Some(release.clone()));
+                    }
                     upstream_status.set_text(&format!(
                         "Latest upstream stable release: {} ({}) · {}{}{}{}",
                         release.version,
@@ -1445,19 +1541,57 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                     Some(release)
                 }
                 Ok(Ok(None)) => {
+                    let _ = snapshots::save_release(&project_data, None);
                     upstream_status.set_text(
                         "No stable upstream release metadata is available for this project homepage.",
                     );
                     None
                 }
                 Ok(Err(error)) => {
-                    upstream_status.set_text(&format!("Could not check upstream releases: {error}"));
-                    None
+                    if let Some(snapshot) = snapshots::load(&project_data) {
+                        if let Some(release) = snapshot.upstream_release {
+                            upstream_status.set_text(&format!(
+                                "Could not refresh upstream releases: {error} · showing cached {} · {}{}",
+                                release.version,
+                                snapshots::cache_age_label(snapshot.upstream_fetched_at_unix),
+                                if snapshots::cache_is_stale(snapshot.upstream_fetched_at_unix) {
+                                    " · STALE SNAPSHOT"
+                                } else {
+                                    ""
+                                }
+                            ));
+                            Some(release)
+                        } else {
+                            upstream_status.set_text(&format!("Could not check upstream releases: {error}"));
+                            None
+                        }
+                    } else {
+                        upstream_status.set_text(&format!("Could not check upstream releases: {error}"));
+                        None
+                    }
                 }
                 Err(_) => {
-                    upstream_status
-                        .set_text("The background upstream release lookup failed unexpectedly.");
-                    None
+                    if let Some(snapshot) = snapshots::load(&project_data) {
+                        if let Some(release) = snapshot.upstream_release {
+                            upstream_status.set_text(&format!(
+                                "Live upstream lookup failed · showing cached {} · {}{}",
+                                release.version,
+                                snapshots::cache_age_label(snapshot.upstream_fetched_at_unix),
+                                if snapshots::cache_is_stale(snapshot.upstream_fetched_at_unix) {
+                                    " · STALE SNAPSHOT"
+                                } else {
+                                    ""
+                                }
+                            ));
+                            Some(release)
+                        } else {
+                            upstream_status.set_text("The background upstream release lookup failed unexpectedly.");
+                            None
+                        }
+                    } else {
+                        upstream_status.set_text("The background upstream release lookup failed unexpectedly.");
+                        None
+                    }
                 }
             };
             *release_state.borrow_mut() = release;
