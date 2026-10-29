@@ -125,6 +125,8 @@ pub struct UpstreamRelease {
     pub published_at: Option<String>,
     pub url: Option<String>,
     pub stale_cache: bool,
+    #[serde(default)]
+    pub prerelease: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -388,6 +390,7 @@ fn fetch_release(
             published_at: release.released_at,
             url,
             stale_cache: false,
+            prerelease: is_prerelease_tag(&release.tag_name),
         }));
     }
 
@@ -419,11 +422,22 @@ fn fetch_release(
         published_at: release.published_at,
         url: release.html_url,
         stale_cache: false,
+        prerelease: false,
     }))
 }
 
+/// Identify common prerelease markers without assuming every hyphen means a prerelease.
+fn is_prerelease_tag(tag: &str) -> bool {
+    let normalized = tag.trim().trim_start_matches(['v', 'V']).to_ascii_lowercase();
+    ["-alpha", ".alpha", "-beta", ".beta", "-rc", ".rc", "-pre", ".pre", "-preview", ".preview", "-dev", ".dev"]
+        .iter()
+        .any(|marker| normalized.contains(marker))
+        || normalized.ends_with("-snapshot")
+}
+
 /// Compare a numeric upstream tag with a package version only when the repository
-/// slug matches the package name. Unsupported version schemes return None.
+/// slug matches the package name. Prereleases and unsupported RPM/version schemes
+/// deliberately return None rather than being reported as stable update signals.
 pub fn compare_package_version(
     homepage: &str,
     release_version: &str,
@@ -441,6 +455,9 @@ pub fn compare_package_version(
         return None;
     }
 
+    if is_prerelease_tag(release_version) {
+        return None;
+    }
     let upstream = parse_numeric_version(release_version, false)?;
     let packaged = parse_numeric_version(package_version, true)?;
     let width = upstream.len().max(packaged.len());
