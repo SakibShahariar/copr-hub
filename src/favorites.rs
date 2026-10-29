@@ -9,6 +9,15 @@ const MAX_IMPORTED_PROJECTS: usize = 5_000;
 const MAX_SAVED_PROJECTS: usize = 10_000;
 const MAX_SAVED_FILE_BYTES: u64 = 10 * 1024 * 1024;
 
+fn ensure_saved_project_limit(count: usize) -> Result<(), String> {
+    if count > MAX_SAVED_PROJECTS {
+        return Err(format!(
+            "The saved-project list exceeds the {MAX_SAVED_PROJECTS}-project limit."
+        ));
+    }
+    Ok(())
+}
+
 fn favorites_path() -> PathBuf {
     gtk::glib::user_data_dir()
         .join("copr-hub")
@@ -29,13 +38,9 @@ pub fn load() -> Result<Vec<CoprProject>, String> {
         Ok(contents) => {
             let projects: Vec<CoprProject> = serde_json::from_str(&contents)
                 .map_err(|error| format!("Could not read saved projects: {error}"))?;
-            if projects.len() > MAX_SAVED_PROJECTS {
-                return Err(format!(
-                    "The saved-project list exceeds the {MAX_SAVED_PROJECTS}-project limit."
-                ));
-            }
+            ensure_saved_project_limit(projects.len())?;
             Ok(projects)
-        },
+        }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
         Err(error) => Err(format!("Could not open saved projects: {error}")),
     }
@@ -120,6 +125,7 @@ pub fn toggle(project: &CoprProject) -> Result<bool, String> {
 
     let mut projects = load()?;
     let saved = toggle_in_list(&mut projects, project);
+    ensure_saved_project_limit(projects.len())?;
     let contents = serde_json::to_vec_pretty(&projects)
         .map_err(|error| format!("Could not encode saved projects: {error}"))?;
     storage::atomic_write(&path, &contents)
@@ -157,11 +163,11 @@ pub fn import_from(path: &std::path::Path) -> Result<usize, String> {
 
     let mut projects = load()?;
     let added = merge_projects(&mut projects, imported);
-    if projects.len() > MAX_SAVED_PROJECTS {
-        return Err(format!(
+    ensure_saved_project_limit(projects.len()).map_err(|_| {
+        format!(
             "Import would exceed the {MAX_SAVED_PROJECTS}-project saved-list limit; no changes were saved."
-        ));
-    }
+        )
+    })?;
     let contents = serde_json::to_vec_pretty(&projects)
         .map_err(|error| format!("Could not encode merged saved projects: {error}"))?;
     storage::atomic_write(&path, &contents)
@@ -247,6 +253,8 @@ mod tests {
     fn saved_project_limits_allow_regular_backups() {
         assert!(MAX_SAVED_PROJECTS >= MAX_IMPORTED_PROJECTS);
         assert!(MAX_SAVED_FILE_BYTES as usize >= MAX_BACKUP_BYTES);
+        assert!(ensure_saved_project_limit(MAX_SAVED_PROJECTS).is_ok());
+        assert!(ensure_saved_project_limit(MAX_SAVED_PROJECTS + 1).is_err());
     }
 
     #[test]
