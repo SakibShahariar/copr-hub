@@ -1090,13 +1090,11 @@ fn render_repositories(
                                 let names = packages.join(", ");
                                 origin_summary.set_text(&format!("{} installed package(s) from this repo", packages.len()));
                                 origin_summary.set_tooltip_text(Some(&names));
-                                origin_summary.set_accessible_label(Some(&format!("{} installed packages from this repository: {}", packages.len(), names)));
-                            }
+                             }
                             Ok(Err(error)) => {
                                 origin_summary.set_text("Installed package origins unavailable");
                                 origin_summary.set_tooltip_text(Some(&error));
-                                origin_summary.set_accessible_label(Some("Installed package origins unavailable; check DNF support and permissions."));
-                            }
+                             }
                             Err(_) => {
                                 origin_summary.set_text("Installed package origins unavailable");
                                 origin_summary.set_tooltip_text(Some("The background DNF query failed."));
@@ -2630,8 +2628,7 @@ fn build_saved_page(
     freshness_days.set_value(f64::from(monitoring::load_config().freshness_threshold_days.clamp(7, 3650)));
     freshness_days.set_numeric(true);
     freshness_days.set_tooltip_text(Some("Choose how long without a reported build activity marks a project as stale."));
-    freshness_days.set_accessible_label(Some("Project build freshness threshold in days"));
-    freshness_row.append(&freshness_label);
+     freshness_row.append(&freshness_label);
     freshness_row.append(&freshness_days);
     content.append(&freshness_row);
     freshness_days.connect_value_changed({
