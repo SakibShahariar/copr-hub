@@ -6,6 +6,8 @@ use std::path::PathBuf;
 
 const MAX_BACKUP_BYTES: usize = 5 * 1024 * 1024;
 const MAX_IMPORTED_PROJECTS: usize = 5_000;
+const MAX_SAVED_PROJECTS: usize = 10_000;
+const MAX_SAVED_FILE_BYTES: u64 = 10 * 1024 * 1024;
 
 fn favorites_path() -> PathBuf {
     gtk::glib::user_data_dir()
@@ -15,9 +17,23 @@ fn favorites_path() -> PathBuf {
 
 pub fn load() -> Result<Vec<CoprProject>, String> {
     let path = favorites_path();
+    match fs::metadata(&path) {
+        Ok(metadata) if metadata.len() > MAX_SAVED_FILE_BYTES => {
+            return Err("The saved-project list exceeds the 10 MiB safety limit.".to_string());
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(format!("Could not inspect saved projects: {error}")),
+    }
     match fs::read_to_string(&path) {
-        Ok(contents) => serde_json::from_str(&contents)
-            .map_err(|error| format!("Could not read saved projects: {error}")),
+        Ok(contents) => {
+            let projects: Vec<CoprProject> = serde_json::from_str(&contents)
+                .map_err(|error| format!("Could not read saved projects: {error}"))?;
+            if projects.len() > MAX_SAVED_PROJECTS {
+                return Err(format!("The saved-project list exceeds the {MAX_SAVED_PROJECTS}-project limit."));
+            }
+            Ok(projects)
+        },
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
         Err(error) => Err(format!("Could not open saved projects: {error}")),
     }
@@ -139,6 +155,11 @@ pub fn import_from(path: &std::path::Path) -> Result<usize, String> {
 
     let mut projects = load()?;
     let added = merge_projects(&mut projects, imported);
+    if projects.len() > MAX_SAVED_PROJECTS {
+        return Err(format!(
+            "Import would exceed the {MAX_SAVED_PROJECTS}-project saved-list limit; no changes were saved."
+        ));
+    }
     let contents = serde_json::to_vec_pretty(&projects)
         .map_err(|error| format!("Could not encode merged saved projects: {error}"))?;
     storage::atomic_write(&path, &contents)
@@ -218,6 +239,12 @@ mod tests {
         assert!(parse_backup(&contents)
             .unwrap_err()
             .contains("invalid or oversized project entry"));
+    }
+
+    #[test]
+    fn saved_project_limits_allow_regular_backups() {
+        assert!(MAX_SAVED_PROJECTS >= MAX_IMPORTED_PROJECTS);
+        assert!(MAX_SAVED_FILE_BYTES as usize >= MAX_BACKUP_BYTES);
     }
 
     #[test]
