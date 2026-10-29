@@ -45,6 +45,13 @@ fn ensure_saved_project_limit(count: usize) -> Result<(), String> {
     Ok(())
 }
 
+fn ensure_saved_file_size(size: usize) -> Result<(), String> {
+    if size > MAX_SAVED_FILE_BYTES as usize {
+        return Err("The saved-project list would exceed the 10 MiB safety limit.".to_string());
+    }
+    Ok(())
+}
+
 fn favorites_path() -> PathBuf {
     gtk::glib::user_data_dir()
         .join("copr-hub")
@@ -142,10 +149,17 @@ pub fn toggle(project: &CoprProject) -> Result<bool, String> {
         .map_err(|error| format!("Could not create saved-projects directory: {error}"))?;
 
     let mut projects = load()?;
+    let already_saved = projects
+        .iter()
+        .any(|saved| saved.owner == project.owner && saved.name == project.name);
+    if !already_saved && !project_has_valid_fields(project) {
+        return Err("The project contains invalid or oversized metadata and cannot be saved.".to_string());
+    }
     let saved = toggle_in_list(&mut projects, project);
     ensure_saved_project_limit(projects.len())?;
     let contents = serde_json::to_vec_pretty(&projects)
         .map_err(|error| format!("Could not encode saved projects: {error}"))?;
+    ensure_saved_file_size(contents.len())?;
     storage::atomic_write(&path, &contents)
         .map_err(|error| format!("Could not save project list: {error}"))?;
     Ok(saved)
@@ -188,6 +202,9 @@ pub fn import_from(path: &std::path::Path) -> Result<usize, String> {
     })?;
     let contents = serde_json::to_vec_pretty(&projects)
         .map_err(|error| format!("Could not encode merged saved projects: {error}"))?;
+    ensure_saved_file_size(contents.len()).map_err(|_| {
+        "Import would exceed the 10 MiB saved-project limit; no changes were saved.".to_string()
+    })?;
     storage::atomic_write(&path, &contents)
         .map_err(|error| format!("Could not save imported projects: {error}"))?;
     Ok(added)
@@ -283,6 +300,14 @@ mod tests {
         let mut oversized_homepage = project("alice", "demo");
         oversized_homepage.homepage = Some("x".repeat(4097));
         assert!(!project_has_valid_fields(&oversized_homepage));
+    }
+
+    #[test]
+    fn saved_file_size_limit_accepts_boundary_and_rejects_overflow() {
+        assert!(ensure_saved_file_size(MAX_SAVED_FILE_BYTES as usize).is_ok());
+        assert!(ensure_saved_file_size(MAX_SAVED_FILE_BYTES as usize + 1)
+            .unwrap_err()
+            .contains("10 MiB safety limit"));
     }
 
     #[test]
