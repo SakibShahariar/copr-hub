@@ -159,9 +159,7 @@ pub fn latest_release(homepage: &str) -> Result<Option<UpstreamRelease>, String>
 
     let stale_candidate = cache.lock().ok().and_then(|cache| {
         cache.get(&key).and_then(|(stored_at, release)| {
-            (stored_at.elapsed() <= MAX_STALE_CACHE_AGE)
-                .then(|| release.clone())
-                .flatten()
+            stale_cache_fallback(*stored_at, release.clone())
         })
     });
 
@@ -187,6 +185,18 @@ pub fn latest_release(homepage: &str) -> Result<Option<UpstreamRelease>, String>
         return Ok(Some(release));
     }
     result
+}
+
+fn stale_cache_fallback(
+    stored_at: Instant,
+    release: Option<UpstreamRelease>,
+) -> Option<UpstreamRelease> {
+    if stored_at.elapsed() > MAX_STALE_CACHE_AGE {
+        return None;
+    }
+    let mut release = release?;
+    release.stale_cache = true;
+    Some(release)
 }
 
 fn fetch_release(
@@ -385,6 +395,27 @@ mod tests {
         assert!(!is_retryable_status(StatusCode::NOT_FOUND));
         assert!(!is_retryable_status(StatusCode::FORBIDDEN));
         assert!(!is_retryable_status(StatusCode::OK));
+    }
+
+    #[test]
+    fn stale_cache_fallback_is_limited_and_marked() {
+        use super::{stale_cache_fallback, UpstreamRelease, MAX_STALE_CACHE_AGE};
+        use std::time::{Duration, Instant};
+
+        let release = || UpstreamRelease {
+            version: "v1.2.3".into(),
+            name: "Release 1.2.3".into(),
+            published_at: Some("2026-09-01T00:00:00Z".into()),
+            url: Some("https://github.com/demo/tool/releases/tag/v1.2.3".into()),
+            stale_cache: false,
+        };
+
+        let cached = stale_cache_fallback(Instant::now(), Some(release())).unwrap();
+        assert!(cached.stale_cache);
+        assert!(stale_cache_fallback(Instant::now(), None).is_none());
+
+        let expired_at = Instant::now() - MAX_STALE_CACHE_AGE - Duration::from_secs(1);
+        assert!(stale_cache_fallback(expired_at, Some(release())).is_none());
     }
 
     #[test]
