@@ -2648,7 +2648,7 @@ fn build_saved_page(
     content.append(&monitoring_note);
 
     let freshness_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-    let freshness_label = gtk::Label::new(Some("Mark builds stale after (days)"));
+    let freshness_label = gtk::Label::with_mnemonic("_Mark builds stale after (days)");
     freshness_label.set_xalign(0.0);
     freshness_label.set_hexpand(true);
     let freshness_days = gtk::SpinButton::with_range(7.0, 3650.0, 7.0);
@@ -2658,6 +2658,7 @@ fn build_saved_page(
             .clamp(7, 3650),
     ));
     freshness_days.set_numeric(true);
+    freshness_label.set_mnemonic_widget(Some(&freshness_days));
     freshness_days.set_tooltip_text(Some(
         "Choose how long without a reported build activity marks a project as stale.",
     ));
