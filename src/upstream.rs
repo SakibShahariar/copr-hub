@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const CACHE_TTL: Duration = Duration::from_secs(15 * 60);
+const MAX_STALE_CACHE_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 const CACHE_CAPACITY: usize = 128;
 
 type ReleaseCache = Mutex<HashMap<String, (Instant, Option<UpstreamRelease>)>>;
@@ -18,6 +19,7 @@ pub struct UpstreamRelease {
     pub name: String,
     pub published_at: Option<String>,
     pub url: Option<String>,
+    pub stale_cache: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -155,6 +157,14 @@ pub fn latest_release(homepage: &str) -> Result<Option<UpstreamRelease>, String>
         }
     }
 
+    let stale_candidate = cache.lock().ok().and_then(|cache| {
+        cache.get(&key).and_then(|(stored_at, release)| {
+            (stored_at.elapsed() <= MAX_STALE_CACHE_AGE)
+                .then(|| release.clone())
+                .flatten()
+        })
+    });
+
     let result = fetch_release(&owner, &repo, is_gitlab);
     if let Ok(release) = &result {
         if let Ok(mut cache) = cache.lock() {
@@ -169,6 +179,12 @@ pub fn latest_release(homepage: &str) -> Result<Option<UpstreamRelease>, String>
             }
             cache.insert(key, (Instant::now(), release.clone()));
         }
+        return result;
+    }
+
+    if let Some(mut release) = stale_candidate {
+        release.stale_cache = true;
+        return Ok(Some(release));
     }
     result
 }
@@ -209,6 +225,7 @@ fn fetch_release(
                 .unwrap_or_else(|| release.tag_name.clone()),
             published_at: release.released_at,
             url,
+            stale_cache: false,
         }));
     }
 
@@ -234,6 +251,7 @@ fn fetch_release(
             .unwrap_or_else(|| release.tag_name.clone()),
         published_at: release.published_at,
         url: release.html_url,
+        stale_cache: false,
     }))
 }
 

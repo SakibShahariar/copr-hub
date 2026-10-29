@@ -972,8 +972,13 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                     } else {
                         ""
                     };
+                    let cache_notice = if release.stale_cache {
+                        " · Showing cached metadata because the upstream service is unavailable"
+                    } else {
+                        ""
+                    };
                     upstream_status.set_text(&format!(
-                        "Latest upstream stable release: {} ({}) · {}{}{}",
+                        "Latest upstream stable release: {} ({}) · {}{}{}{}",
                         release.version,
                         release.name,
                         date,
@@ -982,7 +987,8 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                         } else {
                             format!(" · {url}")
                         },
-                        stale_notice
+                        stale_notice,
+                        cache_notice
                     ));
                     Some(release)
                 }
