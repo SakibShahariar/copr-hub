@@ -15,12 +15,21 @@ fn default_freshness_threshold_days() -> u32 {
     DEFAULT_FRESHNESS_THRESHOLD_DAYS
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MonitoringConfig {
     #[serde(default)]
     pub enabled: bool,
     #[serde(default = "default_freshness_threshold_days")]
     pub freshness_threshold_days: u32,
+}
+
+impl Default for MonitoringConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            freshness_threshold_days: DEFAULT_FRESHNESS_THRESHOLD_DAYS,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
