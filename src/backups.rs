@@ -23,9 +23,7 @@ fn config_path() -> PathBuf {
 }
 
 fn backup_dir() -> PathBuf {
-    gtk::glib::user_data_dir()
-        .join("copr-hub")
-        .join("backups")
+    gtk::glib::user_data_dir().join("copr-hub").join("backups")
 }
 
 fn now_unix() -> u64 {
@@ -97,10 +95,7 @@ pub fn run_if_due() -> Result<Option<PathBuf>, String> {
                 .file_name()
                 .to_string_lossy()
                 .starts_with("saved-projects-")
-                && entry
-                    .path()
-                    .extension()
-                    .is_some_and(|ext| ext == "json")
+                && entry.path().extension().is_some_and(|ext| ext == "json")
         })
         .collect();
     backups.sort_by_key(|entry| entry.file_name());
