@@ -13,7 +13,7 @@ Copr Hub is built with Rust, GTK4, and libadwaita, with a GNOME-friendly interfa
 - **Find projects** — search COPR, sort results, and filter locally.
 - **Understand build health** — inspect package versions, Fedora build targets, failed/in-progress builds, and project-build freshness.
 - **Spot upstream updates** — compare supported package versions with GitHub/GitLab stable releases, with clearly labeled cached data and freshness hints.
-- **Track projects** — save favorites, run on-demand health checks, and export/import saved-project backups.
+- **Track and compare projects** — save favorites, run on-demand health checks, compare two or three projects side by side, and export/import saved-project backups.
 - **Manage COPR repositories** — inspect repository configuration, enable/disable repositories, and remove supported COPR definitions after confirmation.
 - **Manage packages** — list installed COPR packages, install packages, or remove them with explicit confirmation.
 - **Keep a local history** — search, export, import, or clear recent activity.
