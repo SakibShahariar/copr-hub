@@ -475,10 +475,11 @@ mod tests {
 
         assert!(upstream_status_error("GitHub", StatusCode::FORBIDDEN, true)
             .contains("rate limit reached"));
-        assert!(upstream_status_error("GitLab", StatusCode::SERVICE_UNAVAILABLE, false)
-            .contains("temporarily unavailable"));
-        assert!(upstream_status_error("GitHub", StatusCode::FORBIDDEN, false)
-            .contains("HTTP 403"));
+        assert!(
+            upstream_status_error("GitLab", StatusCode::SERVICE_UNAVAILABLE, false)
+                .contains("temporarily unavailable")
+        );
+        assert!(upstream_status_error("GitHub", StatusCode::FORBIDDEN, false).contains("HTTP 403"));
     }
 
     #[test]
