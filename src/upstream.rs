@@ -437,7 +437,7 @@ fn is_prerelease_tag(tag: &str) -> bool {
         "-dev", ".dev",
     ]
     .iter()
-    .any(|marker| normalized.contains(marker))
+    .any(|marker| normalized.contains(*marker))
         || normalized.ends_with("-snapshot")
 }
 
