@@ -25,6 +25,18 @@ pub fn is_saved(project: &CoprProject) -> Result<bool, String> {
         .any(|saved| saved.owner == project.owner && saved.name == project.name))
 }
 
+fn parse_backup(contents: &str) -> Result<Vec<CoprProject>, String> {
+    let imported: Vec<CoprProject> = serde_json::from_str(contents)
+        .map_err(|error| format!("This is not a valid Copr Hub saved-project backup: {error}"))?;
+    if imported
+        .iter()
+        .any(|project| project.name.trim().is_empty() || project.owner.trim().is_empty())
+    {
+        return Err("The backup contains a project without a name or owner.".to_string());
+    }
+    Ok(imported)
+}
+
 fn merge_projects(
     projects: &mut Vec<CoprProject>,
     imported: impl IntoIterator<Item = CoprProject>,
@@ -78,7 +90,7 @@ pub fn export_to(path: &std::path::Path) -> Result<usize, String> {
     let projects = load()?;
     let contents = serde_json::to_vec_pretty(&projects)
         .map_err(|error| format!("Could not encode saved projects: {error}"))?;
-    fs::write(path, contents)
+    storage::atomic_write(path, &contents)
         .map_err(|error| format!("Could not export saved projects: {error}"))?;
     Ok(projects.len())
 }
@@ -87,14 +99,7 @@ pub fn export_to(path: &std::path::Path) -> Result<usize, String> {
 pub fn import_from(path: &std::path::Path) -> Result<usize, String> {
     let contents = fs::read_to_string(path)
         .map_err(|error| format!("Could not read the selected backup: {error}"))?;
-    let imported: Vec<CoprProject> = serde_json::from_str(&contents)
-        .map_err(|error| format!("This is not a valid Copr Hub saved-project backup: {error}"))?;
-    if imported
-        .iter()
-        .any(|project| project.name.trim().is_empty() || project.owner.trim().is_empty())
-    {
-        return Err("The backup contains a project without a name or owner.".to_string());
-    }
+    let imported = parse_backup(&contents)?;
 
     let path = favorites_path();
     let parent = path
@@ -147,6 +152,24 @@ mod tests {
         assert!(projects
             .iter()
             .any(|item| item.owner == "carol" && item.name == "tool"));
+    }
+
+    #[test]
+    fn backup_parser_rejects_invalid_json() {
+        let error = parse_backup("{not json").unwrap_err();
+        assert!(error.contains("valid Copr Hub saved-project backup"));
+    }
+
+    #[test]
+    fn backup_parser_rejects_projects_without_identity() {
+        let contents = r#"[{"owner":"alice","name":"  "},{"owner":"bob","name":"tool"}]"#;
+        let error = parse_backup(contents).unwrap_err();
+        assert!(error.contains("without a name or owner"));
+    }
+
+    #[test]
+    fn backup_parser_accepts_an_empty_backup() {
+        assert!(parse_backup("[]").unwrap().is_empty());
     }
 
     #[test]
