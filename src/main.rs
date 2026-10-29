@@ -224,9 +224,7 @@ fn check_saved_projects() -> Vec<(String, String, String)> {
         if let Some(release) = release.as_ref().filter(|release| !release.stale_cache) {
             let _ = snapshots::save_release(&project, Some(release.clone()));
         }
-        if let Ok(history) =
-            copr::fetch_project_build_history(&project.owner, &project.name)
-        {
+        if let Ok(history) = copr::fetch_project_build_history(&project.owner, &project.name) {
             let _ = snapshots::save_history(&project, history);
         }
         let alerts = monitoring::record_observation(&project, &monitor, release.as_ref())
