@@ -62,14 +62,22 @@ fn load_persistent_cache() {
         return;
     };
     let now = unix_now();
-    let entries = saved.entries.into_iter().filter_map(|(key, entry)| {
-        let age = persisted_entry_age(entry.cached_at_unix, now)?;
-        if key.len() > 1024 {
-            return None;
-        }
-        Some((key, (Instant::now() - age, entry.release)))
-    }).take(CACHE_CAPACITY).collect::<HashMap<_, _>>();
-    if let Ok(mut cache) = RELEASE_CACHE.get_or_init(|| Mutex::new(HashMap::new())).lock() {
+    let entries = saved
+        .entries
+        .into_iter()
+        .filter_map(|(key, entry)| {
+            let age = persisted_entry_age(entry.cached_at_unix, now)?;
+            if key.len() > 1024 {
+                return None;
+            }
+            Some((key, (Instant::now() - age, entry.release)))
+        })
+        .take(CACHE_CAPACITY)
+        .collect::<HashMap<_, _>>();
+    if let Ok(mut cache) = RELEASE_CACHE
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+    {
         cache.extend(entries);
     }
 }
@@ -82,16 +90,21 @@ fn save_persistent_cache() {
         return;
     };
     let now = unix_now();
-    let entries = cache.iter().filter_map(|(key, (stored_at, release))| {
-        let age = stored_at.elapsed().as_secs();
-        (age <= MAX_STALE_CACHE_AGE.as_secs()).then(|| (
-            key.clone(),
-            PersistedCacheEntry {
-                cached_at_unix: now.saturating_sub(age),
-                release: release.clone(),
-            },
-        ))
-    }).collect();
+    let entries = cache
+        .iter()
+        .filter_map(|(key, (stored_at, release))| {
+            let age = stored_at.elapsed().as_secs();
+            (age <= MAX_STALE_CACHE_AGE.as_secs()).then(|| {
+                (
+                    key.clone(),
+                    PersistedCacheEntry {
+                        cached_at_unix: now.saturating_sub(age),
+                        release: release.clone(),
+                    },
+                )
+            })
+        })
+        .collect();
     let saved = PersistedReleaseCache { entries };
     let Ok(contents) = serde_json::to_vec(&saved) else {
         return;
@@ -546,7 +559,10 @@ mod tests {
         use super::{persisted_entry_age, MAX_STALE_CACHE_AGE};
         use std::time::Duration;
 
-        assert_eq!(persisted_entry_age(900, 1_000), Some(Duration::from_secs(100)));
+        assert_eq!(
+            persisted_entry_age(900, 1_000),
+            Some(Duration::from_secs(100))
+        );
         assert_eq!(
             persisted_entry_age(1_000, 900),
             None,
@@ -587,7 +603,10 @@ mod tests {
         assert_eq!(entry.cached_at_unix, 1_800_000_000);
         let release = entry.release.as_ref().unwrap();
         assert_eq!(release.version, "v2.4.1");
-        assert_eq!(release.published_at.as_deref(), Some("2026-10-01T12:00:00Z"));
+        assert_eq!(
+            release.published_at.as_deref(),
+            Some("2026-10-01T12:00:00Z")
+        );
     }
 
     #[test]
