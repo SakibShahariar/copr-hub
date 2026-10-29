@@ -67,17 +67,41 @@ fn is_retryable_status(status: reqwest::StatusCode) -> bool {
     status == reqwest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error()
 }
 
+fn has_rate_limit_headers(headers: &reqwest::header::HeaderMap) -> bool {
+    headers.contains_key(reqwest::header::RETRY_AFTER)
+        || headers
+            .get("x-ratelimit-remaining")
+            .and_then(|value| value.to_str().ok())
+            .is_some_and(|remaining| remaining == "0")
+}
+
+fn is_rate_limited_response(
+    status: reqwest::StatusCode,
+    headers: &reqwest::header::HeaderMap,
+) -> bool {
+    status == reqwest::StatusCode::TOO_MANY_REQUESTS
+        || (status == reqwest::StatusCode::FORBIDDEN && has_rate_limit_headers(headers))
+}
+
 fn is_retryable_response(
     status: reqwest::StatusCode,
     headers: &reqwest::header::HeaderMap,
 ) -> bool {
-    is_retryable_status(status)
-        || (status == reqwest::StatusCode::FORBIDDEN
-            && (headers.contains_key(reqwest::header::RETRY_AFTER)
-                || headers
-                    .get("x-ratelimit-remaining")
-                    .and_then(|value| value.to_str().ok())
-                    .is_some_and(|remaining| remaining == "0")))
+    is_retryable_status(status) || is_rate_limited_response(status, headers)
+}
+
+fn upstream_status_error(
+    provider: &str,
+    status: reqwest::StatusCode,
+    rate_limited: bool,
+) -> String {
+    if rate_limited {
+        format!("{provider} API rate limit reached; wait a moment before checking releases again.")
+    } else if status.is_server_error() {
+        format!("{provider} is temporarily unavailable (HTTP {status}); try again later.")
+    } else {
+        format!("{provider} release lookup failed (HTTP {status}).")
+    }
 }
 
 /// Retry one time for temporary upstream failures; release lookups are safe GET requests.
@@ -237,9 +261,14 @@ fn fetch_release(
         if response.status() == reqwest::StatusCode::NOT_FOUND {
             return Ok(None);
         }
+        if !response.status().is_success() {
+            return Err(upstream_status_error(
+                "GitLab",
+                response.status(),
+                is_rate_limited_response(response.status(), response.headers()),
+            ));
+        }
         let release: GitLabRelease = response
-            .error_for_status()
-            .map_err(|error| format!("GitLab release lookup failed: {error}"))?
             .json()
             .map_err(|error| format!("Could not read GitLab release metadata: {error}"))?;
         let url = release._links.and_then(|links| links.self_url);
@@ -261,9 +290,14 @@ fn fetch_release(
     if response.status() == reqwest::StatusCode::NOT_FOUND {
         return Ok(None);
     }
+    if !response.status().is_success() {
+        return Err(upstream_status_error(
+            "GitHub",
+            response.status(),
+            is_rate_limited_response(response.status(), response.headers()),
+        ));
+    }
     let release: GitHubRelease = response
-        .error_for_status()
-        .map_err(|error| format!("GitHub release lookup failed: {error}"))?
         .json()
         .map_err(|error| format!("Could not read GitHub release metadata: {error}"))?;
     if release.draft.unwrap_or(false) || release.prerelease.unwrap_or(false) {
@@ -432,6 +466,19 @@ mod tests {
 
         let expired_at = Instant::now() - MAX_STALE_CACHE_AGE - Duration::from_secs(1);
         assert!(stale_cache_fallback(expired_at, Some(release())).is_none());
+    }
+
+    #[test]
+    fn upstream_http_errors_explain_rate_limits_and_temporary_outages() {
+        use super::upstream_status_error;
+        use reqwest::StatusCode;
+
+        assert!(upstream_status_error("GitHub", StatusCode::FORBIDDEN, true)
+            .contains("rate limit reached"));
+        assert!(upstream_status_error("GitLab", StatusCode::SERVICE_UNAVAILABLE, false)
+            .contains("temporarily unavailable"));
+        assert!(upstream_status_error("GitHub", StatusCode::FORBIDDEN, false)
+            .contains("HTTP 403"));
     }
 
     #[test]
