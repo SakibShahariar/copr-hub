@@ -422,7 +422,11 @@ fn query_installed_package_origins() -> InstalledOrigins {
     if !output.status.success() {
         return Err(format!(
             "DNF could not inspect installed package origins: {}",
-            bounded_command_details(&String::from_utf8_lossy(&output.stderr))
+            command_failure_details(
+                &String::from_utf8_lossy(&output.stderr),
+                "",
+                "DNF returned no error details.",
+            )
         ));
     }
     let mut origins: HashMap<String, Vec<String>> = HashMap::new();
