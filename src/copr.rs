@@ -90,7 +90,9 @@ fn is_retryable_status(status: reqwest::StatusCode) -> bool {
 
 /// Retry one time for transient connection failures and temporary COPR outages.
 /// GET requests are safe to retry; the short backoff avoids hammering an unhealthy service.
-fn send_with_retry(request: reqwest::blocking::RequestBuilder) -> Result<reqwest::blocking::Response, String> {
+fn send_with_retry(
+    request: reqwest::blocking::RequestBuilder,
+) -> Result<reqwest::blocking::Response, String> {
     let retry_request = request.try_clone();
     match request.send() {
         Ok(response) if is_retryable_status(response.status()) && retry_request.is_some() => {
@@ -161,8 +163,8 @@ pub fn fetch_project_monitor(owner: &str, project: &str) -> Result<ProjectMonito
             .get(format!("{COPR_API_BASE}/monitor"))
             .query(&[("ownername", owner), ("projectname", project)]),
     )?
-        .error_for_status()
-        .map_err(|error| service_response_error(error, "project"))?;
+    .error_for_status()
+    .map_err(|error| service_response_error(error, "project"))?;
 
     let mut monitor: ProjectMonitor = response
         .json()
@@ -180,8 +182,8 @@ pub fn fetch_project_monitor(owner: &str, project: &str) -> Result<ProjectMonito
                         ("limit", "1"),
                     ]),
             )?
-                .error_for_status()
-                .map_err(|error| service_response_error(error, "recent build"))?
+            .error_for_status()
+            .map_err(|error| service_response_error(error, "recent build"))?
                 .json::<BuildListResponse>()
                 .map_err(|error| format!("Could not read recent build information: {error}"))
         })
@@ -273,6 +275,16 @@ pub fn build_freshness_message(build: Option<&ProjectBuildSummary>, now: i64) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn retryable_statuses_are_limited_to_rate_limits_and_server_errors() {
+        assert!(is_retryable_status(reqwest::StatusCode::TOO_MANY_REQUESTS));
+        assert!(is_retryable_status(reqwest::StatusCode::BAD_GATEWAY));
+        assert!(is_retryable_status(reqwest::StatusCode::SERVICE_UNAVAILABLE));
+        assert!(!is_retryable_status(reqwest::StatusCode::NOT_FOUND));
+        assert!(!is_retryable_status(reqwest::StatusCode::FORBIDDEN));
+        assert!(!is_retryable_status(reqwest::StatusCode::OK));
+    }
 
     #[test]
     fn service_status_messages_cover_common_api_failures() {
