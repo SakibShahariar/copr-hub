@@ -376,8 +376,7 @@ mod tests {
         });
 
         let response = send_with_retry(
-            reqwest::blocking::Client::new()
-                .get(format!("http://{address}/release")),
+            reqwest::blocking::Client::new().get(format!("http://{address}/release")),
         )
         .unwrap();
 
