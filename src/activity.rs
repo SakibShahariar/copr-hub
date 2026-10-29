@@ -164,6 +164,16 @@ pub fn clear() -> Result<(), String> {
 }
 
 pub fn record(action: &str, target: &str, summary: &str) -> Result<(), String> {
+    let entry = ActivityEntry {
+        timestamp: 0,
+        action: action.to_string(),
+        target: target.to_string(),
+        summary: summary.to_string(),
+    };
+    if !activity_entry_has_valid_fields(&entry) {
+        return Err("Activity entry contains invalid or oversized fields.".to_string());
+    }
+
     let path = history_path();
     let parent = path
         .parent()
