@@ -428,10 +428,16 @@ fn fetch_release(
 
 /// Identify common prerelease markers without assuming every hyphen means a prerelease.
 fn is_prerelease_tag(tag: &str) -> bool {
-    let normalized = tag.trim().trim_start_matches(['v', 'V']).to_ascii_lowercase();
-    ["-alpha", ".alpha", "-beta", ".beta", "-rc", ".rc", "-pre", ".pre", "-preview", ".preview", "-dev", ".dev"]
-        .iter()
-        .any(|marker| normalized.contains(marker))
+    let normalized = tag
+        .trim()
+        .trim_start_matches(['v', 'V'])
+        .to_ascii_lowercase();
+    [
+        "-alpha", ".alpha", "-beta", ".beta", "-rc", ".rc", "-pre", ".pre", "-preview", ".preview",
+        "-dev", ".dev",
+    ]
+    .iter()
+    .any(|marker| normalized.contains(marker))
         || normalized.ends_with("-snapshot")
 }
 
@@ -776,7 +782,12 @@ mod tests {
             None
         );
         assert_eq!(
-            compare_package_version("https://github.com/demo/python-tool", "2.0.0", "python3-tool", "1.0.0-1"),
+            compare_package_version(
+                "https://github.com/demo/python-tool",
+                "2.0.0",
+                "python3-tool",
+                "1.0.0-1"
+            ),
             Some(Ordering::Greater)
         );
         assert_eq!(
