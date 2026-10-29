@@ -564,6 +564,27 @@ fn render_repositories(
                     }
                 });
                 row.add_suffix(&toggle);
+
+                if system::copr_project_spec_from_repository_id(&repository.id).is_some() {
+                    let remove = gtk::Button::with_label("Remove");
+                    remove.set_valign(gtk::Align::Center);
+                    remove.add_css_class("destructive-action");
+                    remove.connect_clicked({
+                        let parent = parent.clone();
+                        let repository = repository.clone();
+                        let list = list.clone();
+                        let feedback = feedback.clone();
+                        move |_| {
+                            confirm_repository_removal(
+                                &parent,
+                                &repository,
+                                &list,
+                                &feedback,
+                            );
+                        }
+                    });
+                    row.add_suffix(&remove);
+                }
                 list.append(&row);
             }
         }
@@ -621,6 +642,67 @@ fn confirm_repository_toggle(
                             "Repository configuration",
                             &activity_repository_id,
                             &format!("Repository {action_past}"),
+                        )
+                        .err()
+                        .map(|error| format!("Activity history could not be saved: {error}"));
+                        refresh_repositories_with_notice(&parent, &list, &feedback, notice);
+                    }
+                    Ok(Err(error)) => feedback.set_text(&error),
+                    Err(_) => feedback.set_text("The repository operation failed unexpectedly."),
+                }
+            });
+        }
+    });
+    dialog.present();
+}
+
+fn confirm_repository_removal(
+    parent: &adw::ApplicationWindow,
+    repository: &system::CoprRepository,
+    list: &gtk::ListBox,
+    feedback: &gtk::Label,
+) {
+    let dialog = gtk::MessageDialog::builder()
+        .transient_for(parent)
+        .modal(true)
+        .message_type(gtk::MessageType::Warning)
+        .buttons(gtk::ButtonsType::None)
+        .text(format!("Remove {}?", repository.name))
+        .secondary_text(
+            "This removes the COPR repository configuration from this system; it does not uninstall packages already installed from it. You will be asked to authenticate.",
+        )
+        .build();
+    dialog.add_button("Cancel", gtk::ResponseType::Cancel);
+    dialog.add_button("Remove repository", gtk::ResponseType::Accept);
+
+    dialog.connect_response({
+        let parent = parent.clone();
+        let repository = repository.clone();
+        let list = list.clone();
+        let feedback = feedback.clone();
+        move |dialog, response| {
+            dialog.close();
+            if response != gtk::ResponseType::Accept {
+                return;
+            }
+
+            feedback.set_text("Removing repository…");
+            let repository_id = repository.id.clone();
+            let activity_repository_id = repository.id.clone();
+            let list = list.clone();
+            let feedback = feedback.clone();
+            let parent = parent.clone();
+            gtk::glib::MainContext::default().spawn_local(async move {
+                let result = gtk::gio::spawn_blocking(move || {
+                    system::remove_copr_repository(&repository_id)
+                })
+                .await;
+                match result {
+                    Ok(Ok(())) => {
+                        let notice = activity::record(
+                            "Repository configuration",
+                            &activity_repository_id,
+                            "Repository removed",
                         )
                         .err()
                         .map(|error| format!("Activity history could not be saved: {error}"));

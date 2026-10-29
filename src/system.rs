@@ -226,6 +226,43 @@ fn is_valid_copr_repository_id(repository_id: &str) -> bool {
             .all(|character| character.is_ascii_alphanumeric() || ":._-".contains(character))
 }
 
+fn copr_project_spec_from_repository_id(repository_id: &str) -> Option<String> {
+    let suffix = repository_id.strip_prefix("copr:copr.fedorainfracloud.org:")?;
+    let (owner, project) = suffix.split_once(':')?;
+    let valid_owner = !owner.is_empty()
+        && owner
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || "@._-".contains(character));
+    let valid_project = !project.is_empty()
+        && project.chars().all(|character| {
+            character.is_ascii_alphanumeric() || ":._-".contains(character)
+        });
+    (valid_owner && valid_project).then(|| format!("{owner}/{project}"))
+}
+
+pub fn remove_copr_repository(repository_id: &str) -> Result<(), String> {
+    let project_spec = copr_project_spec_from_repository_id(repository_id).ok_or_else(|| {
+        "This repository ID is not a supported standard Fedora COPR project; it was left unchanged."
+            .to_string()
+    })?;
+
+    let output = Command::new("pkexec")
+        .args(["dnf", "--assumeyes", "copr", "remove", &project_spec])
+        .output()
+        .map_err(|error| format!("Could not start the privileged DNF helper: {error}"))?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let details = command_failure_details(
+        &String::from_utf8_lossy(&output.stderr),
+        &String::from_utf8_lossy(&output.stdout),
+        "Authentication may have been cancelled, or the DNF COPR plugin may be unavailable.",
+    );
+    Err(format!("DNF could not remove the repository: {details}"))
+}
+
 pub fn set_copr_repository_enabled(repository_id: &str, enabled: bool) -> Result<(), String> {
     if !is_valid_copr_repository_id(repository_id) {
         return Err("The repository identifier is not a valid COPR repository ID.".to_string());
@@ -338,6 +375,33 @@ mod tests {
             command_failure_details("  ", "\n", "Authentication was cancelled."),
             "Authentication was cancelled."
         );
+    }
+
+    #[test]
+    fn converts_only_standard_fedora_copr_ids_to_project_specs() {
+        assert_eq!(
+            copr_project_spec_from_repository_id(
+                "copr:copr.fedorainfracloud.org:alice:demo"
+            ),
+            Some("alice/demo".to_string())
+        );
+        assert_eq!(
+            copr_project_spec_from_repository_id(
+                "copr:copr.fedorainfracloud.org:@team:demo:custom"
+            ),
+            Some("@team/demo:custom".to_string())
+        );
+        assert_eq!(
+            copr_project_spec_from_repository_id("copr:other.example:alice:demo"),
+            None
+        );
+        assert_eq!(
+            copr_project_spec_from_repository_id(
+                "copr:copr.fedorainfracloud.org:alice:../unsafe"
+            ),
+            None
+        );
+        assert_eq!(copr_project_spec_from_repository_id("fedora"), None);
     }
 
     #[test]
