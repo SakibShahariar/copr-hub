@@ -1802,23 +1802,31 @@ fn show_compare_picker(parent: &adw::ApplicationWindow) {
     let projects = match favorites::load() {
         Ok(projects) => projects,
         Err(error) => {
-            let dialog = adw::AlertDialog::builder()
-                .heading("Could not load saved projects")
-                .body(error)
+            let dialog = gtk::MessageDialog::builder()
+                .transient_for(parent)
+                .modal(true)
+                .message_type(gtk::MessageType::Error)
+                .buttons(gtk::ButtonsType::Close)
+                .text("Could not load saved projects")
+                .secondary_text(&error)
                 .build();
-            dialog.add_response("close", "Close");
-            dialog.present(Some(parent));
+            dialog.connect_response(|dialog, _| dialog.close());
+            dialog.present();
             return;
         }
     };
 
     if projects.len() < 2 {
-        let dialog = adw::AlertDialog::builder()
-            .heading("Save at least two projects")
-            .body("Project comparison needs at least two saved COPR projects. Save projects from their details windows, then try again.")
+        let dialog = gtk::MessageDialog::builder()
+            .transient_for(parent)
+            .modal(true)
+            .message_type(gtk::MessageType::Info)
+            .buttons(gtk::ButtonsType::Close)
+            .text("Save at least two projects")
+            .secondary_text("Project comparison needs at least two saved COPR projects. Save projects from their details windows, then try again.")
             .build();
-        dialog.add_response("close", "Close");
-        dialog.present(Some(parent));
+        dialog.connect_response(|dialog, _| dialog.close());
+        dialog.present();
         return;
     }
 
