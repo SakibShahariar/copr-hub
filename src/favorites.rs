@@ -9,6 +9,28 @@ const MAX_IMPORTED_PROJECTS: usize = 5_000;
 const MAX_SAVED_PROJECTS: usize = 10_000;
 const MAX_SAVED_FILE_BYTES: u64 = 10 * 1024 * 1024;
 
+fn project_has_valid_fields(project: &CoprProject) -> bool {
+    !project.name.trim().is_empty()
+        && !project.owner.trim().is_empty()
+        && project.name.len() <= 512
+        && project.owner.len() <= 512
+        && project
+            .description
+            .as_ref()
+            .is_none_or(|value| value.len() <= 16_384)
+        && project
+            .homepage
+            .as_ref()
+            .is_none_or(|value| value.len() <= 4096)
+}
+
+fn validate_project_entries(projects: &[CoprProject]) -> Result<(), String> {
+    if projects.iter().any(|project| !project_has_valid_fields(project)) {
+        return Err("The saved-project list contains an invalid or oversized project entry.".to_string());
+    }
+    Ok(())
+}
+
 fn ensure_saved_project_limit(count: usize) -> Result<(), String> {
     if count > MAX_SAVED_PROJECTS {
         return Err(format!(
@@ -39,6 +61,7 @@ pub fn load() -> Result<Vec<CoprProject>, String> {
             let projects: Vec<CoprProject> = serde_json::from_str(&contents)
                 .map_err(|error| format!("Could not read saved projects: {error}"))?;
             ensure_saved_project_limit(projects.len())?;
+            validate_project_entries(&projects)?;
             Ok(projects)
         }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
@@ -63,20 +86,7 @@ fn parse_backup(contents: &str) -> Result<Vec<CoprProject>, String> {
             "The backup contains more than {MAX_IMPORTED_PROJECTS} saved projects."
         ));
     }
-    if imported.iter().any(|project| {
-        project.name.trim().is_empty()
-            || project.owner.trim().is_empty()
-            || project.name.len() > 512
-            || project.owner.len() > 512
-            || project
-                .description
-                .as_ref()
-                .is_some_and(|value| value.len() > 16_384)
-            || project
-                .homepage
-                .as_ref()
-                .is_some_and(|value| value.len() > 4096)
-    }) {
+    if imported.iter().any(|project| !project_has_valid_fields(project)) {
         return Err("The backup contains an invalid or oversized project entry.".to_string());
     }
     Ok(imported)
@@ -247,6 +257,21 @@ mod tests {
         assert!(parse_backup(&contents)
             .unwrap_err()
             .contains("invalid or oversized project entry"));
+    }
+
+    #[test]
+    fn saved_project_field_validation_rejects_blank_and_oversized_values() {
+        assert!(!project_has_valid_fields(&project(" ", "demo")));
+        assert!(!project_has_valid_fields(&project("alice", "")));
+        assert!(!project_has_valid_fields(&project("alice", &"x".repeat(513))));
+
+        let mut oversized_description = project("alice", "demo");
+        oversized_description.description = Some("x".repeat(16_385));
+        assert!(!project_has_valid_fields(&oversized_description));
+
+        let mut oversized_homepage = project("alice", "demo");
+        oversized_homepage.homepage = Some("x".repeat(4097));
+        assert!(!project_has_valid_fields(&oversized_homepage));
     }
 
     #[test]
