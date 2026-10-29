@@ -1083,10 +1083,14 @@ fn update_intelligence_summary(
         }
     }
 
-    let update_summary = if homepage.is_some() && release.is_some() {
-        format!("{newer_packages} package(s) with a newer matched upstream release")
-    } else {
-        "upstream update comparison unavailable".to_string()
+    let update_summary = match (homepage.is_some(), release) {
+        (true, Some(release)) if release.stale_cache => format!(
+            "{newer_packages} package(s) with a newer matched upstream release (cached metadata; may be out of date)"
+        ),
+        (true, Some(_)) => {
+            format!("{newer_packages} package(s) with a newer matched upstream release")
+        }
+        _ => "upstream update comparison unavailable".to_string(),
     };
     let build_age = copr::build_freshness_message(latest_build, now);
     let stale_release = release
@@ -1894,6 +1898,26 @@ mod url_tests {
         assert!(summary.contains("1 package(s) with a newer matched upstream release"));
         assert!(summary.contains("1 failed build target(s)"));
         assert!(summary.contains("1 in-progress target(s)"));
+    }
+
+    #[test]
+    fn update_intelligence_warns_when_release_comparison_uses_cached_metadata() {
+        let release = upstream::UpstreamRelease {
+            version: "1.3.0".into(),
+            name: "Tool 1.3.0".into(),
+            published_at: Some("2026-09-01T00:00:00Z".into()),
+            url: None,
+            stale_cache: true,
+        };
+        let summary = update_intelligence_summary(
+            &[],
+            Some("https://github.com/demo/tool"),
+            Some(&release),
+            None,
+            1_800_000_000,
+        );
+
+        assert!(summary.contains("cached metadata; may be out of date"));
     }
 
     #[test]
