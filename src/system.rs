@@ -374,6 +374,45 @@ fn is_valid_copr_repository_id(repository_id: &str) -> bool {
             .all(|character| character.is_ascii_alphanumeric() || ":._-".contains(character))
 }
 
+
+/// Installed RPMs whose recorded source repository matches the supplied COPR ID.
+/// DNF metadata can be unavailable offline; in that case the caller receives an
+/// explicit error rather than a misleading empty dependency list.
+pub fn installed_packages_from_repository(repository_id: &str) -> Result<Vec<String>, String> {
+    if !is_safe_repository_id(repository_id) {
+        return Err("Invalid repository ID.".to_string());
+    }
+    let output = Command::new("dnf")
+        .args(["repoquery", "--installed", "--queryformat", "%{name}\\t%{from_repo}"])
+        .output()
+        .map_err(|error| format!("Could not run DNF to inspect installed package origins: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "DNF could not inspect installed package origins: {}",
+            bounded_command_details(&String::from_utf8_lossy(&output.stderr))
+        ));
+    }
+    let mut packages = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| {
+            let (name, origin) = line.split_once('\\t')?;
+            (origin.trim() == repository_id).then(|| name.trim().to_string())
+        })
+        .filter(|name| !name.is_empty())
+        .collect::<Vec<_>>();
+    packages.sort();
+    packages.dedup();
+    Ok(packages)
+}
+
+fn is_safe_repository_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 200
+        && value.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'+')
+        })
+}
+
 pub fn copr_project_spec_from_repository_id(repository_id: &str) -> Option<String> {
     let suffix = repository_id.strip_prefix("copr:copr.fedorainfracloud.org:")?;
     let (owner, project) = suffix.split_once(':')?;
