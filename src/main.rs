@@ -1660,9 +1660,13 @@ fn build_saved_page(parent: &adw::ApplicationWindow, stack: &adw::ViewStack) -> 
     let import = gtk::Button::with_label("Import");
     import.set_tooltip_text(Some("Merge projects from a Copr Hub JSON backup"));
     import.set_icon_name("document-open-symbolic");
+    let compare = gtk::Button::with_label("Compare");
+    compare.set_tooltip_text(Some("Compare live build health for 2–3 saved projects"));
+    compare.set_icon_name("view-grid-symbolic");
     let refresh = gtk::Button::with_label("Refresh");
     refresh.set_icon_name("view-refresh-symbolic");
     heading.append(&title);
+    heading.append(&compare);
     heading.append(&export);
     heading.append(&import);
     heading.append(&refresh);
@@ -1768,6 +1772,10 @@ fn build_saved_page(parent: &adw::ApplicationWindow, stack: &adw::ViewStack) -> 
             dialog.show();
         }
     });
+    compare.connect_clicked({
+        let parent = parent.clone();
+        move |_| show_compare_picker(&parent)
+    });
     refresh.connect_clicked({
         let parent = parent.clone();
         let list = list.clone();
@@ -1788,6 +1796,301 @@ fn build_saved_page(parent: &adw::ApplicationWindow, stack: &adw::ViewStack) -> 
     });
 
     scroll_page(&content)
+}
+
+fn show_compare_picker(parent: &adw::ApplicationWindow) {
+    let projects = match favorites::load() {
+        Ok(projects) => projects,
+        Err(error) => {
+            let dialog = adw::AlertDialog::builder()
+                .heading("Could not load saved projects")
+                .body(error)
+                .build();
+            dialog.add_response("close", "Close");
+            dialog.present(Some(parent));
+            return;
+        }
+    };
+
+    if projects.len() < 2 {
+        let dialog = adw::AlertDialog::builder()
+            .heading("Save at least two projects")
+            .body("Project comparison needs at least two saved COPR projects. Save projects from their details windows, then try again.")
+            .build();
+        dialog.add_response("close", "Close");
+        dialog.present(Some(parent));
+        return;
+    }
+
+    let window = adw::Window::builder()
+        .transient_for(parent)
+        .modal(true)
+        .title("Choose projects to compare")
+        .default_width(620)
+        .default_height(560)
+        .build();
+
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 16);
+    content.set_margin_top(24);
+    content.set_margin_bottom(24);
+    content.set_margin_start(24);
+    content.set_margin_end(24);
+
+    let heading = adw::StatusPage::builder()
+        .icon_name("view-grid-symbolic")
+        .title("Compare COPR projects")
+        .description("Select two or three saved projects. Copr Hub will fetch their current build health and compare package counts, target outcomes, and build freshness.")
+        .build();
+    heading.set_vexpand(false);
+    content.append(&heading);
+
+    let choices_box = gtk::Box::new(gtk::Orientation::Vertical, 8);
+    let mut choices = Vec::with_capacity(projects.len());
+    for project in projects {
+        let description = project
+            .description
+            .as_deref()
+            .filter(|description| !description.trim().is_empty())
+            .unwrap_or("No description");
+        let check = gtk::CheckButton::with_label(&format!(
+            "{} (@{}) — {}",
+            project.name, project.owner, description
+        ));
+        check.set_halign(gtk::Align::Start);
+        choices_box.append(&check);
+        choices.push((check, project));
+    }
+
+    let scroll = gtk::ScrolledWindow::builder()
+        .vexpand(true)
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .child(&choices_box)
+        .build();
+    content.append(&scroll);
+
+    let feedback = gtk::Label::new(Some("Choose 2–3 projects to compare."));
+    feedback.set_xalign(0.0);
+    feedback.set_wrap(true);
+    feedback.add_css_class("dim-label");
+    content.append(&feedback);
+
+    let actions = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    actions.set_halign(gtk::Align::End);
+    let cancel = gtk::Button::with_label("Cancel");
+    let compare = gtk::Button::with_label("Compare selected");
+    compare.add_css_class("suggested-action");
+    actions.append(&cancel);
+    actions.append(&compare);
+    content.append(&actions);
+    window.set_content(Some(&content));
+
+    cancel.connect_clicked({
+        let window = window.clone();
+        move |_| window.close()
+    });
+
+    let choices = std::rc::Rc::new(choices);
+    compare.connect_clicked({
+        let parent = parent.clone();
+        let window = window.clone();
+        let feedback = feedback.clone();
+        let choices = choices.clone();
+        move |_| {
+            let selected: Vec<copr::CoprProject> = choices
+                .iter()
+                .filter(|(check, _)| check.is_active())
+                .map(|(_, project)| project.clone())
+                .collect();
+            if !(2..=3).contains(&selected.len()) {
+                feedback.set_text("Select exactly two or three projects to keep the comparison readable.");
+                return;
+            }
+            window.close();
+            show_project_comparison(&parent, selected);
+        }
+    });
+
+    window.present();
+}
+
+fn comparison_cell(text: &str, heading: bool) -> gtk::Label {
+    let label = gtk::Label::builder()
+        .label(text)
+        .xalign(0.0)
+        .yalign(0.5)
+        .wrap(true)
+        .selectable(true)
+        .build();
+    if heading {
+        label.add_css_class("heading");
+    } else {
+        label.add_css_class("dim-label");
+    }
+    label
+}
+
+fn show_project_comparison(
+    parent: &adw::ApplicationWindow,
+    projects: Vec<copr::CoprProject>,
+) {
+    let window = adw::Window::builder()
+        .transient_for(parent)
+        .modal(true)
+        .title("COPR project comparison")
+        .default_width(900)
+        .default_height(520)
+        .build();
+
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 16);
+    content.set_margin_top(24);
+    content.set_margin_bottom(24);
+    content.set_margin_start(24);
+    content.set_margin_end(24);
+
+    let title = gtk::Label::builder()
+        .label("Project comparison")
+        .xalign(0.0)
+        .build();
+    title.add_css_class("title-1");
+    content.append(&title);
+
+    let note = gtk::Label::builder()
+        .label("Build data is fetched live from COPR. Failed or unavailable lookups are shown explicitly; results are informational, not a security assessment.")
+        .xalign(0.0)
+        .wrap(true)
+        .build();
+    note.add_css_class("dim-label");
+    content.append(&note);
+
+    let grid = gtk::Grid::builder()
+        .column_spacing(20)
+        .row_spacing(14)
+        .hexpand(true)
+        .build();
+
+    grid.attach(&comparison_cell("Metric", true), 0, 0, 1, 1);
+    let metric_names = [
+        "Packages",
+        "Succeeded targets",
+        "Failed targets",
+        "In-progress targets",
+        "Unknown targets",
+        "Latest build",
+    ];
+    for (row, metric) in metric_names.iter().enumerate() {
+        grid.attach(
+            &comparison_cell(metric, true),
+            0,
+            row as i32 + 1,
+            1,
+            1,
+        );
+    }
+
+    for (index, project) in projects.into_iter().enumerate() {
+        let column = index as i32 + 1;
+        grid.attach(
+            &comparison_cell(&format!("{}/{}", project.owner, project.name), true),
+            column,
+            0,
+            1,
+            1,
+        );
+
+        let cells: Vec<gtk::Label> = (0..metric_names.len())
+            .map(|_| comparison_cell("Loading…", false))
+            .collect();
+        for (row, cell) in cells.iter().enumerate() {
+            grid.attach(cell, column, row as i32 + 1, 1, 1);
+        }
+
+        let owner = project.owner.clone();
+        let name = project.name.clone();
+        gtk::glib::MainContext::default().spawn_local(async move {
+            let result = gtk::gio::spawn_blocking(move || {
+                copr::fetch_project_monitor(&owner, &name)
+            })
+            .await;
+
+            match result {
+                Ok(Ok(monitor)) => {
+                    let mut succeeded = 0usize;
+                    let mut failed = 0usize;
+                    let mut active = 0usize;
+                    let mut unknown = 0usize;
+                    for build in monitor
+                        .packages
+                        .iter()
+                        .flat_map(|package| package.chroots.values())
+                    {
+                        match build
+                            .state
+                            .as_deref()
+                            .unwrap_or("unknown")
+                            .to_ascii_lowercase()
+                            .as_str()
+                        {
+                            "succeeded" | "success" | "complete" | "completed" => succeeded += 1,
+                            "failed" | "error" => failed += 1,
+                            "pending" | "running" | "starting" | "building" | "waiting" => {
+                                active += 1
+                            }
+                            _ => unknown += 1,
+                        }
+                    }
+                    let now = gtk::glib::DateTime::now_local()
+                        .map(|date| date.to_unix())
+                        .unwrap_or(0);
+                    let freshness = copr::build_freshness_message(
+                        monitor.latest_build.as_ref(),
+                        now,
+                    );
+                    let values = [
+                        monitor.packages.len().to_string(),
+                        succeeded.to_string(),
+                        failed.to_string(),
+                        active.to_string(),
+                        unknown.to_string(),
+                        freshness,
+                    ];
+                    for (cell, value) in cells.iter().zip(values) {
+                        cell.set_text(&value);
+                        cell.remove_css_class("dim-label");
+                    }
+                }
+                Ok(Err(error)) => {
+                    for cell in &cells {
+                        cell.set_text(&format!("Unavailable: {error}"));
+                        cell.remove_css_class("dim-label");
+                    }
+                }
+                Err(_) => {
+                    for cell in &cells {
+                        cell.set_text("Unavailable: background lookup failed");
+                        cell.remove_css_class("dim-label");
+                    }
+                }
+            }
+        });
+    }
+
+    let scroll = gtk::ScrolledWindow::builder()
+        .vexpand(true)
+        .hexpand(true)
+        .child(&grid)
+        .build();
+    content.append(&scroll);
+
+    let close = gtk::Button::with_label("Close");
+    close.set_halign(gtk::Align::End);
+    close.connect_clicked({
+        let window = window.clone();
+        move |_| window.close()
+    });
+    content.append(&close);
+
+    window.set_content(Some(&content));
+    window.present();
 }
 
 fn refresh_saved_projects(
