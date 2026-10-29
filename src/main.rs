@@ -67,10 +67,7 @@ fn load_search_cache() -> Option<PersistedSearch> {
     }
     let serialized = fs::read(&path).ok()?;
     let entry: PersistedSearch = serde_json::from_slice(&serialized).ok()?;
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .ok()?
-        .as_secs();
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_secs();
     let age = now.checked_sub(entry.saved_at_unix)?;
     if age > SEARCH_CACHE_MAX_AGE_SECS
         || entry.query.trim().is_empty()
@@ -343,7 +340,13 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
         let count = cached.projects.len();
         let cached_response = Ok(cached.projects);
         *latest_response.borrow_mut() = Some(cached_response.clone());
-        render_projects(&parent, &results, &feedback, cached_response, sort.selected());
+        render_projects(
+            &parent,
+            &results,
+            &feedback,
+            cached_response,
+            sort.selected(),
+        );
         feedback.set_text(&format!(
             "Showing {count} saved result(s) for “{}”. Cached results may be out of date; search to refresh.",
             cached.query
