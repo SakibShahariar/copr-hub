@@ -1019,7 +1019,49 @@ fn render_repositories(
                     repository.file.display()
                 ));
                 row.add_prefix(&gtk::Image::from_icon_name("folder-symbolic"));
-                row.add_suffix(&gtk::Label::new(Some(status)));
+                let status_label = gtk::Label::new(Some(status));
+                status_label.set_accessible_role(gtk::AccessibleRole::Status);
+                status_label.set_tooltip_text(Some("Repository enabled state"));
+                row.add_suffix(&status_label);
+
+                // Show installed package origins before a user disables or removes
+                // a repository. A failed query is explicitly shown as unknown.
+                let origin_summary = gtk::Label::new(Some("Checking installed packages…"));
+                origin_summary.set_wrap(true);
+                origin_summary.set_xalign(0.0);
+                origin_summary.add_css_class("dim-label");
+                origin_summary.set_accessible_role(gtk::AccessibleRole::Status);
+                row.set_subtitle(format!("{} · {} · Installed package origins: checking…", repository.id, repository.file.display()));
+                row.add_suffix(&origin_summary);
+                {
+                    let repository_id = repository.id.clone();
+                    gtk::glib::MainContext::default().spawn_local(async move {
+                        let result = gtk::gio::spawn_blocking(move || {
+                            system::installed_packages_from_repository(&repository_id)
+                        }).await;
+                        match result {
+                            Ok(Ok(packages)) if packages.is_empty() => {
+                                origin_summary.set_text("No installed packages attributed to this repo");
+                                origin_summary.set_tooltip_text(Some("DNF reports no installed RPMs with this source repository ID."));
+                            }
+                            Ok(Ok(packages)) => {
+                                let names = packages.join(", ");
+                                origin_summary.set_text(&format!("{} installed package(s) from this repo", packages.len()));
+                                origin_summary.set_tooltip_text(Some(&names));
+                                origin_summary.set_accessible_label(Some(&format!("{} installed packages from this repository: {}", packages.len(), names)));
+                            }
+                            Ok(Err(error)) => {
+                                origin_summary.set_text("Installed package origins unavailable");
+                                origin_summary.set_tooltip_text(Some(&error));
+                                origin_summary.set_accessible_label(Some("Installed package origins unavailable; check DNF support and permissions."));
+                            }
+                            Err(_) => {
+                                origin_summary.set_text("Installed package origins unavailable");
+                                origin_summary.set_tooltip_text(Some("The background DNF query failed."));
+                            }
+                        }
+                    });
+                }
 
                 let action = if repository.enabled {
                     "Disable"
