@@ -6,7 +6,9 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
   <description>
-    <p>Copr Hub is a native GNOME application for searching community-built Fedora COPR projects, inspecting project information, and viewing configured COPR repositories.</p>
+    <p>Copr Hub is a native GNOME application for discovering community-built Fedora COPR projects, inspecting package build status, and managing configured COPR repositories without running the application as root.</p>
+    <p>It can track stable releases hosted on GitHub and GitLab, highlight potentially outdated upstream releases and old project builds, save projects locally, and back up or restore saved projects and activity history using portable JSON files. Local lists can be searched and filtered without repeating network requests.</p>
+    <p>Build age and release freshness are informational hints only; they do not establish whether a project is secure, maintained, or trustworthy.</p>
   </description>
   <launchable type="desktop-id">io.github.SakibShahariar.CoprHub.desktop</launchable>
   <provides>

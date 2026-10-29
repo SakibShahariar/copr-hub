@@ -1645,12 +1645,16 @@ fn build_activity_page(parent: &adw::ApplicationWindow, stack: &adw::ViewStack) 
     let export = gtk::Button::with_label("Export");
     export.set_icon_name("document-save-symbolic");
     export.set_tooltip_text(Some("Export activity history as JSON"));
+    let import = gtk::Button::with_label("Import");
+    import.set_icon_name("document-open-symbolic");
+    import.set_tooltip_text(Some("Merge an activity-history JSON backup"));
     let clear = gtk::Button::with_label("Clear history");
     clear.add_css_class("destructive-action");
     let refresh = gtk::Button::with_label("Refresh");
     refresh.set_icon_name("view-refresh-symbolic");
     heading.append(&title);
     heading.append(&export);
+    heading.append(&import);
     heading.append(&clear);
     heading.append(&refresh);
     content.append(&heading);
@@ -1710,6 +1714,43 @@ fn build_activity_page(parent: &adw::ApplicationWindow, stack: &adw::ViewStack) 
                                 Err(error) => feedback.set_text(&error),
                             },
                             None => feedback.set_text("Could not access the selected export path."),
+                        }
+                    }
+                    dialog.destroy();
+                }
+            });
+            dialog.show();
+        }
+    });
+
+    import.connect_clicked({
+        let parent = parent.clone();
+        let list = list.clone();
+        let feedback = feedback.clone();
+        move |_| {
+            let dialog = gtk::FileChooserNative::new(
+                Some("Import activity history"),
+                Some(&parent),
+                gtk::FileChooserAction::Open,
+                Some("Import"),
+                Some("Cancel"),
+            );
+            dialog.connect_response({
+                let list = list.clone();
+                let feedback = feedback.clone();
+                move |dialog, response| {
+                    if response == gtk::ResponseType::Accept {
+                        match dialog.file().and_then(|file| file.path()) {
+                            Some(path) => match activity::import_from(&path) {
+                                Ok(added) => {
+                                    refresh_activity(&list, &feedback);
+                                    feedback.set_text(&format!(
+                                        "Imported {added} new activity event(s); existing history was preserved."
+                                    ));
+                                }
+                                Err(error) => feedback.set_text(&error),
+                            },
+                            None => feedback.set_text("Could not access the selected activity backup."),
                         }
                     }
                     dialog.destroy();

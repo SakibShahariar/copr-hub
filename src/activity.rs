@@ -40,6 +40,67 @@ pub fn export_to(path: &std::path::Path) -> Result<usize, String> {
     Ok(entries.len())
 }
 
+fn parse_import(contents: &str) -> Result<Vec<ActivityEntry>, String> {
+    let entries: Vec<ActivityEntry> = serde_json::from_str(contents)
+        .map_err(|error| format!("This is not a valid Copr Hub activity backup: {error}"))?;
+    if entries.iter().any(|entry| {
+        entry.action.trim().is_empty()
+            || entry.target.trim().is_empty()
+            || entry.action.len() > 512
+            || entry.target.len() > 4096
+            || entry.summary.len() > 8192
+    }) {
+        return Err("The backup contains an invalid or oversized activity entry.".to_string());
+    }
+    Ok(entries)
+}
+
+fn same_entry(left: &ActivityEntry, right: &ActivityEntry) -> bool {
+    left.timestamp == right.timestamp
+        && left.action == right.action
+        && left.target == right.target
+        && left.summary == right.summary
+}
+
+fn merge_entries(
+    current: &mut Vec<ActivityEntry>,
+    imported: impl IntoIterator<Item = ActivityEntry>,
+) -> usize {
+    let mut added_entries = Vec::new();
+    for entry in imported {
+        if !current.iter().any(|existing| same_entry(existing, &entry)) {
+            current.push(entry.clone());
+            added_entries.push(entry);
+        }
+    }
+    current.sort_by(|left, right| right.timestamp.cmp(&left.timestamp));
+    current.truncate(MAX_ENTRIES);
+    added_entries
+        .iter()
+        .filter(|added| current.iter().any(|entry| same_entry(entry, added)))
+        .count()
+}
+
+/// Import an activity backup, preserving current entries and avoiding duplicates.
+pub fn import_from(path: &std::path::Path) -> Result<usize, String> {
+    let contents = fs::read_to_string(path)
+        .map_err(|error| format!("Could not read the selected activity backup: {error}"))?;
+    let imported = parse_import(&contents)?;
+    let mut entries = load()?;
+    let added = merge_entries(&mut entries, imported);
+    let path = history_path();
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Could not determine the activity history directory.".to_string())?;
+    fs::create_dir_all(parent)
+        .map_err(|error| format!("Could not create activity history directory: {error}"))?;
+    let contents = serde_json::to_vec_pretty(&entries)
+        .map_err(|error| format!("Could not encode merged activity history: {error}"))?;
+    storage::atomic_write(&path, &contents)
+        .map_err(|error| format!("Could not save imported activity history: {error}"))?;
+    Ok(added)
+}
+
 pub fn clear() -> Result<(), String> {
     let path = history_path();
     let parent = path
@@ -89,6 +150,56 @@ pub fn record(action: &str, target: &str, summary: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn import_parser_rejects_invalid_and_oversized_entries() {
+        assert!(parse_import("{bad")
+            .unwrap_err()
+            .contains("valid Copr Hub activity backup"));
+        let invalid = r#"[{"timestamp":1,"action":" ","target":"demo","summary":"ok"}]"#;
+        assert!(parse_import(invalid)
+            .unwrap_err()
+            .contains("invalid or oversized"));
+        let oversized = format!(
+            r#"[{{"timestamp":1,"action":"search","target":"demo","summary":"{}"}}]"#,
+            "x".repeat(8193)
+        );
+        assert!(parse_import(&oversized).is_err());
+    }
+
+    #[test]
+    fn importing_merges_newest_entries_without_duplicates_and_caps_history() {
+        let entry = |timestamp, target: &str| ActivityEntry {
+            timestamp,
+            action: "Project search".into(),
+            target: target.into(),
+            summary: "1 result".into(),
+        };
+        let mut current = vec![entry(10, "existing")];
+        let added = merge_entries(
+            &mut current,
+            vec![
+                entry(10, "existing"),
+                entry(30, "newer"),
+                entry(20, "middle"),
+            ],
+        );
+        assert_eq!(added, 2);
+        assert_eq!(
+            current
+                .iter()
+                .map(|item| item.timestamp)
+                .collect::<Vec<_>>(),
+            vec![30, 20, 10]
+        );
+
+        let many = (0..150).map(|timestamp| entry(timestamp, &format!("target-{timestamp}")));
+        let mut capped = Vec::new();
+        merge_entries(&mut capped, many);
+        assert_eq!(capped.len(), MAX_ENTRIES);
+        assert_eq!(capped[0].timestamp, 149);
+        assert_eq!(capped[MAX_ENTRIES - 1].timestamp, 50);
+    }
 
     #[test]
     fn activity_entry_round_trips_through_json() {
