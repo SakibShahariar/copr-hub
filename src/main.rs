@@ -1902,7 +1902,9 @@ fn show_compare_picker(parent: &adw::ApplicationWindow) {
                 .map(|(_, project)| project.clone())
                 .collect();
             if !(2..=3).contains(&selected.len()) {
-                feedback.set_text("Select exactly two or three projects to keep the comparison readable.");
+                feedback.set_text(
+                    "Select exactly two or three projects to keep the comparison readable.",
+                );
                 return;
             }
             window.close();
@@ -1929,10 +1931,7 @@ fn comparison_cell(text: &str, heading: bool) -> gtk::Label {
     label
 }
 
-fn show_project_comparison(
-    parent: &adw::ApplicationWindow,
-    projects: Vec<copr::CoprProject>,
-) {
+fn show_project_comparison(parent: &adw::ApplicationWindow, projects: Vec<copr::CoprProject>) {
     let window = adw::Window::builder()
         .transient_for(parent)
         .modal(true)
@@ -1978,13 +1977,7 @@ fn show_project_comparison(
         "Latest build",
     ];
     for (row, metric) in metric_names.iter().enumerate() {
-        grid.attach(
-            &comparison_cell(metric, true),
-            0,
-            row as i32 + 1,
-            1,
-            1,
-        );
+        grid.attach(&comparison_cell(metric, true), 0, row as i32 + 1, 1, 1);
     }
 
     for (index, project) in projects.into_iter().enumerate() {
@@ -2007,10 +2000,8 @@ fn show_project_comparison(
         let owner = project.owner.clone();
         let name = project.name.clone();
         gtk::glib::MainContext::default().spawn_local(async move {
-            let result = gtk::gio::spawn_blocking(move || {
-                copr::fetch_project_monitor(&owner, &name)
-            })
-            .await;
+            let result =
+                gtk::gio::spawn_blocking(move || copr::fetch_project_monitor(&owner, &name)).await;
 
             match result {
                 Ok(Ok(monitor)) => {
@@ -2041,10 +2032,8 @@ fn show_project_comparison(
                     let now = gtk::glib::DateTime::now_local()
                         .map(|date| date.to_unix())
                         .unwrap_or(0);
-                    let freshness = copr::build_freshness_message(
-                        monitor.latest_build.as_ref(),
-                        now,
-                    );
+                    let freshness =
+                        copr::build_freshness_message(monitor.latest_build.as_ref(), now);
                     let values = [
                         monitor.packages.len().to_string(),
                         succeeded.to_string(),
