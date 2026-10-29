@@ -2662,7 +2662,7 @@ fn build_saved_page(
     freshness_days.set_tooltip_text(Some(
         "Choose how long without a reported build activity marks a project as stale.",
     ));
-     freshness_row.append(&freshness_label);
+    freshness_row.append(&freshness_label);
     freshness_row.append(&freshness_days);
     content.append(&freshness_row);
     freshness_days.connect_value_changed({
