@@ -1087,6 +1087,55 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
     });
     content.append(&packages);
 
+    let matrix_title = gtk::Label::builder()
+        .label("Build-target matrix")
+        .xalign(0.0)
+        .build();
+    matrix_title.add_css_class("title-3");
+    content.append(&matrix_title);
+
+    let matrix_note = gtk::Label::builder()
+        .label("Each cell shows the status COPR reports for a package and target. A dash means COPR did not report that package/target combination.")
+        .xalign(0.0)
+        .wrap(true)
+        .build();
+    matrix_note.add_css_class("dim-label");
+    content.append(&matrix_note);
+
+    let matrix = gtk::Grid::builder()
+        .column_spacing(12)
+        .row_spacing(8)
+        .hexpand(true)
+        .build();
+    let matrix_scroll = gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::Automatic)
+        .vscrollbar_policy(gtk::PolicyType::Automatic)
+        .height_request(240)
+        .child(&matrix)
+        .build();
+    matrix_scroll.add_css_class("card");
+    content.append(&matrix_scroll);
+
+    let timeline_title = gtk::Label::builder()
+        .label("Recent build timeline")
+        .xalign(0.0)
+        .build();
+    timeline_title.add_css_class("title-3");
+    content.append(&timeline_title);
+
+    let timeline_status = gtk::Label::builder()
+        .label("Loading recent COPR build history…")
+        .xalign(0.0)
+        .wrap(true)
+        .build();
+    timeline_status.add_css_class("dim-label");
+    content.append(&timeline_status);
+
+    let timeline = gtk::ListBox::new();
+    timeline.set_selection_mode(gtk::SelectionMode::None);
+    timeline.add_css_class("boxed-list");
+    content.append(&timeline);
+
     let scroll = gtk::ScrolledWindow::builder()
         .hscrollbar_policy(gtk::PolicyType::Never)
         .vscrollbar_policy(gtk::PolicyType::Automatic)
@@ -1094,6 +1143,84 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
         .build();
     window.set_content(Some(&scroll));
     window.present();
+
+    let history_owner = project.owner.clone();
+    let history_project = project.name.clone();
+    {
+        let timeline = timeline.clone();
+        let timeline_status = timeline_status.clone();
+        gtk::glib::MainContext::default().spawn_local(async move {
+            let response = gtk::gio::spawn_blocking(move || {
+                copr::fetch_project_build_history(&history_owner, &history_project)
+            })
+            .await;
+            clear_list_box(&timeline);
+            match response {
+                Ok(Ok(builds)) if builds.is_empty() => {
+                    timeline_status.set_text("COPR returned no recent build-history records.");
+                }
+                Ok(Ok(builds)) => {
+                    timeline_status.set_text(&format!(
+                        "Showing {} recent build record(s) from COPR. Older builds may be pruned by COPR, so this is not necessarily a complete lifetime history.",
+                        builds.len()
+                    ));
+                    for build in builds {
+                        let package_name = build
+                            .source_package
+                            .as_ref()
+                            .and_then(|source| source.name.as_deref())
+                            .unwrap_or("Unknown package");
+                        let version = build
+                            .source_package
+                            .as_ref()
+                            .and_then(|source| source.version.as_deref())
+                            .unwrap_or("version unavailable");
+                        let state = build.state.as_deref().unwrap_or("unknown");
+                        let timestamp = build
+                            .submitted_on
+                            .or(build.started_on)
+                            .or(build.ended_on)
+                            .and_then(format_build_timestamp);
+                        let date = timestamp.unwrap_or_else(|| "Timestamp unavailable".to_string());
+                        let target_summary = if build.chroots.is_empty() {
+                            "targets unavailable".to_string()
+                        } else {
+                            build.chroots.join(", ")
+                        };
+                        let row = adw::ActionRow::builder()
+                            .title(format!("{package_name} {version}"))
+                            .subtitle(format!("{state} · {date} · {target_summary}"))
+                            .build();
+                        row.add_prefix(&gtk::Image::from_icon_name(
+                            if matches!(state.to_ascii_lowercase().as_str(), "succeeded" | "success" | "complete" | "completed") {
+                                "emblem-ok-symbolic"
+                            } else if matches!(state.to_ascii_lowercase().as_str(), "failed" | "error") {
+                                "dialog-error-symbolic"
+                            } else {
+                                "content-loading-symbolic"
+                            }
+                        ));
+                        if let Some(build_id) = build.id {
+                            let url = format!(
+                                "https://copr.fedorainfracloud.org/coprs/{}/{}/build/{}/",
+                                history_owner, history_project, build_id
+                            );
+                            let link = gtk::LinkButton::with_label(&url, "Open build");
+                            link.set_valign(gtk::Align::Center);
+                            row.add_suffix(&link);
+                        }
+                        timeline.append(&row);
+                    }
+                }
+                Ok(Err(error)) => {
+                    timeline_status.set_text(&format!("Could not load build history: {error}"));
+                }
+                Err(_) => {
+                    timeline_status.set_text("The background build-history lookup failed unexpectedly.");
+                }
+            }
+        });
+    }
 
     let homepage = project.homepage.clone();
     if homepage.is_none() {
@@ -1134,6 +1261,7 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                     &packages,
                     &status,
                     &intelligence,
+                    &matrix,
                     response,
                     release.as_ref(),
                     homepage.as_deref(),
@@ -1211,6 +1339,7 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                     &packages,
                     &status,
                     &intelligence,
+                    &matrix,
                     response,
                     release.as_ref(),
                     homepage_for_comparison.as_deref(),
@@ -1308,14 +1437,21 @@ fn render_project_monitor(
     list: &gtk::ListBox,
     status: &gtk::Label,
     intelligence: &gtk::Label,
+    matrix: &gtk::Grid,
     response: Result<copr::ProjectMonitor, String>,
     upstream_release: Option<&upstream::UpstreamRelease>,
     homepage: Option<&str>,
 ) {
     clear_list_box(list);
+    while let Some(child) = matrix.first_child() {
+        matrix.remove(&child);
+    }
 
     match response {
         Ok(monitor) if monitor.packages.is_empty() => {
+            let empty = gtk::Label::new(Some("No package/target data is available to build a matrix."));
+            empty.set_xalign(0.0);
+            matrix.attach(&empty, 0, 0, 1, 1);
             status.set_text("COPR did not report any packages for this project.");
         }
         Ok(monitor) => {
@@ -1330,6 +1466,7 @@ fn render_project_monitor(
                     .map(|date| date.to_unix())
                     .unwrap_or(0),
             );
+            render_build_target_matrix(matrix, &monitor.packages);
             let target_health = copr::build_target_health_summary(&monitor.packages);
             intelligence.set_text(&update_intelligence_summary(
                 &monitor.packages,
@@ -1497,9 +1634,92 @@ fn render_project_monitor(
                 list.append(&row);
             }
         }
-        Err(error) => status.set_text(&format!(
-            "Could not load project build information: {error}"
-        )),
+        Err(error) => {
+            status.set_text(&format!("Could not load project build information: {error}"));
+            let unavailable = gtk::Label::new(Some("Build-target matrix unavailable because project data could not be loaded."));
+            unavailable.set_xalign(0.0);
+            matrix.attach(&unavailable, 0, 0, 1, 1);
+        },
+    }
+}
+
+fn format_build_timestamp(timestamp: i64) -> Option<String> {
+    let date = gtk::glib::DateTime::from_unix_local(timestamp).ok()?;
+    date.format("%Y-%m-%d %H:%M").ok().map(|value| value.to_string())
+}
+
+fn render_build_target_matrix(matrix: &gtk::Grid, packages: &[copr::MonitoredPackage]) {
+    while let Some(child) = matrix.first_child() {
+        matrix.remove(&child);
+    }
+
+    let targets: std::collections::BTreeSet<String> = packages
+        .iter()
+        .flat_map(|package| package.chroots.keys().cloned())
+        .collect();
+    if targets.is_empty() {
+        let empty = gtk::Label::new(Some("COPR did not report any build targets."));
+        empty.set_xalign(0.0);
+        matrix.attach(&empty, 0, 0, 1, 1);
+        return;
+    }
+
+    let package_heading = gtk::Label::new(Some("Package"));
+    package_heading.set_xalign(0.0);
+    package_heading.add_css_class("heading");
+    matrix.attach(&package_heading, 0, 0, 1, 1);
+
+    let targets: Vec<String> = targets.into_iter().collect();
+    for (column, target) in targets.iter().enumerate() {
+        let heading = gtk::Label::builder()
+            .label(target)
+            .wrap(true)
+            .max_width_chars(18)
+            .build();
+        heading.add_css_class("heading");
+        matrix.attach(&heading, column as i32 + 1, 0, 1, 1);
+    }
+
+    for (row_index, package) in packages.iter().enumerate() {
+        let row = row_index as i32 + 1;
+        let package_label = gtk::Label::builder()
+            .label(&package.name)
+            .xalign(0.0)
+            .wrap(true)
+            .build();
+        package_label.add_css_class("heading");
+        matrix.attach(&package_label, 0, row, 1, 1);
+
+        for (column, target) in targets.iter().enumerate() {
+            let (label, class) = match package.chroots.get(target) {
+                Some(build) => {
+                    let state = build.state.as_deref().unwrap_or("unknown");
+                    let normalized = state.to_ascii_lowercase();
+                    let class = match normalized.as_str() {
+                        "succeeded" | "success" | "complete" | "completed" => "success",
+                        "failed" | "error" => "error",
+                        "pending" | "waiting" | "starting" | "running" | "building" => "warning",
+                        _ => "dim-label",
+                    };
+                    let version = build.pkg_version.as_deref().unwrap_or("");
+                    let label = if version.is_empty() {
+                        state.to_string()
+                    } else {
+                        format!("{state}\n{version}")
+                    };
+                    (label, class)
+                }
+                None => ("—".to_string(), "dim-label"),
+            };
+            let cell = gtk::Label::builder()
+                .label(&label)
+                .wrap(true)
+                .selectable(true)
+                .build();
+            cell.add_css_class("card");
+            cell.add_css_class(class);
+            matrix.attach(&cell, column as i32 + 1, row, 1, 1);
+        }
     }
 }
 
