@@ -994,6 +994,7 @@ fn refresh_repositories_with_notice(
     feedback: &gtk::Label,
     notice: Option<String>,
 ) {
+    system::invalidate_installed_package_origins();
     feedback.set_text("Reading COPR repository configuration…");
     clear_list_box(list);
 
