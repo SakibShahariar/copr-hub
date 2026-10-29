@@ -1756,6 +1756,8 @@ fn refresh_saved_projects(
                         let button = button.clone();
                         let owner = owner.clone();
                         let name = name.clone();
+                        let activity_owner = owner.clone();
+                        let activity_name = name.clone();
                         gtk::glib::MainContext::default().spawn_local(async move {
                             let result = gtk::gio::spawn_blocking(move || {
                                 copr::fetch_project_monitor(&owner, &name)
@@ -1800,7 +1802,7 @@ fn refresh_saved_projects(
                                     ));
                                     let _ = activity::record(
                                         "Project health check",
-                                        &format!("{owner}/{name}"),
+                                        &format!("{activity_owner}/{activity_name}"),
                                         &format!("{} package(s); {failed} failed target(s)", monitor.packages.len()),
                                     );
                                 }
