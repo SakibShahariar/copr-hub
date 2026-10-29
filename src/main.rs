@@ -201,7 +201,6 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
             feedback.set_text("Searching COPR…");
             search.set_sensitive(false);
             search_button.set_sensitive(false);
-            clear_list_box(&results);
 
             let activity_query = query.clone();
             let results = results.clone();
@@ -649,13 +648,13 @@ fn render_projects(
     response: Result<Vec<copr::CoprProject>, String>,
     sort_order: u32,
 ) {
-    clear_list_box(list);
-
     match response {
         Ok(projects) if projects.is_empty() => {
+            clear_list_box(list);
             feedback.set_text("No projects matched that search. Try a different name or owner.");
         }
         Ok(mut projects) => {
+            clear_list_box(list);
             match sort_order {
                 1 => projects.sort_by(|a, b| {
                     a.name
