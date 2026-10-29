@@ -215,7 +215,7 @@ pub fn list_package_updates() -> Result<Vec<AvailablePackageUpdate>, String> {
             "repoquery",
             "--upgrades",
             "--queryformat",
-            "%{name}\\t%{evr}\\t%{repoid}",
+            "%{name}\t%{evr}\t%{repoid}",
         ])
         .output()
         .map_err(|error| format!("Could not start DNF to check package updates: {error}"))?;
@@ -245,7 +245,7 @@ fn parse_package_updates(output: &str) -> Vec<AvailablePackageUpdate> {
     output
         .lines()
         .filter_map(|line| {
-            let mut fields = line.splitn(3, '\\t');
+            let mut fields = line.splitn(3, '\t');
             let name = fields.next()?.trim();
             let version = fields.next()?.trim();
             let repository = fields.next()?.trim();
@@ -618,7 +618,7 @@ enabled=1
 
     #[test]
     fn parses_update_candidates_and_ignores_malformed_rows() {
-        let output = "demo\\t2.0-1.fc44\\tcopr:alice:demo\\nbase\\t3.0-1.fc44\\tfedora\\nmissing-version\\t\\tfedora\\n--bad\\t1.0\\tfedora\\n";
+        let output = "demo\t2.0-1.fc44\tcopr:alice:demo\nbase\t3.0-1.fc44\tfedora\nmissing-version\t\tfedora\n--bad\t1.0\tfedora\n";
         let updates = parse_package_updates(output);
         assert_eq!(updates.len(), 2);
         assert_eq!(updates[0].name, "base");
@@ -632,7 +632,7 @@ enabled=1
         let output = (0..105)
             .map(|index| format!(" capability-{index} "))
             .collect::<Vec<_>>()
-            .join("\\n");
+            .join("\n");
         let lines = bounded_lines(&output);
         assert_eq!(lines.len(), 100);
         assert_eq!(lines[0], "capability-0");
