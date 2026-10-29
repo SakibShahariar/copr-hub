@@ -2085,8 +2085,7 @@ fn update_intelligence_summary(
                     .collect();
                 if comparisons.iter().any(Option::is_some) {
                     compared_packages += 1;
-                    has_newer_release =
-                        comparisons.contains(&Some(std::cmp::Ordering::Greater));
+                    has_newer_release = comparisons.contains(&Some(std::cmp::Ordering::Greater));
                 } else {
                     unsupported_packages += 1;
                 }
