@@ -1642,14 +1642,24 @@ fn build_activity_page(parent: &adw::ApplicationWindow, stack: &adw::ViewStack) 
         .hexpand(true)
         .build();
     title.add_css_class("title-2");
+    let export = gtk::Button::with_label("Export");
+    export.set_icon_name("document-save-symbolic");
+    export.set_tooltip_text(Some("Export activity history as JSON"));
     let clear = gtk::Button::with_label("Clear history");
     clear.add_css_class("destructive-action");
     let refresh = gtk::Button::with_label("Refresh");
     refresh.set_icon_name("view-refresh-symbolic");
     heading.append(&title);
+    heading.append(&export);
     heading.append(&clear);
     heading.append(&refresh);
     content.append(&heading);
+
+    let filter = gtk::SearchEntry::builder()
+        .placeholder_text("Filter activity by action, target, or summary")
+        .tooltip_text("Search the locally recorded activity without changing history")
+        .build();
+    content.append(&filter);
 
     let feedback = gtk::Label::builder()
         .label("Activity history is stored locally on this user account.")
@@ -1662,7 +1672,52 @@ fn build_activity_page(parent: &adw::ApplicationWindow, stack: &adw::ViewStack) 
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::SelectionMode::None);
     list.add_css_class("boxed-list");
+    list.set_filter_func({
+        let filter = filter.clone();
+        move |row| {
+            let query = filter.text().trim().to_ascii_lowercase();
+            query.is_empty() || row.widget_name().to_ascii_lowercase().contains(&query)
+        }
+    });
+    filter.connect_search_changed({
+        let list = list.clone();
+        move |_| list.invalidate_filter()
+    });
     content.append(&list);
+
+    export.connect_clicked({
+        let parent = parent.clone();
+        let feedback = feedback.clone();
+        move |_| {
+            let dialog = gtk::FileChooserNative::new(
+                Some("Export activity history"),
+                Some(&parent),
+                gtk::FileChooserAction::Save,
+                Some("Export"),
+                Some("Cancel"),
+            );
+            dialog.set_current_name("copr-hub-activity.json");
+            dialog.connect_response({
+                let feedback = feedback.clone();
+                move |dialog, response| {
+                    if response == gtk::ResponseType::Accept {
+                        match dialog.file().and_then(|file| file.path()) {
+                            Some(path) => match activity::export_to(&path) {
+                                Ok(count) => feedback.set_text(&format!(
+                                    "Exported {count} activity event(s) to {}.",
+                                    path.display()
+                                )),
+                                Err(error) => feedback.set_text(&error),
+                            },
+                            None => feedback.set_text("Could not access the selected export path."),
+                        }
+                    }
+                    dialog.destroy();
+                }
+            });
+            dialog.show();
+        }
+    });
 
     refresh.connect_clicked({
         let list = list.clone();
@@ -1749,6 +1804,10 @@ fn refresh_activity(list: &gtk::ListBox, feedback: &gtk::Label) {
                         entry.summary
                     ))
                     .build();
+                row.set_widget_name(&format!(
+                    "{} {} {}",
+                    entry.action, entry.target, entry.summary
+                ));
                 row.add_prefix(&gtk::Image::from_icon_name("document-properties-symbolic"));
                 list.append(&row);
             }
