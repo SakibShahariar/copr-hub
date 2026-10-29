@@ -355,6 +355,37 @@ mod tests {
     }
 
     #[test]
+    fn retries_a_transient_server_response_once() {
+        use super::send_with_retry;
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            for status in ["503 Service Unavailable", "200 OK"] {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut request = [0_u8; 1024];
+                let _ = stream.read(&mut request).unwrap();
+                write!(
+                    stream,
+                    "HTTP/1.1 {status}\\r\\nContent-Length: 0\\r\\nConnection: close\\r\\n\\r\\n"
+                )
+                .unwrap();
+            }
+        });
+
+        let response = send_with_retry(
+            reqwest::blocking::Client::new()
+                .get(format!("http://{address}/release")),
+        )
+        .unwrap();
+
+        assert_eq!(response.status(), reqwest::StatusCode::OK);
+        server.join().unwrap();
+    }
+
+    #[test]
     fn recognizes_github_and_gitlab_project_homepages() {
         assert_eq!(
             repository_parts("https://github.com/owner/project"),
