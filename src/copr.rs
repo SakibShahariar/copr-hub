@@ -1,5 +1,6 @@
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::thread;
 use std::time::Duration;
 
 const STALE_BUILD_AFTER_DAYS: i64 = 90;
@@ -83,6 +84,37 @@ fn request_error(error: reqwest::Error) -> String {
     }
 }
 
+fn is_retryable_status(status: reqwest::StatusCode) -> bool {
+    status == reqwest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error()
+}
+
+/// Retry one time for transient connection failures and temporary COPR outages.
+/// GET requests are safe to retry; the short backoff avoids hammering an unhealthy service.
+fn send_with_retry(request: reqwest::blocking::RequestBuilder) -> Result<reqwest::blocking::Response, String> {
+    let retry_request = request.try_clone();
+    match request.send() {
+        Ok(response) if is_retryable_status(response.status()) && retry_request.is_some() => {
+            drop(response);
+            thread::sleep(Duration::from_millis(350));
+            retry_request
+                .expect("retry request was checked above")
+                .send()
+                .map_err(request_error)
+        }
+        Ok(response) => Ok(response),
+        Err(error)
+            if (error.is_timeout() || error.is_connect()) && retry_request.is_some() =>
+        {
+            thread::sleep(Duration::from_millis(350));
+            retry_request
+                .expect("retry request was checked above")
+                .send()
+                .map_err(request_error)
+        }
+        Err(error) => Err(request_error(error)),
+    }
+}
+
 fn service_status_message(status: reqwest::StatusCode, operation: &str) -> String {
     match status {
         reqwest::StatusCode::TOO_MANY_REQUESTS => {
@@ -111,9 +143,8 @@ pub fn search_projects(pattern: &str) -> Result<Vec<CoprProject>, String> {
 
     let response = client()?
         .get(format!("{COPR_API_BASE}/project/list/"))
-        .query(&[("pattern", pattern), ("limit", SEARCH_LIMIT)])
-        .send()
-        .map_err(request_error)?
+        .query(&[("pattern", pattern), ("limit", SEARCH_LIMIT)]);
+    let response = send_with_retry(response)?
         .error_for_status()
         .map_err(|error| service_response_error(error, "search"))?;
 
@@ -125,11 +156,11 @@ pub fn search_projects(pattern: &str) -> Result<Vec<CoprProject>, String> {
 }
 
 pub fn fetch_project_monitor(owner: &str, project: &str) -> Result<ProjectMonitor, String> {
-    let response = client()?
-        .get(format!("{COPR_API_BASE}/monitor"))
-        .query(&[("ownername", owner), ("projectname", project)])
-        .send()
-        .map_err(request_error)?
+    let response = send_with_retry(
+        client()?
+            .get(format!("{COPR_API_BASE}/monitor"))
+            .query(&[("ownername", owner), ("projectname", project)]),
+    )?
         .error_for_status()
         .map_err(|error| service_response_error(error, "project"))?;
 
@@ -140,15 +171,15 @@ pub fn fetch_project_monitor(owner: &str, project: &str) -> Result<ProjectMonito
     // The monitor endpoint has no timestamps, so use the newest project build for freshness.
     let latest_build = client()
         .and_then(|client| {
-            client
-                .get(format!("{}/build/list/", COPR_API_BASE))
-                .query(&[
-                    ("ownername", owner),
-                    ("projectname", project),
-                    ("limit", "1"),
-                ])
-                .send()
-                .map_err(request_error)?
+            send_with_retry(
+                client
+                    .get(format!("{}/build/list/", COPR_API_BASE))
+                    .query(&[
+                        ("ownername", owner),
+                        ("projectname", project),
+                        ("limit", "1"),
+                    ]),
+            )?
                 .error_for_status()
                 .map_err(|error| service_response_error(error, "recent build"))?
                 .json::<BuildListResponse>()
