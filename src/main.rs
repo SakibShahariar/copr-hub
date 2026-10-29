@@ -6,10 +6,81 @@ mod system;
 mod upstream;
 
 use adw::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
+use std::fs;
+use std::path::PathBuf;
 use std::rc::Rc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 type ProjectSearchResponse = Result<Vec<copr::CoprProject>, String>;
+
+const SEARCH_CACHE_MAX_BYTES: u64 = 2 * 1024 * 1024;
+const SEARCH_CACHE_MAX_AGE_SECS: u64 = 30 * 24 * 60 * 60;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PersistedSearch {
+    query: String,
+    saved_at_unix: u64,
+    projects: Vec<copr::CoprProject>,
+}
+
+fn search_cache_path() -> PathBuf {
+    gtk::glib::user_cache_dir()
+        .join("copr-hub")
+        .join("last-search.json")
+}
+
+fn save_search_cache(query: &str, projects: &[copr::CoprProject]) {
+    if query.is_empty() || query.len() > 256 || projects.len() > 25 {
+        return;
+    }
+    let saved_at_unix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or(0);
+    let entry = PersistedSearch {
+        query: query.to_string(),
+        saved_at_unix,
+        projects: projects.to_vec(),
+    };
+    let Ok(serialized) = serde_json::to_vec(&entry) else {
+        return;
+    };
+    if serialized.len() as u64 > SEARCH_CACHE_MAX_BYTES {
+        return;
+    }
+    let path = search_cache_path();
+    let Some(parent) = path.parent() else {
+        return;
+    };
+    if fs::create_dir_all(parent).is_ok() {
+        let _ = crate::storage::atomic_write(&path, &serialized);
+    }
+}
+
+fn load_search_cache() -> Option<PersistedSearch> {
+    let path = search_cache_path();
+    let metadata = fs::metadata(&path).ok()?;
+    if metadata.len() > SEARCH_CACHE_MAX_BYTES {
+        return None;
+    }
+    let serialized = fs::read(&path).ok()?;
+    let entry: PersistedSearch = serde_json::from_slice(&serialized).ok()?;
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()?
+        .as_secs();
+    let age = now.checked_sub(entry.saved_at_unix)?;
+    if age > SEARCH_CACHE_MAX_AGE_SECS
+        || entry.query.trim().is_empty()
+        || entry.query.len() > 256
+        || entry.projects.len() > 25
+    {
+        return None;
+    }
+    Some(entry)
+}
 
 fn main() {
     let app = adw::Application::builder()
