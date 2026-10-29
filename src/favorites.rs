@@ -30,7 +30,9 @@ pub fn load() -> Result<Vec<CoprProject>, String> {
             let projects: Vec<CoprProject> = serde_json::from_str(&contents)
                 .map_err(|error| format!("Could not read saved projects: {error}"))?;
             if projects.len() > MAX_SAVED_PROJECTS {
-                return Err(format!("The saved-project list exceeds the {MAX_SAVED_PROJECTS}-project limit."));
+                return Err(format!(
+                    "The saved-project list exceeds the {MAX_SAVED_PROJECTS}-project limit."
+                ));
             }
             Ok(projects)
         },
