@@ -198,13 +198,13 @@ pub fn preview_import(path: &std::path::Path) -> Result<ImportPreview, String> {
     let existing = load()?;
     let existing_keys: HashSet<(String, String)> = existing
         .iter()
-        .map(|project| (project.owner.to_ascii_lowercase(), project.name.to_ascii_lowercase()))
+        .map(|project| (project.owner.clone(), project.name.clone()))
         .collect();
     let mut seen = HashSet::new();
     let mut already_saved = 0;
     let mut new_projects = 0;
     for project in &imported {
-        let key = (project.owner.to_ascii_lowercase(), project.name.to_ascii_lowercase());
+        let key = (project.owner.clone(), project.name.clone());
         if existing_keys.contains(&key) || !seen.insert(key) {
             already_saved += 1;
         } else {
