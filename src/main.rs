@@ -2710,9 +2710,8 @@ fn build_saved_page(
         let app = app.clone();
         let monitoring_note = monitoring_note.clone();
         move |toggle| {
-            let config = monitoring::MonitoringConfig {
-                enabled: toggle.is_active(),
-            };
+            let mut config = monitoring::load_config();
+            config.enabled = toggle.is_active();
             match monitoring::save_config(&config) {
                 Ok(()) if config.enabled => {
                     monitoring_note.set_text("Monitoring enabled. A check will run shortly, then every six hours while Copr Hub remains open.");
