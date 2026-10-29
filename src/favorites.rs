@@ -1,7 +1,11 @@
 use crate::copr::CoprProject;
 use crate::storage;
+use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
+
+const MAX_BACKUP_BYTES: usize = 5 * 1024 * 1024;
+const MAX_IMPORTED_PROJECTS: usize = 5_000;
 
 fn favorites_path() -> PathBuf {
     gtk::glib::user_data_dir()
@@ -26,13 +30,26 @@ pub fn is_saved(project: &CoprProject) -> Result<bool, String> {
 }
 
 fn parse_backup(contents: &str) -> Result<Vec<CoprProject>, String> {
+    if contents.len() > MAX_BACKUP_BYTES {
+        return Err("The saved-project backup is larger than the 5 MiB import limit.".to_string());
+    }
     let imported: Vec<CoprProject> = serde_json::from_str(contents)
         .map_err(|error| format!("This is not a valid Copr Hub saved-project backup: {error}"))?;
-    if imported
-        .iter()
-        .any(|project| project.name.trim().is_empty() || project.owner.trim().is_empty())
+    if imported.len() > MAX_IMPORTED_PROJECTS {
+        return Err(format!(
+            "The backup contains more than {MAX_IMPORTED_PROJECTS} saved projects."
+        ));
+    }
+    if imported.iter().any(|project| {
+        project.name.trim().is_empty()
+            || project.owner.trim().is_empty()
+            || project.name.len() > 512
+            || project.owner.len() > 512
+            || project.description.as_ref().is_some_and(|value| value.len() > 16_384)
+            || project.homepage.as_ref().is_some_and(|value| value.len() > 4096)
+    })
     {
-        return Err("The backup contains a project without a name or owner.".to_string());
+        return Err("The backup contains an invalid or oversized project entry.".to_string());
     }
     Ok(imported)
 }
@@ -41,12 +58,14 @@ fn merge_projects(
     projects: &mut Vec<CoprProject>,
     imported: impl IntoIterator<Item = CoprProject>,
 ) -> usize {
+    let mut identities: HashSet<(String, String)> = projects
+        .iter()
+        .map(|project| (project.owner.clone(), project.name.clone()))
+        .collect();
     let mut added = 0;
     for project in imported {
-        if !projects
-            .iter()
-            .any(|saved| saved.owner == project.owner && saved.name == project.name)
-        {
+        let identity = (project.owner.clone(), project.name.clone());
+        if identities.insert(identity) {
             projects.push(project);
             added += 1;
         }
@@ -97,6 +116,11 @@ pub fn export_to(path: &std::path::Path) -> Result<usize, String> {
 
 /// Import a JSON backup, merging by owner/project identity without duplicating entries.
 pub fn import_from(path: &std::path::Path) -> Result<usize, String> {
+    let metadata = fs::metadata(path)
+        .map_err(|error| format!("Could not inspect the selected backup: {error}"))?;
+    if metadata.len() > MAX_BACKUP_BYTES as u64 {
+        return Err("The saved-project backup is larger than the 5 MiB import limit.".to_string());
+    }
     let contents = fs::read_to_string(path)
         .map_err(|error| format!("Could not read the selected backup: {error}"))?;
     let imported = parse_backup(&contents)?;
@@ -164,7 +188,31 @@ mod tests {
     fn backup_parser_rejects_projects_without_identity() {
         let contents = r#"[{"owner":"alice","name":"  "},{"owner":"bob","name":"tool"}]"#;
         let error = parse_backup(contents).unwrap_err();
-        assert!(error.contains("without a name or owner"));
+        assert!(error.contains("invalid or oversized project entry"));
+    }
+
+    #[test]
+    fn backup_parser_rejects_oversized_files_and_project_lists() {
+        let too_large = " ".repeat(MAX_BACKUP_BYTES + 1);
+        assert!(parse_backup(&too_large)
+            .unwrap_err()
+            .contains("5 MiB import limit"));
+
+        let projects = vec![project("owner", "project"); MAX_IMPORTED_PROJECTS + 1];
+        let contents = serde_json::to_string(&projects).unwrap();
+        assert!(parse_backup(&contents)
+            .unwrap_err()
+            .contains("more than 5000 saved projects"));
+    }
+
+    #[test]
+    fn backup_parser_rejects_oversized_project_fields() {
+        let mut oversized = project("owner", "project");
+        oversized.homepage = Some("x".repeat(4097));
+        let contents = serde_json::to_string(&vec![oversized]).unwrap();
+        assert!(parse_backup(&contents)
+            .unwrap_err()
+            .contains("invalid or oversized project entry"));
     }
 
     #[test]
