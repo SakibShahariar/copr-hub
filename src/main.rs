@@ -1074,7 +1074,6 @@ fn render_repositories(
                 origin_summary.set_xalign(0.0);
                 origin_summary.add_css_class("dim-label");
                 origin_summary.set_accessible_role(gtk::AccessibleRole::Status);
-                row.set_subtitle(format!("{} · {} · Installed package origins: checking…", repository.id, repository.file.display()));
                 row.add_suffix(&origin_summary);
                 {
                     let repository_id = repository.id.clone();
