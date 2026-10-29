@@ -2607,6 +2607,31 @@ fn build_saved_page(
     monitoring_note.add_css_class("dim-label");
     content.append(&monitoring_note);
 
+    let freshness_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    let freshness_label = gtk::Label::new(Some("Mark builds stale after (days)"));
+    freshness_label.set_xalign(0.0);
+    freshness_label.set_hexpand(true);
+    let freshness_days = gtk::SpinButton::with_range(7.0, 3650.0, 7.0);
+    freshness_days.set_value(f64::from(monitoring::load_config().freshness_threshold_days.clamp(7, 3650)));
+    freshness_days.set_numeric(true);
+    freshness_days.set_tooltip_text(Some("Choose how long without a reported build activity marks a project as stale."));
+    freshness_days.set_accessible_label(Some("Project build freshness threshold in days"));
+    freshness_row.append(&freshness_label);
+    freshness_row.append(&freshness_days);
+    content.append(&freshness_row);
+    freshness_days.connect_value_changed({
+        let feedback = feedback.clone();
+        let freshness_days = freshness_days.clone();
+        move |_| {
+            let mut config = monitoring::load_config();
+            config.freshness_threshold_days = freshness_days.value_as_int().clamp(7, 3650) as u32;
+            match monitoring::save_config(&config) {
+                Ok(()) => feedback.set_text(&format!("Project freshness threshold set to {} days. New health observations will use this threshold.", config.freshness_threshold_days)),
+                Err(error) => feedback.set_text(&format!("Could not save freshness threshold: {error}")),
+            }
+        }
+    });
+
     let backup_toggle = gtk::CheckButton::with_label("Create scheduled local backups of saved projects");
     backup_toggle.set_tooltip_text(Some("When enabled, create a JSON backup about once per day while Copr Hub is open. Keep the latest seven backups. No background system service is installed."));
     backup_toggle.set_active(backups::load_config().enabled);
