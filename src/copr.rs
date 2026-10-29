@@ -27,7 +27,7 @@ struct ProjectListResponse {
     projects: Vec<CoprProject>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct ProjectMonitor {
     #[serde(default)]
     pub packages: Vec<MonitoredPackage>,
@@ -35,7 +35,7 @@ pub struct ProjectMonitor {
     pub latest_build: Option<ProjectBuildSummary>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct ProjectBuildSummary {
     #[serde(default)]
     pub state: Option<String>,
@@ -51,7 +51,7 @@ struct BuildListResponse {
     builds: Vec<ProjectBuildSummary>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct ProjectBuildEvent {
     #[serde(default)]
     pub id: Option<i64>,
@@ -69,7 +69,7 @@ pub struct ProjectBuildEvent {
     pub source_package: Option<BuildSourcePackage>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct BuildSourcePackage {
     #[serde(default)]
     pub name: Option<String>,
@@ -77,14 +77,14 @@ pub struct BuildSourcePackage {
     pub version: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct MonitoredPackage {
     pub name: String,
     #[serde(default)]
     pub chroots: HashMap<String, ChrootBuild>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct ChrootBuild {
     #[serde(default)]
     pub state: Option<String>,
