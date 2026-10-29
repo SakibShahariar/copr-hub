@@ -259,6 +259,7 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
 
     let results = gtk::ListBox::new();
     let latest_response: Rc<RefCell<Option<ProjectSearchResponse>>> = Rc::new(RefCell::new(None));
+    let cached_search = load_search_cache();
     results.set_selection_mode(gtk::SelectionMode::None);
     results.add_css_class("boxed-list");
     results.set_filter_func({
@@ -316,11 +317,16 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
                     Err(_) => Err("The background search task failed unexpectedly.".to_string()),
                 };
                 let summary = match &response {
-                    Ok(projects) => format!("{} result(s)", projects.len()),
+                    Ok(projects) => {
+                        save_search_cache(&activity_query, projects);
+                        format!("{} result(s)", projects.len())
+                    }
                     Err(error) => format!("Failed: {error}"),
                 };
                 let activity_result = activity::record("Project search", &activity_query, &summary);
-                *latest_response.borrow_mut() = Some(response.clone());
+                if response.is_ok() {
+                    *latest_response.borrow_mut() = Some(response.clone());
+                }
                 render_projects(&parent, &results, &feedback, response, sort.selected());
                 if let Err(error) = activity_result {
                     feedback.set_text(&format!(
@@ -331,6 +337,18 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
             });
         }
     };
+
+    if let Some(cached) = cached_search {
+        search.set_text(&cached.query);
+        let count = cached.projects.len();
+        let cached_response = Ok(cached.projects);
+        *latest_response.borrow_mut() = Some(cached_response.clone());
+        render_projects(&parent, &results, &feedback, cached_response, sort.selected());
+        feedback.set_text(&format!(
+            "Showing {count} saved result(s) for “{}”. Cached results may be out of date; search to refresh.",
+            cached.query
+        ));
+    }
 
     search.connect_activate({
         let perform_search = perform_search.clone();
