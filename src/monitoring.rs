@@ -239,7 +239,10 @@ mod tests {
 
     fn state() -> ProjectState {
         ProjectState {
-            target_states: HashMap::from([("demo@fedora-44-x86_64".to_string(), "succeeded".to_string())]),
+            target_states: HashMap::from([(
+                "demo@fedora-44-x86_64".to_string(),
+                "succeeded".to_string(),
+            )]),
             latest_build_state: Some("succeeded".to_string()),
             upstream_version: Some("1.0.0".to_string()),
             stale: false,
@@ -255,10 +258,9 @@ mod tests {
     fn alerts_only_on_new_failed_target_and_not_repeated_failures() {
         let previous = state();
         let mut current = previous.clone();
-        current.target_states.insert(
-            "demo@fedora-44-x86_64".to_string(),
-            "failed".to_string(),
-        );
+        current
+            .target_states
+            .insert("demo@fedora-44-x86_64".to_string(), "failed".to_string());
         current.latest_build_state = Some("failed".to_string());
         let alerts = compare_states(Some(&previous), &current);
         assert_eq!(alerts.len(), 1);
@@ -275,7 +277,9 @@ mod tests {
         current.stale = true;
         let alerts = compare_states(Some(&previous), &current);
         assert_eq!(alerts.len(), 2);
-        assert!(alerts.iter().any(|alert| alert.contains("New upstream release")));
+        assert!(alerts
+            .iter()
+            .any(|alert| alert.contains("New upstream release")));
         assert!(alerts.iter().any(|alert| alert.contains("become stale")));
     }
 
