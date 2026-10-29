@@ -139,7 +139,8 @@ fn current_state(monitor: &copr::ProjectMonitor, threshold_days: u32) -> Project
     }
     let latest = monitor.latest_build.as_ref();
     let latest_build_timestamp = latest.and_then(|build| build.ended_on.or(build.submitted_on));
-    let threshold_days = threshold_days.clamp(MIN_FRESHNESS_THRESHOLD_DAYS, MAX_FRESHNESS_THRESHOLD_DAYS);
+    let threshold_days =
+        threshold_days.clamp(MIN_FRESHNESS_THRESHOLD_DAYS, MAX_FRESHNESS_THRESHOLD_DAYS);
     let stale = latest_build_timestamp
         .and_then(|timestamp| i64::try_from(now_unix()).ok().map(|now| now - timestamp))
         .is_some_and(|age| age >= i64::from(threshold_days) * 24 * 60 * 60);
@@ -190,9 +191,10 @@ fn compare_states(previous: Option<&ProjectState>, current: &ProjectState) -> Ve
     }
 
     if !previous.stale && current.stale {
-        alerts.push(
-            format!("Project build activity has become stale (no build in at least {} days).", current.stale_after_days),
-        );
+        alerts.push(format!(
+            "Project build activity has become stale (no build in at least {} days).",
+            current.stale_after_days
+        ));
     }
 
     if let (Some(old), Some(new)) = (
@@ -239,8 +241,16 @@ pub fn record_observation(
     if let Some(previous) = previous.as_ref() {
         let mut changes = Vec::new();
         if previous.target_states != current.target_states {
-            let failed_before = previous.target_states.values().filter(|value| is_failed(value)).count();
-            let failed_now = current.target_states.values().filter(|value| is_failed(value)).count();
+            let failed_before = previous
+                .target_states
+                .values()
+                .filter(|value| is_failed(value))
+                .count();
+            let failed_now = current
+                .target_states
+                .values()
+                .filter(|value| is_failed(value))
+                .count();
             changes.push(format!("failed targets: {failed_before} → {failed_now}"));
         }
         if previous.latest_build_state != current.latest_build_state {
@@ -252,7 +262,10 @@ pub fn record_observation(
         }
         if previous.stale != current.stale {
             changes.push(if current.stale {
-                format!("build activity became stale after {} days", current.stale_after_days)
+                format!(
+                    "build activity became stale after {} days",
+                    current.stale_after_days
+                )
             } else {
                 "build activity is no longer stale".to_string()
             });
