@@ -15,7 +15,7 @@ Copr Hub is built with Rust, GTK4, and libadwaita, with a GNOME-friendly interfa
 - **Spot upstream updates** — compare supported package versions with GitHub/GitLab stable releases, with clearly labeled cached data and freshness hints.
 - **Track and compare projects** — save favorites, compare build health, optionally receive change-only notifications, and export/import saved-project backups.
 - **Manage COPR repositories** — inspect repository configuration, enable/disable repositories, and remove supported COPR definitions after confirmation.
-- **Manage packages** — list installed COPR packages, install packages, or remove them with explicit confirmation.
+- **Manage packages** — check enabled repositories for available upgrades to installed COPR packages, inspect direct dependency impact, install packages, or remove them with explicit confirmation.
 - **Keep a local history** — search, export, import, or clear recent activity.
 - **Work through interruptions** — cached project details, recent builds, upstream metadata, saved projects, activity, and local repository information remain useful offline with visible freshness labels.
 
