@@ -158,9 +158,9 @@ pub fn latest_release(homepage: &str) -> Result<Option<UpstreamRelease>, String>
     }
 
     let stale_candidate = cache.lock().ok().and_then(|cache| {
-        cache.get(&key).and_then(|(stored_at, release)| {
-            stale_cache_fallback(*stored_at, release.clone())
-        })
+        cache
+            .get(&key)
+            .and_then(|(stored_at, release)| stale_cache_fallback(*stored_at, release.clone()))
     });
 
     let result = fetch_release(&owner, &repo, is_gitlab);
