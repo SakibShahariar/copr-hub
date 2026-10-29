@@ -1449,7 +1449,9 @@ fn render_project_monitor(
 
     match response {
         Ok(monitor) if monitor.packages.is_empty() => {
-            let empty = gtk::Label::new(Some("No package/target data is available to build a matrix."));
+            let empty = gtk::Label::new(Some(
+                "No package/target data is available to build a matrix.",
+            ));
             empty.set_xalign(0.0);
             matrix.attach(&empty, 0, 0, 1, 1);
             status.set_text("COPR did not report any packages for this project.");
@@ -1635,17 +1637,23 @@ fn render_project_monitor(
             }
         }
         Err(error) => {
-            status.set_text(&format!("Could not load project build information: {error}"));
-            let unavailable = gtk::Label::new(Some("Build-target matrix unavailable because project data could not be loaded."));
+            status.set_text(&format!(
+                "Could not load project build information: {error}"
+            ));
+            let unavailable = gtk::Label::new(Some(
+                "Build-target matrix unavailable because project data could not be loaded.",
+            ));
             unavailable.set_xalign(0.0);
             matrix.attach(&unavailable, 0, 0, 1, 1);
-        },
+        }
     }
 }
 
 fn format_build_timestamp(timestamp: i64) -> Option<String> {
     let date = gtk::glib::DateTime::from_unix_local(timestamp).ok()?;
-    date.format("%Y-%m-%d %H:%M").ok().map(|value| value.to_string())
+    date.format("%Y-%m-%d %H:%M")
+        .ok()
+        .map(|value| value.to_string())
 }
 
 fn render_build_target_matrix(matrix: &gtk::Grid, packages: &[copr::MonitoredPackage]) {
