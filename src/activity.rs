@@ -1,6 +1,7 @@
 use crate::storage;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::cmp::Reverse;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -73,7 +74,7 @@ fn merge_entries(
             added_entries.push(entry);
         }
     }
-    current.sort_by(|left, right| right.timestamp.cmp(&left.timestamp));
+    current.sort_by_key(|entry| Reverse(entry.timestamp));
     current.truncate(MAX_ENTRIES);
     added_entries
         .iter()
