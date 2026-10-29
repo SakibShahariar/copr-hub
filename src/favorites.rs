@@ -25,8 +25,13 @@ fn project_has_valid_fields(project: &CoprProject) -> bool {
 }
 
 fn validate_project_entries(projects: &[CoprProject]) -> Result<(), String> {
-    if projects.iter().any(|project| !project_has_valid_fields(project)) {
-        return Err("The saved-project list contains an invalid or oversized project entry.".to_string());
+    if projects
+        .iter()
+        .any(|project| !project_has_valid_fields(project))
+    {
+        return Err(
+            "The saved-project list contains an invalid or oversized project entry.".to_string(),
+        );
     }
     Ok(())
 }
@@ -86,7 +91,10 @@ fn parse_backup(contents: &str) -> Result<Vec<CoprProject>, String> {
             "The backup contains more than {MAX_IMPORTED_PROJECTS} saved projects."
         ));
     }
-    if imported.iter().any(|project| !project_has_valid_fields(project)) {
+    if imported
+        .iter()
+        .any(|project| !project_has_valid_fields(project))
+    {
         return Err("The backup contains an invalid or oversized project entry.".to_string());
     }
     Ok(imported)
@@ -263,7 +271,10 @@ mod tests {
     fn saved_project_field_validation_rejects_blank_and_oversized_values() {
         assert!(!project_has_valid_fields(&project(" ", "demo")));
         assert!(!project_has_valid_fields(&project("alice", "")));
-        assert!(!project_has_valid_fields(&project("alice", &"x".repeat(513))));
+        assert!(!project_has_valid_fields(&project(
+            "alice",
+            &"x".repeat(513)
+        )));
 
         let mut oversized_description = project("alice", "demo");
         oversized_description.description = Some("x".repeat(16_385));
