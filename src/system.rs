@@ -168,6 +168,19 @@ pub struct InstalledCoprPackage {
     pub repository: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AvailablePackageUpdate {
+    pub name: String,
+    pub version: String,
+    pub repository: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct PackageDependencyImpact {
+    pub requirements: Vec<String>,
+    pub required_by: Vec<String>,
+}
+
 pub fn list_installed_copr_packages() -> Result<Vec<InstalledCoprPackage>, String> {
     let output = Command::new("dnf")
         .args([
@@ -192,6 +205,141 @@ pub fn list_installed_copr_packages() -> Result<Vec<InstalledCoprPackage>, Strin
     let mut packages = parse_installed_copr_packages(&stdout);
     packages.sort_by(|left, right| left.name.cmp(&right.name));
     Ok(packages)
+}
+
+/// Query enabled repositories for upgrade candidates. DNF handles RPM EVR
+/// ordering and repository policy; callers should only display returned candidates.
+pub fn list_package_updates() -> Result<Vec<AvailablePackageUpdate>, String> {
+    let output = Command::new("dnf")
+        .args([
+            "repoquery",
+            "--upgrades",
+            "--queryformat",
+            "%{name}\\t%{evr}\\t%{repoid}",
+        ])
+        .output()
+        .map_err(|error| format!("Could not start DNF to check package updates: {error}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(if stderr.is_empty() {
+            "DNF could not check available package updates. Check enabled repositories and connectivity."
+                .to_string()
+        } else {
+            format!("DNF could not check available package updates: {stderr}")
+        });
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut updates = parse_package_updates(&stdout);
+    updates.sort_by(|left, right| {
+        left.name
+            .cmp(&right.name)
+            .then_with(|| left.repository.cmp(&right.repository))
+            .then_with(|| left.version.cmp(&right.version))
+    });
+    Ok(updates)
+}
+
+fn parse_package_updates(output: &str) -> Vec<AvailablePackageUpdate> {
+    output
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.splitn(3, '\\t');
+            let name = fields.next()?.trim();
+            let version = fields.next()?.trim();
+            let repository = fields.next()?.trim();
+            if !is_valid_package_name(name) || version.is_empty() || repository.is_empty() {
+                return None;
+            }
+            Some(AvailablePackageUpdate {
+                name: name.to_string(),
+                version: version.to_string(),
+                repository: repository.to_string(),
+            })
+        })
+        .collect()
+}
+
+/// Inspect the local RPM database only. No repository refresh or network request
+/// is made, so this view remains useful offline.
+pub fn inspect_package_dependency_impact(
+    package_name: &str,
+) -> Result<PackageDependencyImpact, String> {
+    if !is_valid_package_name(package_name) {
+        return Err("The package name contains unsupported characters.".to_string());
+    }
+
+    let requirements = run_rpm_query(&["-q", "--requires", package_name])?;
+    let reverse_output = run_rpm_query_allow_empty(&["-q", "--whatrequires", package_name])?;
+    Ok(PackageDependencyImpact {
+        requirements: bounded_lines(&requirements),
+        required_by: bounded_lines(&reverse_output),
+    })
+}
+
+fn run_rpm_query(arguments: &[&str]) -> Result<String, String> {
+    let output = Command::new("rpm")
+        .args(arguments)
+        .env("LC_ALL", "C")
+        .output()
+        .map_err(|error| format!("Could not start RPM to inspect dependencies: {error}"))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(if stderr.is_empty() {
+            "RPM could not inspect the installed package database.".to_string()
+        } else {
+            format!("RPM dependency query failed: {stderr}")
+        });
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+fn run_rpm_query_allow_empty(arguments: &[&str]) -> Result<String, String> {
+    let output = Command::new("rpm")
+        .args(arguments)
+        .env("LC_ALL", "C")
+        .output()
+        .map_err(|error| format!("Could not start RPM to inspect dependencies: {error}"))?;
+    if output.status.success() {
+        return Ok(String::from_utf8_lossy(&output.stdout).into_owned());
+    }
+
+    let details = format!(
+        "{} {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    )
+    .to_ascii_lowercase();
+    if details.contains("no package requires") || details.contains("no package provides") {
+        return Ok(String::new());
+    }
+    let details = details.trim();
+    Err(if details.is_empty() {
+        "RPM could not inspect reverse dependencies.".to_string()
+    } else {
+        format!("RPM reverse-dependency query failed: {details}")
+    })
+}
+
+fn bounded_lines(output: &str) -> Vec<String> {
+    output
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .take(100)
+        .map(str::to_string)
+        .collect()
+}
+
+fn is_valid_package_name(package_name: &str) -> bool {
+    package_name
+        .chars()
+        .next()
+        .is_some_and(|character| character.is_ascii_alphanumeric())
+        && package_name
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || "+._-".contains(character))
 }
 
 fn parse_installed_copr_packages(output: &str) -> Vec<InstalledCoprPackage> {
@@ -290,14 +438,7 @@ pub fn set_copr_repository_enabled(repository_id: &str, enabled: bool) -> Result
 }
 
 pub fn set_package_installed(package_name: &str, install: bool) -> Result<(), String> {
-    if !package_name
-        .chars()
-        .next()
-        .is_some_and(|character| character.is_ascii_alphanumeric())
-        || !package_name
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || "+._-".contains(character))
-    {
+    if !is_valid_package_name(package_name) {
         return Err("The package name contains unsupported characters.".to_string());
     }
 
@@ -473,6 +614,38 @@ enabled=1
             overrides.get("copr:copr.fedorainfracloud.org:alice:demo"),
             Some(&false)
         );
+    }
+
+    #[test]
+    fn parses_update_candidates_and_ignores_malformed_rows() {
+        let output = "demo\\t2.0-1.fc44\\tcopr:alice:demo\\nbase\\t3.0-1.fc44\\tfedora\\nmissing-version\\t\\tfedora\\n--bad\\t1.0\\tfedora\\n";
+        let updates = parse_package_updates(output);
+        assert_eq!(updates.len(), 2);
+        assert_eq!(updates[0].name, "base");
+        assert_eq!(updates[0].version, "3.0-1.fc44");
+        assert_eq!(updates[1].name, "demo");
+        assert_eq!(updates[1].repository, "copr:alice:demo");
+    }
+
+    #[test]
+    fn dependency_output_is_trimmed_and_bounded() {
+        let output = (0..105)
+            .map(|index| format!(" capability-{index} "))
+            .collect::<Vec<_>>()
+            .join("\\n");
+        let lines = bounded_lines(&output);
+        assert_eq!(lines.len(), 100);
+        assert_eq!(lines[0], "capability-0");
+        assert_eq!(lines[99], "capability-99");
+    }
+
+    #[test]
+    fn package_name_validation_rejects_options_and_shell_syntax() {
+        assert!(is_valid_package_name("gtk4"));
+        assert!(is_valid_package_name("python3.13"));
+        assert!(!is_valid_package_name("--requires"));
+        assert!(!is_valid_package_name("demo;touch"));
+        assert!(!is_valid_package_name(""));
     }
 
     #[test]
