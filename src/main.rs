@@ -218,7 +218,9 @@ fn start_scheduled_backups(app: &adw::Application) {
 }
 
 fn launch_scheduled_backup(app: &adw::Application) {
-    if !backups::load_config().enabled { return; }
+    if !backups::load_config().enabled {
+        return;
+    }
     let app = app.clone();
     gtk::glib::MainContext::default().spawn_local(async move {
         let result = gtk::gio::spawn_blocking(backups::run_if_due).await;
@@ -1077,7 +1079,8 @@ fn render_repositories(
                         .await;
                         match result {
                             Ok(Ok(packages)) if packages.is_empty() => {
-                                query_summary.set_text("No installed packages attributed to this repo");
+                                query_summary
+                                    .set_text("No installed packages attributed to this repo");
                                 query_summary.set_tooltip_text(Some(
                                     "DNF reports no installed RPMs with this source repository ID.",
                                 ));
@@ -1096,7 +1099,8 @@ fn render_repositories(
                             }
                             Err(_) => {
                                 query_summary.set_text("Installed package origins unavailable");
-                                query_summary.set_tooltip_text(Some("The background DNF query failed."));
+                                query_summary
+                                    .set_tooltip_text(Some("The background DNF query failed."));
                             }
                         }
                     });
@@ -2062,14 +2066,28 @@ fn update_intelligence_summary(
     for package in packages {
         let mut has_newer_release = false;
         if let Some((release, homepage)) = release.zip(homepage) {
-            let versions: Vec<_> = package.chroots.values().filter_map(|build| build.pkg_version.as_deref()).collect();
+            let versions: Vec<_> = package
+                .chroots
+                .values()
+                .filter_map(|build| build.pkg_version.as_deref())
+                .collect();
             if !versions.is_empty() {
-                let comparisons: Vec<_> = versions.iter().map(|version| {
-                    upstream::compare_package_version(homepage, &release.version, &package.name, version)
-                }).collect();
+                let comparisons: Vec<_> = versions
+                    .iter()
+                    .map(|version| {
+                        upstream::compare_package_version(
+                            homepage,
+                            &release.version,
+                            &package.name,
+                            version,
+                        )
+                    })
+                    .collect();
                 if comparisons.iter().any(Option::is_some) {
                     compared_packages += 1;
-                    has_newer_release = comparisons.iter().any(|value| *value == Some(std::cmp::Ordering::Greater));
+                    has_newer_release = comparisons
+                        .iter()
+                        .any(|value| *value == Some(std::cmp::Ordering::Greater));
                 } else {
                     unsupported_packages += 1;
                 }
@@ -2634,9 +2652,15 @@ fn build_saved_page(
     freshness_label.set_xalign(0.0);
     freshness_label.set_hexpand(true);
     let freshness_days = gtk::SpinButton::with_range(7.0, 3650.0, 7.0);
-    freshness_days.set_value(f64::from(monitoring::load_config().freshness_threshold_days.clamp(7, 3650)));
+    freshness_days.set_value(f64::from(
+        monitoring::load_config()
+            .freshness_threshold_days
+            .clamp(7, 3650),
+    ));
     freshness_days.set_numeric(true);
-    freshness_days.set_tooltip_text(Some("Choose how long without a reported build activity marks a project as stale."));
+    freshness_days.set_tooltip_text(Some(
+        "Choose how long without a reported build activity marks a project as stale.",
+    ));
      freshness_row.append(&freshness_label);
     freshness_row.append(&freshness_days);
     content.append(&freshness_row);
@@ -2653,7 +2677,8 @@ fn build_saved_page(
         }
     });
 
-    let backup_toggle = gtk::CheckButton::with_label("Create scheduled local backups of saved projects");
+    let backup_toggle =
+        gtk::CheckButton::with_label("Create scheduled local backups of saved projects");
     backup_toggle.set_tooltip_text(Some("When enabled, create a JSON backup about once per day while Copr Hub is open. Keep the latest seven backups. No background system service is installed."));
     backup_toggle.set_active(backups::load_config().enabled);
     content.append(&backup_toggle);
