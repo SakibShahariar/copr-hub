@@ -375,7 +375,6 @@ fn is_valid_copr_repository_id(repository_id: &str) -> bool {
             .all(|character| character.is_ascii_alphanumeric() || ":._-".contains(character))
 }
 
-
 /// Cache installed RPM origins for the current app session so each repository row
 /// does not launch a separate DNF query. Refreshing the repository page invalidates it.
 type InstalledOrigins = Result<HashMap<String, Vec<String>>, String>;
@@ -410,9 +409,16 @@ pub fn installed_packages_from_repository(repository_id: &str) -> Result<Vec<Str
 
 fn query_installed_package_origins() -> InstalledOrigins {
     let output = Command::new("dnf")
-        .args(["repoquery", "--installed", "--queryformat", "%{name}|%{from_repo}"])
+        .args([
+            "repoquery",
+            "--installed",
+            "--queryformat",
+            "%{name}|%{from_repo}",
+        ])
         .output()
-        .map_err(|error| format!("Could not run DNF to inspect installed package origins: {error}"))?;
+        .map_err(|error| {
+            format!("Could not run DNF to inspect installed package origins: {error}")
+        })?;
     if !output.status.success() {
         return Err(format!(
             "DNF could not inspect installed package origins: {}",
@@ -421,11 +427,16 @@ fn query_installed_package_origins() -> InstalledOrigins {
     }
     let mut origins: HashMap<String, Vec<String>> = HashMap::new();
     for line in String::from_utf8_lossy(&output.stdout).lines() {
-        let Some((name, origin)) = line.split_once('|') else { continue };
+        let Some((name, origin)) = line.split_once('|') else {
+            continue;
+        };
         let name = name.trim();
         let origin = origin.trim();
         if is_valid_package_name(name) && is_safe_repository_id(origin) {
-            origins.entry(origin.to_string()).or_default().push(name.to_string());
+            origins
+                .entry(origin.to_string())
+                .or_default()
+                .push(name.to_string());
         }
     }
     for packages in origins.values_mut() {
