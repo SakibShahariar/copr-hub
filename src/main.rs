@@ -341,7 +341,7 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
         let cached_response = Ok(cached.projects);
         *latest_response.borrow_mut() = Some(cached_response.clone());
         render_projects(
-            &parent,
+            parent,
             &results,
             &feedback,
             cached_response,
