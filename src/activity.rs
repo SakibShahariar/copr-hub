@@ -30,6 +30,16 @@ pub fn load() -> Result<Vec<ActivityEntry>, String> {
     }
 }
 
+/// Export the local activity history to a portable JSON file.
+pub fn export_to(path: &std::path::Path) -> Result<usize, String> {
+    let entries = load()?;
+    let contents = serde_json::to_vec_pretty(&entries)
+        .map_err(|error| format!("Could not encode activity history: {error}"))?;
+    storage::atomic_write(path, &contents)
+        .map_err(|error| format!("Could not export activity history: {error}"))?;
+    Ok(entries.len())
+}
+
 pub fn clear() -> Result<(), String> {
     let path = history_path();
     let parent = path
