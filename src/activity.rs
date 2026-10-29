@@ -94,6 +94,11 @@ fn merge_entries(
 
 /// Import an activity backup, preserving current entries and avoiding duplicates.
 pub fn import_from(path: &std::path::Path) -> Result<usize, String> {
+    let metadata = fs::metadata(path)
+        .map_err(|error| format!("Could not inspect the selected activity backup: {error}"))?;
+    if metadata.len() > MAX_IMPORT_BYTES as u64 {
+        return Err("The activity backup is larger than the 1 MiB import limit.".to_string());
+    }
     let contents = fs::read_to_string(path)
         .map_err(|error| format!("Could not read the selected activity backup: {error}"))?;
     let imported = parse_import(&contents)?;
