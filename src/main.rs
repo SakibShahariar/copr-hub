@@ -1881,6 +1881,7 @@ mod url_tests {
             name: "Tool 1.3.0".into(),
             published_at: Some("2026-09-01T00:00:00Z".into()),
             url: None,
+            stale_cache: false,
         };
         let summary = update_intelligence_summary(
             &packages,
