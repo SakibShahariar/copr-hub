@@ -1265,11 +1265,25 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
     window.set_content(Some(&scroll));
     window.present();
 
+    let history_project_data = project.clone();
+    if let Some(snapshot) = snapshots::load(project) {
+        if let Some(builds) = snapshot.build_history.clone() {
+            render_build_history(
+                &timeline,
+                &timeline_status,
+                &history_project_data,
+                &builds,
+                snapshot.history_fetched_at_unix,
+                true,
+            );
+        }
+    }
     let history_owner = project.owner.clone();
     let history_project = project.name.clone();
     {
         let timeline = timeline.clone();
         let timeline_status = timeline_status.clone();
+        let project_data = history_project_data.clone();
         gtk::glib::MainContext::default().spawn_local(async move {
             let fetch_owner = history_owner.clone();
             let fetch_project = history_project.clone();
@@ -1277,69 +1291,61 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                 copr::fetch_project_build_history(&fetch_owner, &fetch_project)
             })
             .await;
-            clear_list_box(&timeline);
             match response {
-                Ok(Ok(builds)) if builds.is_empty() => {
-                    timeline_status.set_text("COPR returned no recent build-history records.");
-                }
                 Ok(Ok(builds)) => {
-                    timeline_status.set_text(&format!(
-                        "Showing {} recent build record(s) from COPR. Older builds may be pruned by COPR, so this is not necessarily a complete lifetime history.",
-                        builds.len()
-                    ));
-                    for build in builds {
-                        let package_name = build
-                            .source_package
-                            .as_ref()
-                            .and_then(|source| source.name.as_deref())
-                            .unwrap_or("Unknown package");
-                        let version = build
-                            .source_package
-                            .as_ref()
-                            .and_then(|source| source.version.as_deref())
-                            .unwrap_or("version unavailable");
-                        let state = build.state.as_deref().unwrap_or("unknown");
-                        let timestamp = build
-                            .submitted_on
-                            .or(build.started_on)
-                            .or(build.ended_on)
-                            .and_then(format_build_timestamp);
-                        let date = timestamp.unwrap_or_else(|| "Timestamp unavailable".to_string());
-                        let target_summary = if build.chroots.is_empty() {
-                            "targets unavailable".to_string()
-                        } else {
-                            build.chroots.join(", ")
-                        };
-                        let row = adw::ActionRow::builder()
-                            .title(format!("{package_name} {version}"))
-                            .subtitle(format!("{state} · {date} · {target_summary}"))
-                            .build();
-                        row.add_prefix(&gtk::Image::from_icon_name(
-                            if matches!(state.to_ascii_lowercase().as_str(), "succeeded" | "success" | "complete" | "completed") {
-                                "emblem-ok-symbolic"
-                            } else if matches!(state.to_ascii_lowercase().as_str(), "failed" | "error") {
-                                "dialog-error-symbolic"
-                            } else {
-                                "content-loading-symbolic"
-                            }
-                        ));
-                        if let Some(build_id) = build.id {
-                            let url = format!(
-                                "https://copr.fedorainfracloud.org/coprs/{}/{}/build/{}/",
-                                history_owner, history_project, build_id
-                            );
-                            let link = gtk::LinkButton::with_label(&url, "Open build");
-                            link.set_valign(gtk::Align::Center);
-                            row.add_suffix(&link);
-                        }
-                        timeline.append(&row);
-                    }
+                    let _ = snapshots::save_history(&project_data, builds.clone());
+                    render_build_history(
+                        &timeline,
+                        &timeline_status,
+                        &project_data,
+                        &builds,
+                        Some(SystemTime::now().duration_since(UNIX_EPOCH).map(|v| v.as_secs()).unwrap_or(0)),
+                        false,
+                    );
                 }
                 Ok(Err(error)) => {
-                    timeline_status.set_text(&format!("Could not load build history: {error}"));
+                    if let Some(snapshot) = snapshots::load(&project_data) {
+                        if let Some(builds) = snapshot.build_history {
+                            render_build_history(
+                                &timeline,
+                                &timeline_status,
+                                &project_data,
+                                &builds,
+                                snapshot.history_fetched_at_unix,
+                                true,
+                            );
+                            timeline_status.set_text(&format!(
+                                "{} · Live refresh failed: {error}",
+                                timeline_status.text()
+                            ));
+                        } else {
+                            timeline_status.set_text(&format!("Could not load build history: {error}"));
+                        }
+                    } else {
+                        timeline_status.set_text(&format!("Could not load build history: {error}"));
+                    }
                 }
                 Err(_) => {
-                    timeline_status.set_text("The background build-history lookup failed unexpectedly.");
+                    if let Some(snapshot) = snapshots::load(&project_data) {
+                        if let Some(builds) = snapshot.build_history {
+                            render_build_history(
+                                &timeline,
+                                &timeline_status,
+                                &project_data,
+                                &builds,
+                                snapshot.history_fetched_at_unix,
+                                true,
+                            );
+                            timeline_status.set_text(&format!(
+                                "{} · The live background lookup failed.",
+                                timeline_status.text()
+                            ));
+                        } else {
+                            timeline_status.set_text("The background build-history lookup failed unexpectedly.");
+                        }
+                    } else {
+                        timeline_status.set_text("The background build-history lookup failed unexpectedly.");
+                    }
                 }
             }
         });
@@ -1469,6 +1475,80 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                 );
             }
         });
+    }
+}
+
+fn render_build_history(
+    timeline: &gtk::ListBox,
+    status: &gtk::Label,
+    project: &copr::CoprProject,
+    builds: &[copr::ProjectBuildEvent],
+    fetched_at: Option<u64>,
+    cached: bool,
+) {
+    clear_list_box(timeline);
+    let source = if cached {
+        format!(
+            "Offline snapshot · {} · data may be stale",
+            snapshots::cache_age_label(fetched_at)
+        )
+    } else {
+        "Fetched live from COPR".to_string()
+    };
+    if builds.is_empty() {
+        status.set_text(&format!("No recent build-history records. {source}"));
+        return;
+    }
+    status.set_text(&format!(
+        "Showing {} recent build record(s) · {source}. Older builds may be pruned by COPR, so this is not necessarily a complete lifetime history.",
+        builds.len()
+    ));
+    for build in builds {
+        let package_name = build
+            .source_package
+            .as_ref()
+            .and_then(|source| source.name.as_deref())
+            .unwrap_or("Unknown package");
+        let version = build
+            .source_package
+            .as_ref()
+            .and_then(|source| source.version.as_deref())
+            .unwrap_or("version unavailable");
+        let state = build.state.as_deref().unwrap_or("unknown");
+        let timestamp = build
+            .submitted_on
+            .or(build.started_on)
+            .or(build.ended_on)
+            .and_then(format_build_timestamp);
+        let date = timestamp.unwrap_or_else(|| "Timestamp unavailable".to_string());
+        let target_summary = if build.chroots.is_empty() {
+            "targets unavailable".to_string()
+        } else {
+            build.chroots.join(", ")
+        };
+        let row = adw::ActionRow::builder()
+            .title(format!("{package_name} {version}"))
+            .subtitle(format!("{state} · {date} · {target_summary}"))
+            .build();
+        row.add_prefix(&gtk::Image::from_icon_name(
+            if matches!(state.to_ascii_lowercase().as_str(), "succeeded" | "success" | "complete" | "completed") {
+                "emblem-ok-symbolic"
+            } else if matches!(state.to_ascii_lowercase().as_str(), "failed" | "error") {
+                "dialog-error-symbolic"
+            } else {
+                "content-loading-symbolic"
+            }
+        ));
+        if let Some(build_id) = build.id {
+            let url = format!(
+                "https://copr.fedorainfracloud.org/coprs/{}/{}/build/{}/",
+                project.owner, project.name, build_id
+            );
+            let link = gtk::LinkButton::with_label(&url, "Open build");
+            link.set_valign(gtk::Align::Center);
+            row.add_suffix(&link);
+        }
+        timeline.append(&row);
     }
 }
 
