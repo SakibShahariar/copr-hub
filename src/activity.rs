@@ -6,6 +6,8 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAX_ENTRIES: usize = 100;
+const MAX_IMPORT_BYTES: usize = 1024 * 1024;
+const MAX_IMPORTED_ENTRIES: usize = 1_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActivityEntry {
@@ -42,8 +44,16 @@ pub fn export_to(path: &std::path::Path) -> Result<usize, String> {
 }
 
 fn parse_import(contents: &str) -> Result<Vec<ActivityEntry>, String> {
+    if contents.len() > MAX_IMPORT_BYTES {
+        return Err("The activity backup is larger than the 1 MiB import limit.".to_string());
+    }
     let entries: Vec<ActivityEntry> = serde_json::from_str(contents)
         .map_err(|error| format!("This is not a valid Copr Hub activity backup: {error}"))?;
+    if entries.len() > MAX_IMPORTED_ENTRIES {
+        return Err(format!(
+            "The activity backup contains more than {MAX_IMPORTED_ENTRIES} entries."
+        ));
+    }
     if entries.iter().any(|entry| {
         entry.action.trim().is_empty()
             || entry.target.trim().is_empty()
@@ -166,6 +176,22 @@ mod tests {
             "x".repeat(8193)
         );
         assert!(parse_import(&oversized).is_err());
+
+        let too_large = " ".repeat(MAX_IMPORT_BYTES + 1);
+        assert!(parse_import(&too_large)
+            .unwrap_err()
+            .contains("1 MiB import limit"));
+
+        let entry = ActivityEntry {
+            timestamp: 1,
+            action: "search".into(),
+            target: "demo".into(),
+            summary: String::new(),
+        };
+        let too_many = serde_json::to_string(&vec![entry; MAX_IMPORTED_ENTRIES + 1]).unwrap();
+        assert!(parse_import(&too_many)
+            .unwrap_err()
+            .contains("more than 1000 entries"));
     }
 
     #[test]
