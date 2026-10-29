@@ -182,8 +182,8 @@ pub fn fetch_project_monitor(owner: &str, project: &str) -> Result<ProjectMonito
             )?
             .error_for_status()
             .map_err(|error| service_response_error(error, "recent build"))?
-                .json::<BuildListResponse>()
-                .map_err(|error| format!("Could not read recent build information: {error}"))
+            .json::<BuildListResponse>()
+            .map_err(|error| format!("Could not read recent build information: {error}"))
         })
         .ok()
         .and_then(|mut response| response.builds.drain(..).next());
