@@ -267,13 +267,6 @@ fn check_saved_projects() -> Vec<(String, String, String)> {
             .unwrap_or_default();
         if !alerts.is_empty() {
             let body = alerts.join(" ");
-            // Persist transitions in Activity as well as notifying the user, so
-            // health changes remain reviewable after the notification disappears.
-            let _ = activity::record(
-                "Project health change",
-                &format!("{}/{}", project.owner, project.name),
-                &body,
-            );
             let id = format!("copr-hub-{}-{}", project.owner, project.name);
             let title = format!("{} · @{}", project.name, project.owner);
             notifications.push((id, title, body));
