@@ -31,7 +31,7 @@ struct ProjectListResponse {
 pub struct ProjectMonitor {
     #[serde(default)]
     pub packages: Vec<MonitoredPackage>,
-    #[serde(skip)]
+    #[serde(default)]
     pub latest_build: Option<ProjectBuildSummary>,
 }
 
