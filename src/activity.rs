@@ -52,8 +52,13 @@ pub fn load() -> Result<Vec<ActivityEntry>, String> {
                     "The activity history contains more than {MAX_ENTRIES} entries."
                 ));
             }
-            if entries.iter().any(|entry| !activity_entry_has_valid_fields(entry)) {
-                return Err("The activity history contains an invalid or oversized entry.".to_string());
+            if entries
+                .iter()
+                .any(|entry| !activity_entry_has_valid_fields(entry))
+            {
+                return Err(
+                    "The activity history contains an invalid or oversized entry.".to_string(),
+                );
             }
             Ok(entries)
         }
@@ -83,7 +88,10 @@ fn parse_import(contents: &str) -> Result<Vec<ActivityEntry>, String> {
             "The activity backup contains more than {MAX_IMPORTED_ENTRIES} entries."
         ));
     }
-    if entries.iter().any(|entry| !activity_entry_has_valid_fields(entry)) {
+    if entries
+        .iter()
+        .any(|entry| !activity_entry_has_valid_fields(entry))
+    {
         return Err("The backup contains an invalid or oversized activity entry.".to_string());
     }
     Ok(entries)
