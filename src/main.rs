@@ -2660,14 +2660,50 @@ fn build_saved_page(
                 move |dialog, response| {
                     if response == gtk::ResponseType::Accept {
                         match dialog.file().and_then(|file| file.path()) {
-                            Some(path) => match favorites::import_from(&path) {
-                                Ok(added) => {
-                                    refresh_saved_projects(&parent, &list, &feedback);
-                                    feedback.set_text(&format!(
-                                        "Imported {added} new project(s); existing saved projects were preserved."
-                                    ));
+                            Some(path) => match favorites::preview_import(&path) {
+                                Ok(preview) => {
+                                    let confirmation = gtk::MessageDialog::builder()
+                                        .transient_for(&parent)
+                                        .modal(true)
+                                        .message_type(gtk::MessageType::Question)
+                                        .buttons(gtk::ButtonsType::None)
+                                        .text("Preview import changes")
+                                        .secondary_text(format!(
+                                            "{} project entries in backup\n{} new project(s) will be added\n{} duplicate/already-saved entry(s) will be skipped\n\nYour current saved projects will be preserved.",
+                                            preview.incoming, preview.new_projects, preview.already_saved
+                                        ))
+                                        .build();
+                                    confirmation.add_button("Cancel", gtk::ResponseType::Cancel);
+                                    confirmation.add_button("Import changes", gtk::ResponseType::Accept);
+                                    confirmation.connect_response({
+                                        let parent = parent.clone();
+                                        let list = list.clone();
+                                        let feedback = feedback.clone();
+                                        let path = path.clone();
+                                        move |confirmation, answer| {
+                                            confirmation.close();
+                                            if answer != gtk::ResponseType::Accept { return; }
+                                            feedback.set_text("Importing saved projects…");
+                                            let parent = parent.clone();
+                                            let list = list.clone();
+                                            let feedback = feedback.clone();
+                                            let path = path.clone();
+                                            gtk::glib::MainContext::default().spawn_local(async move {
+                                                let result = gtk::gio::spawn_blocking(move || favorites::import_from(&path)).await;
+                                                match result {
+                                                    Ok(Ok(added)) => {
+                                                        refresh_saved_projects(&parent, &list, &feedback);
+                                                        feedback.set_text(&format!("Imported {added} new project(s); existing saved projects were preserved."));
+                                                    }
+                                                    Ok(Err(error)) => feedback.set_text(&format!("Import failed: {error}")),
+                                                    Err(_) => feedback.set_text("The background import task failed unexpectedly."),
+                                                }
+                                            });
+                                        }
+                                    });
+                                    confirmation.present();
                                 }
-                                Err(error) => feedback.set_text(&error),
+                                Err(error) => feedback.set_text(&format!("Import preview failed: {error}")),
                             },
                             None => feedback.set_text("Could not access the selected backup file."),
                         }
