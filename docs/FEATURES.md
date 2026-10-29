@@ -14,6 +14,9 @@ This document describes Copr Hub's detailed functionality. The [README](../READM
 
 - Inspect package names, build targets, reported build states, and package versions; open a dedicated details window to inspect every target for a package.
 - Summarize succeeded, failed, in-progress, and unknown build states by Fedora target (up to five targets).
+- Show a package-by-target build matrix with reported target state and package version; missing package/target combinations are marked explicitly instead of being treated as failures.
+- Show a chronological timeline of up to 20 recent project build records, including package/version, reported state, submission/start/end timestamp when available, configured chroots, and a direct COPR build link.
+- The timeline uses actual records returned by COPR. COPR may prune older build records, so the timeline is a recent history view, not a complete lifetime audit log; unavailable timestamps are not guessed.
 - Show latest project-build age and state when COPR provides timestamps. Builds at least 90 days old receive a “No recent project build” hint; missing timestamps remain unavailable.
 - Recognize GitHub or GitLab repositories provided as project homepages and look up their latest stable upstream release, including version/tag, title, publication date, and link.
 - Cache successful upstream release lookups for 15 minutes in memory and persist them locally. Cached metadata up to 24 hours old can be used after restart or when offline, with a stale-cache notice.
