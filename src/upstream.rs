@@ -451,7 +451,17 @@ pub fn compare_package_version(
             .flat_map(char::to_lowercase)
             .collect::<String>()
     };
-    if normalize_name(&repository) != normalize_name(package_name) {
+    let normalized_repository = normalize_name(&repository);
+    let package_matches = normalized_repository == normalize_name(package_name)
+        || package_name
+            .strip_prefix("python3-")
+            .or_else(|| package_name.strip_prefix("python-"))
+            .or_else(|| package_name.strip_prefix("perl-"))
+            .or_else(|| package_name.strip_prefix("golang-"))
+            .or_else(|| package_name.strip_prefix("rust-"))
+            .or_else(|| package_name.strip_prefix("lib"))
+            .is_some_and(|upstream_name| normalize_name(upstream_name) == normalized_repository);
+    if !package_matches {
         return None;
     }
 
@@ -761,6 +771,14 @@ mod tests {
         );
         assert_eq!(
             compare_package_version(homepage, "2.0.0", "different-package", "1.0.0-1"),
+            None
+        );
+        assert_eq!(
+            compare_package_version("https://github.com/demo/python-tool", "2.0.0", "python3-tool", "1.0.0-1"),
+            Some(Ordering::Greater)
+        );
+        assert_eq!(
+            compare_package_version(homepage, "2.0.0-rc1", "tool", "1.0.0-1"),
             None
         );
         assert_eq!(
