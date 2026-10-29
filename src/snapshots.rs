@@ -1,4 +1,4 @@
-use crate::{copr, favorites};
+use crate::copr;
 use crate::upstream::UpstreamRelease;
 use serde::{Deserialize, Serialize};
 use std::fs;
