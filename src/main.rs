@@ -1107,7 +1107,12 @@ fn render_repositories(
                     let repository = repository.clone();
                     let list = list.clone();
                     let feedback = feedback.clone();
+                    let origin_summary = origin_summary.clone();
                     move |_| {
+                        if origin_summary.text().contains("Checking installed packages") {
+                            feedback.set_text("Please wait for installed package-origin information before changing this repository.");
+                            return;
+                        }
                         confirm_repository_toggle(&parent, &repository, &list, &feedback);
                     }
                 });
@@ -1122,7 +1127,12 @@ fn render_repositories(
                         let repository = repository.clone();
                         let list = list.clone();
                         let feedback = feedback.clone();
+                        let origin_summary = origin_summary.clone();
                         move |_| {
+                            if origin_summary.text().contains("Checking installed packages") {
+                                feedback.set_text("Please wait for installed package-origin information before removing this repository.");
+                                return;
+                            }
                             confirm_repository_removal(&parent, &repository, &list, &feedback);
                         }
                     });
