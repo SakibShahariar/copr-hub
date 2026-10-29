@@ -17,11 +17,11 @@ This document describes Copr Hub's detailed functionality. The [README](../READM
 - Show a package-by-target build matrix with reported target state and package version; missing package/target combinations are marked explicitly instead of being treated as failures.
 - Show a chronological timeline of up to 20 recent project build records, including package/version, reported state, submission/start/end timestamp when available, configured chroots, and a direct COPR build link.
 - The timeline uses actual records returned by COPR. COPR may prune older build records, so the timeline is a recent history view, not a complete lifetime audit log; unavailable timestamps are not guessed.
-- Show latest project-build age and state when COPR provides timestamps. Builds at least 90 days old receive a “No recent project build” hint; missing timestamps remain unavailable.
+- Show latest project-build age and state when COPR provides timestamps. The default stale threshold is 90 days; saved-project monitoring lets you configure it from 7 to 3,650 days. Missing timestamps remain unavailable.
 - Recognize GitHub or GitLab repositories provided as project homepages and look up their latest stable upstream release, including version/tag, title, publication date, and link.
 - Cache successful upstream release lookups for 15 minutes in memory and persist them locally. Cached metadata up to 24 hours old can be used after restart or when offline, with a stale-cache notice.
 - Mark a known stable release older than 365 days as over one year old. This is a freshness hint, not proof of abandonment.
-- Flag “Upstream newer” only when a package name matches the repository slug and both upstream and RPM versions use supported numeric syntax. Unsupported or ambiguous versions remain unclassified.
+- Flag “Upstream newer” only when package/repository names match exactly after normalization or through a small set of common Fedora package prefixes (python3-, python-, perl-, golang-, rust-, lib) and both versions use supported numeric syntax. Unmatched and unsupported package/version formats are counted explicitly instead of being guessed. Prerelease tags are marked as prereleases and skipped for stable update comparisons.
 - Show an update-intelligence summary of newer upstream releases, failed/in-progress build targets, and stale upstream/build signals. Cached comparisons are marked as potentially out of date.
 - Filter packages by all packages, newer upstream releases, failed builds, or in-progress builds. Local package search also matches versions, target names, and build states.
 - A build-health summary is informational, not a security or trust assessment.
@@ -31,13 +31,14 @@ This document describes Copr Hub's detailed functionality. The [README](../READM
 - Save and unsave projects locally; filter saved projects by name, owner, or description.
 - Open a saved project's details or run an on-demand health check against current COPR build data.
 - Optionally monitor saved projects while the app is open. Checks run at startup (after a short delay) and then every six hours; there is no always-running daemon.
-- Send desktop notifications only when a later check detects a newly failed target/build, a changed stable upstream release, or a project crossing the 90-day no-build threshold. The first successful check establishes a baseline and does not notify about pre-existing conditions.
+- Send desktop notifications only when a later check detects a newly failed target/build, a changed stable upstream release, or a project crossing the configured no-build freshness threshold. The first successful check establishes a baseline and does not notify about pre-existing conditions.
 - Monitoring is disabled by default and can be enabled or disabled with the checkbox on the Saved projects page. Checks run off the GTK main thread and stop after a connection failure rather than timing out on every remaining project.
 - Store monitoring comparison state locally so unchanged conditions do not repeatedly notify. Notification delivery depends on the desktop notification service.
 - Health checks summarize package count, build freshness, target states, and failed targets. Each check is recorded in local activity history.
 - Saved and Activity views refresh when opened.
 - Validate saved metadata and cap the saved-project file at 10 MiB to help prevent oversized data from making the list unreadable.
-- Export saved projects to portable JSON. Import backups by merging new entries without duplicates or replacing existing saved projects; reject imports that exceed the storage cap without changing existing data.
+- Export saved projects to portable JSON. Preview an import’s incoming, new, and duplicate entry counts before confirming. Import merges new entries without replacing existing saved projects; reject invalid or oversized imports without changing existing data.
+- Optionally create daily local JSON backups while the app is open, retain the latest seven scheduled backups, and disable scheduling without deleting existing backup files. This is an app-session schedule, not a system service or guaranteed backup while the app is closed.
 
 ## Compare saved projects
 
@@ -47,7 +48,7 @@ This document describes Copr Hub's detailed functionality. The [README](../READM
 
 ## Manage repositories and packages
 
-- Read enabled and disabled COPR repository definitions from `/etc/yum.repos.d`, including DNF5 repository enablement overrides.
+- Read enabled and disabled COPR repository definitions from `/etc/yum.repos.d`, including DNF5 repository enablement overrides. Show DNF-reported installed package origins on each repository row before repository changes; unavailable origin metadata is labeled as unavailable rather than treated as an empty list.
 - Enable or disable a repository after explicit confirmation, using `pkexec` and DNF's config-manager rather than running the app as root.
 - Remove supported standard Fedora COPR repositories after separate confirmation. This removes repository configuration only; it does not uninstall packages installed from that source. Unrecognized repository IDs are not offered the removal action.
 - List installed packages whose recorded source is a COPR repository using DNF's read-only `repoquery` command.
@@ -73,6 +74,11 @@ This document describes Copr Hub's detailed functionality. The [README](../READM
 - Live COPR searches, fresh build details, upstream release lookups, and package operations requiring remote repositories need connectivity or usable local DNF metadata/packages.
 - Upstream release cache files are size-limited and entries older than 24 hours are discarded. Cached information is explicitly labeled as potentially stale.
 
+## Accessibility and interaction states
+
+- Keep primary navigation in a keyboard-focusable GNOME-style header switcher; buttons, search entries, checkboxes, spin buttons, rows, and confirmation dialogs use native GTK/libadwaita controls and keyboard focus behavior.
+- Add accessible names to repository status and freshness controls, and expose loading, empty, and failure feedback as text rather than color alone. Package-origin lookup errors remain visible and are not reported as “no installed packages.”
+
 ## Appearance and packaging
 
 - Native GTK4/libadwaita widgets use the active system theme; accent colors are not hard-coded, so Matugen palette changes can flow through the existing GTK theme.
@@ -87,7 +93,9 @@ Copr Hub keeps its local data under the current user's XDG directories and does 
 - Search results cache: `$XDG_CACHE_HOME/copr-hub/last-search.json` (usually `~/.cache/copr-hub/last-search.json`).
 - Upstream release cache: `$XDG_CACHE_HOME/copr-hub/upstream-releases.json` (usually `~/.cache/copr-hub/upstream-releases.json`).
 - Project snapshots: `$XDG_CACHE_HOME/copr-hub/projects/` (hashed project filenames; cached build/target data and timestamps).
-- Monitoring preference: `$XDG_CONFIG_HOME/copr-hub/monitoring.json`.
+- Monitoring preference and freshness threshold: `$XDG_CONFIG_HOME/copr-hub/monitoring.json`.
+- Scheduled-backup preference: `$XDG_CONFIG_HOME/copr-hub/backup-schedule.json`.
+- Scheduled backups: `$XDG_DATA_HOME/copr-hub/backups/` (latest seven retained).
 - Monitoring change baseline: `$XDG_DATA_HOME/copr-hub/monitoring-state.json`.
 
 Files are written atomically with owner-only (`0600`) permissions, including when replacing an older file with broader permissions. The containing directory is synced after replacement to improve persistence across abrupt shutdowns.
