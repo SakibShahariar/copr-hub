@@ -51,7 +51,7 @@ This document describes Copr Hub's detailed functionality. The [README](../READM
 - Handle temporary COPR, GitHub, and GitLab API failures with one bounded retry for rate limits, server errors, connection failures, and timeouts.
 - Retry GitHub `403` responses only when rate-limit headers indicate throttling. Rate-limit/server responses can use a `Retry-After` delay capped at three seconds; otherwise a short backoff is used.
 - Saved projects, activity history, repository configuration, and installed-package listings remain available offline to the extent they rely on local data.
-- Search results already on screen remain visible if a search/refresh fails during the current session. The search-result list is not yet persisted between launches.
+- Persist the last successful search query and up to 25 results in `$XDG_CACHE_HOME/copr-hub/last-search.json` (usually `~/.cache/copr-hub/last-search.json`) and restore them on startup for up to 30 days. Restored results are labeled as potentially stale; live searches still require connectivity. Only the most recent successful search is cached.
 - Live COPR searches, fresh build details, upstream release lookups, and package operations requiring remote repositories need connectivity or usable local DNF metadata/packages.
 - Upstream release cache files are size-limited and entries older than 24 hours are discarded. Cached information is explicitly labeled as potentially stale.
 
@@ -66,6 +66,7 @@ Copr Hub keeps its local data under the current user's XDG directories and does 
 
 - Activity history: `$XDG_DATA_HOME/copr-hub/activity.json` (usually `~/.local/share/copr-hub/activity.json`).
 - Saved projects: `$XDG_DATA_HOME/copr-hub/favorites.json`.
+- Search results cache: `$XDG_CACHE_HOME/copr-hub/last-search.json` (usually `~/.cache/copr-hub/last-search.json`).
 - Upstream release cache: `$XDG_CACHE_HOME/copr-hub/upstream-releases.json` (usually `~/.cache/copr-hub/upstream-releases.json`).
 
 Files are written atomically with owner-only (`0600`) permissions, including when replacing an older file with broader permissions. The containing directory is synced after replacement to improve persistence across abrupt shutdowns.
