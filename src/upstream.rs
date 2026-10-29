@@ -1,6 +1,7 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
+use std::thread;
 use std::time::{Duration, Instant};
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
@@ -49,6 +50,32 @@ fn client() -> Result<reqwest::blocking::Client, String> {
         .timeout(REQUEST_TIMEOUT)
         .build()
         .map_err(|error| format!("Could not prepare upstream release lookup: {error}"))
+}
+
+fn is_retryable_status(status: reqwest::StatusCode) -> bool {
+    status == reqwest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error()
+}
+
+/// Retry one time for temporary upstream failures; release lookups are safe GET requests.
+fn send_with_retry(
+    request: reqwest::blocking::RequestBuilder,
+) -> Result<reqwest::blocking::Response, reqwest::Error> {
+    let retry_request = request.try_clone();
+    match request.send() {
+        Ok(response) if is_retryable_status(response.status()) && retry_request.is_some() => {
+            drop(response);
+            thread::sleep(Duration::from_millis(350));
+            retry_request.expect("retry request was checked above").send()
+        }
+        Ok(response) => Ok(response),
+        Err(error)
+            if (error.is_timeout() || error.is_connect()) && retry_request.is_some() =>
+        {
+            thread::sleep(Duration::from_millis(350));
+            retry_request.expect("retry request was checked above").send()
+        }
+        Err(error) => Err(error),
+    }
 }
 
 fn repository_parts(homepage: &str) -> Option<(String, String, bool)> {
@@ -146,9 +173,7 @@ fn fetch_release(
             .push("releases")
             .push("permalink")
             .push("latest");
-        let response = client
-            .get(endpoint)
-            .send()
+        let response = send_with_retry(client.get(endpoint))
             .map_err(|error| format!("GitLab release lookup failed: {error}"))?;
         if response.status() == reqwest::StatusCode::NOT_FOUND {
             return Ok(None);
@@ -171,9 +196,7 @@ fn fetch_release(
     }
 
     let endpoint = format!("https://api.github.com/repos/{owner}/{repo}/releases/latest");
-    let response = client
-        .get(endpoint)
-        .send()
+    let response = send_with_retry(client.get(endpoint))
         .map_err(|error| format!("GitHub release lookup failed: {error}"))?;
     if response.status() == reqwest::StatusCode::NOT_FOUND {
         return Ok(None);
@@ -314,6 +337,20 @@ pub fn release_is_stale(published_at: Option<&str>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::repository_parts;
+
+    #[test]
+    fn retries_only_rate_limits_and_server_errors() {
+        use super::is_retryable_status;
+        use reqwest::StatusCode;
+
+        assert!(is_retryable_status(StatusCode::TOO_MANY_REQUESTS));
+        assert!(is_retryable_status(StatusCode::INTERNAL_SERVER_ERROR));
+        assert!(is_retryable_status(StatusCode::BAD_GATEWAY));
+        assert!(is_retryable_status(StatusCode::SERVICE_UNAVAILABLE));
+        assert!(!is_retryable_status(StatusCode::NOT_FOUND));
+        assert!(!is_retryable_status(StatusCode::FORBIDDEN));
+        assert!(!is_retryable_status(StatusCode::OK));
+    }
 
     #[test]
     fn recognizes_github_and_gitlab_project_homepages() {
