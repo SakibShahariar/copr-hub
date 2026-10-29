@@ -1750,7 +1750,7 @@ fn refresh_saved_projects(
                     move |button| {
                         button.set_sensitive(false);
                         button.set_label("Checking…");
-                        row.set_subtitle(Some("Fetching current build health from COPR…"));
+                        row.set_subtitle("Fetching current build health from COPR…");
                         let row = row.clone();
                         let feedback = feedback.clone();
                         let button = button.clone();
@@ -1793,7 +1793,7 @@ fn refresh_saved_projects(
                                         freshness,
                                         targets
                                     );
-                                    row.set_subtitle(Some(&summary));
+                                    row.set_subtitle(&summary);
                                     feedback.set_text(&format!(
                                         "Health checked for {}/{}: {} failed target(s) reported. Build status is informational, not a security assessment.",
                                         name, owner, failed
@@ -1805,16 +1805,14 @@ fn refresh_saved_projects(
                                     );
                                 }
                                 Ok(Err(error)) => {
-                                    row.set_subtitle(Some(&format!("Health check failed: {error}")));
+                                    row.set_subtitle(&format!("Health check failed: {error}"));
                                     feedback.set_text(&format!(
                                         "Could not check {}/{}: {error}",
                                         name, owner
                                     ));
                                 }
                                 Err(_) => {
-                                    row.set_subtitle(Some(
-                                        "Health check failed: background task error.",
-                                    ));
+                                    row.set_subtitle("Health check failed: background task error.");
                                     feedback.set_text("The background health-check task failed.");
                                 }
                             }
