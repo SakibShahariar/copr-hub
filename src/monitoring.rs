@@ -7,12 +7,20 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAX_STATE_BYTES: u64 = 2 * 1024 * 1024;
-const STALE_AFTER_SECS: i64 = 90 * 24 * 60 * 60;
+const DEFAULT_FRESHNESS_THRESHOLD_DAYS: u32 = 90;
+const MIN_FRESHNESS_THRESHOLD_DAYS: u32 = 7;
+const MAX_FRESHNESS_THRESHOLD_DAYS: u32 = 3650;
+
+fn default_freshness_threshold_days() -> u32 {
+    DEFAULT_FRESHNESS_THRESHOLD_DAYS
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct MonitoringConfig {
     #[serde(default)]
     pub enabled: bool,
+    #[serde(default = "default_freshness_threshold_days")]
+    pub freshness_threshold_days: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -31,6 +39,8 @@ struct ProjectState {
     upstream_version: Option<String>,
     #[serde(default)]
     stale: bool,
+    #[serde(default = "default_freshness_threshold_days")]
+    stale_after_days: u32,
 }
 
 fn now_unix() -> u64 {
@@ -104,7 +114,7 @@ fn is_failed(value: &str) -> bool {
     matches!(value.to_ascii_lowercase().as_str(), "failed" | "error")
 }
 
-fn current_state(monitor: &copr::ProjectMonitor) -> ProjectState {
+fn current_state(monitor: &copr::ProjectMonitor, threshold_days: u32) -> ProjectState {
     let mut target_states = HashMap::new();
     for package in &monitor.packages {
         for (target, build) in &package.chroots {
@@ -120,9 +130,10 @@ fn current_state(monitor: &copr::ProjectMonitor) -> ProjectState {
     }
     let latest = monitor.latest_build.as_ref();
     let latest_build_timestamp = latest.and_then(|build| build.ended_on.or(build.submitted_on));
+    let threshold_days = threshold_days.clamp(MIN_FRESHNESS_THRESHOLD_DAYS, MAX_FRESHNESS_THRESHOLD_DAYS);
     let stale = latest_build_timestamp
         .and_then(|timestamp| i64::try_from(now_unix()).ok().map(|now| now - timestamp))
-        .is_some_and(|age| age >= STALE_AFTER_SECS);
+        .is_some_and(|age| age >= i64::from(threshold_days) * 24 * 60 * 60);
     ProjectState {
         target_states,
         latest_build_state: latest
@@ -130,6 +141,7 @@ fn current_state(monitor: &copr::ProjectMonitor) -> ProjectState {
             .map(|state| state.to_ascii_lowercase()),
         upstream_version: None,
         stale,
+        stale_after_days: threshold_days,
     }
 }
 
@@ -170,7 +182,7 @@ fn compare_states(previous: Option<&ProjectState>, current: &ProjectState) -> Ve
 
     if !previous.stale && current.stale {
         alerts.push(
-            "Project build activity has become stale (no build in at least 90 days).".to_string(),
+            format!("Project build activity has become stale (no build in at least {} days).", current.stale_after_days),
         );
     }
 
@@ -207,7 +219,8 @@ pub fn record_observation(
     let mut state = load_state();
     let key = project_key(project);
     let previous = state.projects.get(&key).cloned();
-    let mut current = current_state(monitor);
+    let config = load_config();
+    let mut current = current_state(monitor, config.freshness_threshold_days);
     if let Some(release) = release.filter(|release| !release.stale_cache) {
         current.upstream_version = Some(release.version.clone());
     } else if let Some(previous) = previous.as_ref() {
@@ -235,6 +248,7 @@ mod tests {
     #[test]
     fn config_defaults_to_opt_in_off() {
         assert!(!MonitoringConfig::default().enabled);
+        assert_eq!(MonitoringConfig::default().freshness_threshold_days, 90);
     }
 
     fn state() -> ProjectState {
@@ -246,6 +260,7 @@ mod tests {
             latest_build_state: Some("succeeded".to_string()),
             upstream_version: Some("1.0.0".to_string()),
             stale: false,
+            stale_after_days: DEFAULT_FRESHNESS_THRESHOLD_DAYS,
         }
     }
 
