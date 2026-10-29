@@ -226,7 +226,7 @@ fn is_valid_copr_repository_id(repository_id: &str) -> bool {
             .all(|character| character.is_ascii_alphanumeric() || ":._-".contains(character))
 }
 
-fn copr_project_spec_from_repository_id(repository_id: &str) -> Option<String> {
+pub fn copr_project_spec_from_repository_id(repository_id: &str) -> Option<String> {
     let suffix = repository_id.strip_prefix("copr:copr.fedorainfracloud.org:")?;
     let (owner, project) = suffix.split_once(':')?;
     let valid_owner = !owner.is_empty()

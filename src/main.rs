@@ -85,6 +85,26 @@ fn build_ui(app: &adw::Application) {
     window.present();
 }
 
+fn add_loading_bar(parent: &gtk::Box) -> gtk::ProgressBar {
+    let progress = gtk::ProgressBar::new();
+    progress.set_show_text(false);
+    progress.set_pulse_step(0.08);
+    progress.set_visible(false);
+    progress.add_css_class("osd");
+    parent.append(&progress);
+
+    gtk::glib::timeout_add_local(std::time::Duration::from_millis(90), {
+        let progress = progress.clone();
+        move || {
+            if progress.is_visible() {
+                progress.pulse();
+            }
+            gtk::glib::ControlFlow::Continue
+        }
+    });
+    progress
+}
+
 fn scroll_page(child: &impl IsA<gtk::Widget>) -> gtk::Widget {
     let scroll = gtk::ScrolledWindow::builder()
         .hscrollbar_policy(gtk::PolicyType::Never)
@@ -164,6 +184,7 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
         .build();
     feedback.add_css_class("dim-label");
     content.append(&feedback);
+    let progress = add_loading_bar(&content);
 
     let results = gtk::ListBox::new();
     let latest_response: Rc<RefCell<Option<ProjectSearchResponse>>> = Rc::new(RefCell::new(None));
@@ -187,6 +208,7 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
         let results = results.clone();
         let feedback = feedback.clone();
         let search_button = search_button.clone();
+        let progress = progress.clone();
         let parent = parent.clone();
         let latest_response = latest_response.clone();
         let sort = sort.clone();
@@ -199,6 +221,7 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
             }
 
             feedback.set_text("Searching COPR…");
+            progress.set_visible(true);
             search.set_sensitive(false);
             search_button.set_sensitive(false);
 
@@ -207,6 +230,7 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
             let feedback = feedback.clone();
             let search_button = search_button.clone();
             let search = search.clone();
+            let progress = progress.clone();
             let parent = parent.clone();
             let latest_response = latest_response.clone();
             let sort = sort.clone();
@@ -215,6 +239,7 @@ fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
                     gtk::gio::spawn_blocking(move || copr::search_projects(&query)).await;
                 search.set_sensitive(true);
                 search_button.set_sensitive(true);
+                progress.set_visible(false);
                 let response = match response {
                     Ok(result) => result,
                     Err(_) => Err("The background search task failed unexpectedly.".to_string()),
