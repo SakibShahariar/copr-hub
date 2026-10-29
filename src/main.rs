@@ -3519,6 +3519,7 @@ mod url_tests {
             published_at: Some("2026-09-01T00:00:00Z".into()),
             url: None,
             stale_cache: false,
+            prerelease: false,
         };
         let summary = update_intelligence_summary(
             &packages,
@@ -3541,6 +3542,7 @@ mod url_tests {
             published_at: Some("2026-09-01T00:00:00Z".into()),
             url: None,
             stale_cache: true,
+            prerelease: false,
         };
         let summary = update_intelligence_summary(
             &[],
