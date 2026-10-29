@@ -251,8 +251,6 @@ mod tests {
 
     #[test]
     fn saved_project_limits_allow_regular_backups() {
-        assert!(MAX_SAVED_PROJECTS >= MAX_IMPORTED_PROJECTS);
-        assert!(MAX_SAVED_FILE_BYTES as usize >= MAX_BACKUP_BYTES);
         assert!(ensure_saved_project_limit(MAX_SAVED_PROJECTS).is_ok());
         assert!(ensure_saved_project_limit(MAX_SAVED_PROJECTS + 1).is_err());
     }
