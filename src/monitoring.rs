@@ -110,7 +110,11 @@ fn current_state(monitor: &copr::ProjectMonitor) -> ProjectState {
         for (target, build) in &package.chroots {
             target_states.insert(
                 format!("{}@{}", package.name, target),
-                build.state.as_deref().unwrap_or("unknown").to_ascii_lowercase(),
+                build
+                    .state
+                    .as_deref()
+                    .unwrap_or("unknown")
+                    .to_ascii_lowercase(),
             );
         }
     }
@@ -161,7 +165,12 @@ pub fn record_observation(
         }
         newly_failed.sort();
         if !newly_failed.is_empty() {
-            let shown = newly_failed.iter().take(4).cloned().collect::<Vec<_>>().join(", ");
+            let shown = newly_failed
+                .iter()
+                .take(4)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ");
             let more = if newly_failed.len() > 4 {
                 format!(" and {} more", newly_failed.len() - 4)
             } else {
@@ -174,7 +183,10 @@ pub fn record_observation(
         }
 
         if !previous.stale && current.stale {
-            alerts.push("Project build activity has become stale (no build in at least 90 days).".to_string());
+            alerts.push(
+                "Project build activity has become stale (no build in at least 90 days)."
+                    .to_string(),
+            );
         }
 
         if let (Some(old), Some(new)) = (
@@ -182,14 +194,13 @@ pub fn record_observation(
             current.upstream_version.as_deref(),
         ) {
             if old != new {
-                alerts.push(format!("New upstream release detected: {new} (previously {old})."));
+                alerts.push(format!(
+                    "New upstream release detected: {new} (previously {old})."
+                ));
             }
         }
 
-        if current
-            .latest_build_state
-            .as_deref()
-            .is_some_and(is_failed)
+        if current.latest_build_state.as_deref().is_some_and(is_failed)
             && !previous
                 .latest_build_state
                 .as_deref()
@@ -203,7 +214,6 @@ pub fn record_observation(
     save_state(&state)?;
     Ok(alerts)
 }
-
 
 #[cfg(test)]
 mod tests {
