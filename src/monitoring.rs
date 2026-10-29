@@ -133,6 +133,70 @@ fn current_state(monitor: &copr::ProjectMonitor) -> ProjectState {
     }
 }
 
+fn compare_states(previous: Option<&ProjectState>, current: &ProjectState) -> Vec<String> {
+    let Some(previous) = previous else {
+        return Vec::new();
+    };
+    let mut alerts = Vec::new();
+    let mut newly_failed = Vec::new();
+    for (target, current_state) in &current.target_states {
+        if is_failed(current_state)
+            && !previous
+                .target_states
+                .get(target)
+                .is_some_and(|old| is_failed(old))
+        {
+            newly_failed.push(target.clone());
+        }
+    }
+    newly_failed.sort();
+    if !newly_failed.is_empty() {
+        let shown = newly_failed
+            .iter()
+            .take(4)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ");
+        let more = if newly_failed.len() > 4 {
+            format!(" and {} more", newly_failed.len() - 4)
+        } else {
+            String::new()
+        };
+        alerts.push(format!(
+            "{} newly failed build target(s): {shown}{more}",
+            newly_failed.len()
+        ));
+    }
+
+    if !previous.stale && current.stale {
+        alerts.push(
+            "Project build activity has become stale (no build in at least 90 days).".to_string(),
+        );
+    }
+
+    if let (Some(old), Some(new)) = (
+        previous.upstream_version.as_deref(),
+        current.upstream_version.as_deref(),
+    ) {
+        if old != new {
+            alerts.push(format!(
+                "New upstream release detected: {new} (previously {old})."
+            ));
+        }
+    }
+
+    if newly_failed.is_empty()
+        && current.latest_build_state.as_deref().is_some_and(is_failed)
+        && !previous
+            .latest_build_state
+            .as_deref()
+            .is_some_and(is_failed)
+    {
+        alerts.push("The latest project build has failed.".to_string());
+    }
+    alerts
+}
+
 /// Compare a successful observation with the last one. The first observation only
 /// establishes a baseline; it never emits notifications for pre-existing failures.
 pub fn record_observation(
@@ -150,66 +214,7 @@ pub fn record_observation(
         current.upstream_version = previous.upstream_version.clone();
     }
 
-    let mut alerts = Vec::new();
-    if let Some(previous) = previous.as_ref() {
-        let mut newly_failed = Vec::new();
-        for (target, current_state) in &current.target_states {
-            if is_failed(current_state)
-                && !previous
-                    .target_states
-                    .get(target)
-                    .is_some_and(|old| is_failed(old))
-            {
-                newly_failed.push(target.clone());
-            }
-        }
-        newly_failed.sort();
-        if !newly_failed.is_empty() {
-            let shown = newly_failed
-                .iter()
-                .take(4)
-                .cloned()
-                .collect::<Vec<_>>()
-                .join(", ");
-            let more = if newly_failed.len() > 4 {
-                format!(" and {} more", newly_failed.len() - 4)
-            } else {
-                String::new()
-            };
-            alerts.push(format!(
-                "{} newly failed build target(s): {shown}{more}",
-                newly_failed.len()
-            ));
-        }
-
-        if !previous.stale && current.stale {
-            alerts.push(
-                "Project build activity has become stale (no build in at least 90 days)."
-                    .to_string(),
-            );
-        }
-
-        if let (Some(old), Some(new)) = (
-            previous.upstream_version.as_deref(),
-            current.upstream_version.as_deref(),
-        ) {
-            if old != new {
-                alerts.push(format!(
-                    "New upstream release detected: {new} (previously {old})."
-                ));
-            }
-        }
-
-        if current.latest_build_state.as_deref().is_some_and(is_failed)
-            && !previous
-                .latest_build_state
-                .as_deref()
-                .is_some_and(is_failed)
-        {
-            alerts.push("The latest project build has failed.".to_string());
-        }
-    }
-
+    let alerts = compare_states(previous.as_ref(), &current);
     state.projects.insert(key, current);
     save_state(&state)?;
     Ok(alerts)
@@ -230,6 +235,48 @@ mod tests {
     #[test]
     fn config_defaults_to_opt_in_off() {
         assert!(!MonitoringConfig::default().enabled);
+    }
+
+    fn state() -> ProjectState {
+        ProjectState {
+            target_states: HashMap::from([("demo@fedora-44-x86_64".to_string(), "succeeded".to_string())]),
+            latest_build_state: Some("succeeded".to_string()),
+            upstream_version: Some("1.0.0".to_string()),
+            stale: false,
+        }
+    }
+
+    #[test]
+    fn first_observation_establishes_baseline_without_alerts() {
+        assert!(compare_states(None, &state()).is_empty());
+    }
+
+    #[test]
+    fn alerts_only_on_new_failed_target_and_not_repeated_failures() {
+        let previous = state();
+        let mut current = previous.clone();
+        current.target_states.insert(
+            "demo@fedora-44-x86_64".to_string(),
+            "failed".to_string(),
+        );
+        current.latest_build_state = Some("failed".to_string());
+        let alerts = compare_states(Some(&previous), &current);
+        assert_eq!(alerts.len(), 1);
+        assert!(alerts[0].contains("newly failed build target"));
+
+        assert!(compare_states(Some(&current), &current).is_empty());
+    }
+
+    #[test]
+    fn detects_upstream_release_and_stale_transition() {
+        let previous = state();
+        let mut current = previous.clone();
+        current.upstream_version = Some("1.1.0".to_string());
+        current.stale = true;
+        let alerts = compare_states(Some(&previous), &current);
+        assert_eq!(alerts.len(), 2);
+        assert!(alerts.iter().any(|alert| alert.contains("New upstream release")));
+        assert!(alerts.iter().any(|alert| alert.contains("become stale")));
     }
 
     #[test]
