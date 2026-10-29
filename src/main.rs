@@ -853,16 +853,18 @@ fn show_package_dependency_impact(parent: &adw::ApplicationWindow, package_name:
         match result {
             Ok(Ok(impact)) => {
                 status.set_text("Dependency data loaded from the local RPM database.");
-                requirements.set_text(if impact.requirements.is_empty() {
-                    "No direct requirements were reported."
+                let requirements_text = if impact.requirements.is_empty() {
+                    "No direct requirements were reported.".to_string()
                 } else {
-                    &impact.requirements.join("\n")
-                });
-                required_by.set_text(if impact.required_by.is_empty() {
-                    "No installed package was reported as requiring this package."
+                    impact.requirements.join("\n")
+                };
+                requirements.set_text(&requirements_text);
+                let required_by_text = if impact.required_by.is_empty() {
+                    "No installed package was reported as requiring this package.".to_string()
                 } else {
-                    &impact.required_by.join("\n")
-                });
+                    impact.required_by.join("\n")
+                };
+                required_by.set_text(&required_by_text);
                 if impact.requirements.len() == 100 || impact.required_by.len() == 100 {
                     status.set_text("Dependency data loaded; each list is capped at 100 entries.");
                 }
