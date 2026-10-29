@@ -1,4 +1,5 @@
 mod activity;
+mod backups;
 mod copr;
 mod favorites;
 mod monitoring;
@@ -154,6 +155,7 @@ fn build_ui(app: &adw::Application) {
     window.set_content(Some(&root));
     window.present();
     start_monitoring(app);
+    start_scheduled_backups(app);
 }
 
 const MONITOR_INTERVAL_SECONDS: u32 = 6 * 60 * 60;
@@ -197,6 +199,40 @@ fn launch_monitoring_check(app: &adw::Application) {
             Err(_) => {
                 // Monitoring is best-effort; a failed background worker must not
                 // interrupt the main UI or generate repeated failure notifications.
+            }
+        }
+    });
+}
+
+fn start_scheduled_backups(app: &adw::Application) {
+    let periodic_app = app.clone();
+    gtk::glib::timeout_add_seconds_local(6 * 60 * 60, move || {
+        launch_scheduled_backup(&periodic_app);
+        gtk::glib::ControlFlow::Continue
+    });
+    let startup_app = app.clone();
+    gtk::glib::timeout_add_seconds_local(60, move || {
+        launch_scheduled_backup(&startup_app);
+        gtk::glib::ControlFlow::Break
+    });
+}
+
+fn launch_scheduled_backup(app: &adw::Application) {
+    if !backups::load_config().enabled { return; }
+    let app = app.clone();
+    gtk::glib::MainContext::default().spawn_local(async move {
+        let result = gtk::gio::spawn_blocking(backups::run_if_due).await;
+        match result {
+            Ok(Ok(Some(path))) => {
+                let notification = gtk::gio::Notification::new("Copr Hub backup created");
+                notification.set_body(Some(&format!("Saved-project backup: {}", path.display())));
+                app.send_notification(Some("copr-hub-scheduled-backup"), &notification);
+            }
+            Ok(Ok(None)) => {}
+            Ok(Err(_)) | Err(_) => {
+                let notification = gtk::gio::Notification::new("Copr Hub backup failed");
+                notification.set_body(Some("The scheduled saved-project backup could not be created. Open Copr Hub for details."));
+                app.send_notification(Some("copr-hub-scheduled-backup-error"), &notification);
             }
         }
     });
@@ -2570,6 +2606,33 @@ fn build_saved_page(
         .build();
     monitoring_note.add_css_class("dim-label");
     content.append(&monitoring_note);
+
+    let backup_toggle = gtk::CheckButton::with_label("Create scheduled local backups of saved projects");
+    backup_toggle.set_tooltip_text(Some("When enabled, create a JSON backup about once per day while Copr Hub is open. Keep the latest seven backups. No background system service is installed."));
+    backup_toggle.set_active(backups::load_config().enabled);
+    content.append(&backup_toggle);
+    let backup_note = gtk::Label::new(Some("Optional · daily while the app is open · saved under the Copr Hub data directory · retains 7 backups."));
+    backup_note.set_xalign(0.0);
+    backup_note.set_wrap(true);
+    backup_note.add_css_class("dim-label");
+    content.append(&backup_note);
+    backup_toggle.connect_toggled({
+        let feedback = feedback.clone();
+        let app = app.clone();
+        move |toggle| {
+            match backups::set_enabled(toggle.is_active()) {
+                Ok(()) if toggle.is_active() => {
+                    feedback.set_text("Scheduled backups enabled. The first backup will be created shortly while Copr Hub is open.");
+                    launch_scheduled_backup(&app);
+                }
+                Ok(()) => feedback.set_text("Scheduled backups disabled. Existing backup files were kept."),
+                Err(error) => {
+                    feedback.set_text(&format!("Could not update backup schedule: {error}"));
+                    toggle.set_active(!toggle.is_active());
+                }
+            }
+        }
+    });
 
     monitoring_toggle.connect_toggled({
         let app = app.clone();
