@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAX_ENTRIES: usize = 100;
+const MAX_HISTORY_FILE_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_IMPORT_BYTES: usize = 1024 * 1024;
 const MAX_IMPORTED_ENTRIES: usize = 1_000;
 
@@ -23,11 +24,39 @@ fn history_path() -> PathBuf {
         .join("activity.json")
 }
 
+fn activity_entry_has_valid_fields(entry: &ActivityEntry) -> bool {
+    !entry.action.trim().is_empty()
+        && !entry.target.trim().is_empty()
+        && entry.action.len() <= 512
+        && entry.target.len() <= 4096
+        && entry.summary.len() <= 8192
+}
+
 pub fn load() -> Result<Vec<ActivityEntry>, String> {
     let path = history_path();
+    match fs::metadata(&path) {
+        Ok(metadata) if metadata.len() > MAX_HISTORY_FILE_BYTES => {
+            return Err("The activity history exceeds the 2 MiB safety limit.".to_string());
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(format!("Could not inspect activity history: {error}")),
+    }
+
     match fs::read_to_string(&path) {
-        Ok(contents) => serde_json::from_str(&contents)
-            .map_err(|error| format!("Could not read activity history: {error}")),
+        Ok(contents) => {
+            let entries: Vec<ActivityEntry> = serde_json::from_str(&contents)
+                .map_err(|error| format!("Could not read activity history: {error}"))?;
+            if entries.len() > MAX_ENTRIES {
+                return Err(format!(
+                    "The activity history contains more than {MAX_ENTRIES} entries."
+                ));
+            }
+            if entries.iter().any(|entry| !activity_entry_has_valid_fields(entry)) {
+                return Err("The activity history contains an invalid or oversized entry.".to_string());
+            }
+            Ok(entries)
+        }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
         Err(error) => Err(format!("Could not open activity history: {error}")),
     }
@@ -54,13 +83,7 @@ fn parse_import(contents: &str) -> Result<Vec<ActivityEntry>, String> {
             "The activity backup contains more than {MAX_IMPORTED_ENTRIES} entries."
         ));
     }
-    if entries.iter().any(|entry| {
-        entry.action.trim().is_empty()
-            || entry.target.trim().is_empty()
-            || entry.action.len() > 512
-            || entry.target.len() > 4096
-            || entry.summary.len() > 8192
-    }) {
+    if entries.iter().any(|entry| !activity_entry_has_valid_fields(entry)) {
         return Err("The backup contains an invalid or oversized activity entry.".to_string());
     }
     Ok(entries)
@@ -231,6 +254,26 @@ mod tests {
         assert_eq!(capped.len(), MAX_ENTRIES);
         assert_eq!(capped[0].timestamp, 149);
         assert_eq!(capped[MAX_ENTRIES - 1].timestamp, 50);
+    }
+
+    #[test]
+    fn activity_entry_validation_rejects_blank_and_oversized_fields() {
+        let mut entry = ActivityEntry {
+            timestamp: 1,
+            action: "search".to_string(),
+            target: "demo".to_string(),
+            summary: "ok".to_string(),
+        };
+        assert!(activity_entry_has_valid_fields(&entry));
+
+        entry.action = "  ".to_string();
+        assert!(!activity_entry_has_valid_fields(&entry));
+        entry.action = "search".to_string();
+        entry.target = "x".repeat(4097);
+        assert!(!activity_entry_has_valid_fields(&entry));
+        entry.target = "demo".to_string();
+        entry.summary = "x".repeat(8193);
+        assert!(!activity_entry_has_valid_fields(&entry));
     }
 
     #[test]
