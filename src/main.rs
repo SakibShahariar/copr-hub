@@ -1,6 +1,8 @@
 mod activity;
 mod copr;
 mod favorites;
+mod monitoring;
+mod snapshots;
 mod storage;
 mod system;
 mod upstream;
@@ -102,7 +104,7 @@ fn build_ui(app: &adw::Application) {
     let discover = build_discover_page(&window);
     let repositories = build_repositories_page(&window);
     let installed = build_installed_page(&window);
-    let saved = build_saved_page(&window, &stack);
+    let saved = build_saved_page(&window, &stack, app);
     let activity = build_activity_page(&window, &stack);
 
     add_page(
@@ -151,6 +153,87 @@ fn build_ui(app: &adw::Application) {
 
     window.set_content(Some(&root));
     window.present();
+    start_monitoring(app);
+}
+
+const MONITOR_INTERVAL_SECONDS: u32 = 6 * 60 * 60;
+
+fn start_monitoring(app: &adw::Application) {
+    let periodic_app = app.clone();
+    gtk::glib::timeout_add_seconds_local(MONITOR_INTERVAL_SECONDS, move || {
+        if monitoring::load_config().enabled {
+            launch_monitoring_check(&periodic_app);
+        }
+        gtk::glib::ControlFlow::Continue
+    });
+
+    if monitoring::load_config().enabled {
+        let startup_app = app.clone();
+        gtk::glib::timeout_add_seconds_local(45, move || {
+            launch_monitoring_check(&startup_app);
+            gtk::glib::ControlFlow::Break
+        });
+    }
+}
+
+fn launch_monitoring_check(app: &adw::Application) {
+    if !monitoring::load_config().enabled {
+        return;
+    }
+    let app = app.clone();
+    gtk::glib::MainContext::default().spawn_local(async move {
+        let result = gtk::gio::spawn_blocking(check_saved_projects).await;
+        if !monitoring::load_config().enabled {
+            return;
+        }
+        match result {
+            Ok(notifications) => {
+                for (id, title, body) in notifications {
+                    let notification = gtk::gio::Notification::new(&title);
+                    notification.set_body(Some(&body));
+                    app.send_notification(Some(&id), &notification);
+                }
+            }
+            Err(_) => {
+                // Monitoring is best-effort; a failed background worker must not
+                // interrupt the main UI or generate repeated failure notifications.
+            }
+        }
+    });
+}
+
+fn check_saved_projects() -> Vec<(String, String, String)> {
+    let Ok(projects) = favorites::load() else {
+        return Vec::new();
+    };
+    let mut notifications = Vec::new();
+    for project in projects {
+        let monitor = match copr::fetch_project_monitor(&project.owner, &project.name) {
+            Ok(monitor) => monitor,
+            Err(_) => {
+                // A connection failure usually means we're offline. Stop the scan
+                // instead of issuing one timeout per remaining saved project.
+                break;
+            }
+        };
+        let release = project
+            .homepage
+            .as_deref()
+            .and_then(|homepage| upstream::latest_release(homepage).ok().flatten());
+        let _ = snapshots::save_monitor(&project, monitor.clone());
+        if project.homepage.is_some() {
+            let _ = snapshots::save_release(&project, release.clone());
+        }
+        let alerts = monitoring::record_observation(&project, &monitor, release.as_ref())
+            .unwrap_or_default();
+        if !alerts.is_empty() {
+            let body = alerts.join(" ");
+            let id = format!("copr-hub-{}-{}", project.owner, project.name);
+            let title = format!("{} · @{}", project.name, project.owner);
+            notifications.push((id, title, body));
+        }
+    }
+    notifications
 }
 
 fn add_loading_bar(parent: &gtk::Box) -> gtk::ProgressBar {
@@ -412,6 +495,44 @@ fn build_installed_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
         .build();
     feedback.add_css_class("dim-label");
     content.append(&feedback);
+
+    let monitoring_toggle = gtk::CheckButton::with_label(
+        "Monitor saved projects while Copr Hub is open",
+    );
+    monitoring_toggle.set_tooltip_text(Some(
+        "Check for newly failed builds, upstream releases, and projects with no build activity for 90 days. Checks run at most every six hours and stop when the app is closed.",
+    ));
+    monitoring_toggle.set_active(monitoring::load_config().enabled);
+    content.append(&monitoring_toggle);
+
+    let monitoring_note = gtk::Label::builder()
+        .label("Optional · checks run every six hours while the app is open; notifications are sent only for changes after the first baseline.")
+        .xalign(0.0)
+        .wrap(true)
+        .build();
+    monitoring_note.add_css_class("dim-label");
+    content.append(&monitoring_note);
+
+    monitoring_toggle.connect_toggled({
+        let app = app.clone();
+        let monitoring_note = monitoring_note.clone();
+        move |toggle| {
+            let config = monitoring::MonitoringConfig {
+                enabled: toggle.is_active(),
+            };
+            match monitoring::save_config(&config) {
+                Ok(()) if config.enabled => {
+                    monitoring_note.set_text("Monitoring enabled. A check will run shortly, then every six hours while Copr Hub remains open.");
+                    launch_monitoring_check(&app);
+                }
+                Ok(()) => monitoring_note.set_text("Monitoring disabled. No background checks will run."),
+                Err(error) => {
+                    toggle.set_active(!config.enabled);
+                    monitoring_note.set_text(&format!("Could not save monitoring settings: {error}"));
+                }
+            }
+        }
+    });
 
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::SelectionMode::None);
@@ -1871,7 +1992,11 @@ fn confirm_package_operation<F: Fn() + Clone + 'static>(
     dialog.present();
 }
 
-fn build_saved_page(parent: &adw::ApplicationWindow, stack: &adw::ViewStack) -> gtk::Widget {
+fn build_saved_page(
+    parent: &adw::ApplicationWindow,
+    stack: &adw::ViewStack,
+    app: &adw::Application,
+) -> gtk::Widget {
     let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
     content.set_margin_top(24);
     content.set_margin_bottom(24);
