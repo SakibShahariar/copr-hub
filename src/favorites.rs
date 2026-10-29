@@ -153,7 +153,9 @@ pub fn toggle(project: &CoprProject) -> Result<bool, String> {
         .iter()
         .any(|saved| saved.owner == project.owner && saved.name == project.name);
     if !already_saved && !project_has_valid_fields(project) {
-        return Err("The project contains invalid or oversized metadata and cannot be saved.".to_string());
+        return Err(
+            "The project contains invalid or oversized metadata and cannot be saved.".to_string(),
+        );
     }
     let saved = toggle_in_list(&mut projects, project);
     ensure_saved_project_limit(projects.len())?;
