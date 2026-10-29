@@ -496,43 +496,6 @@ fn build_installed_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     feedback.add_css_class("dim-label");
     content.append(&feedback);
 
-    let monitoring_toggle =
-        gtk::CheckButton::with_label("Monitor saved projects while Copr Hub is open");
-    monitoring_toggle.set_tooltip_text(Some(
-        "Check for newly failed builds, upstream releases, and projects with no build activity for 90 days. Checks run at most every six hours and stop when the app is closed.",
-    ));
-    monitoring_toggle.set_active(monitoring::load_config().enabled);
-    content.append(&monitoring_toggle);
-
-    let monitoring_note = gtk::Label::builder()
-        .label("Optional · checks run every six hours while the app is open; notifications are sent only for changes after the first baseline.")
-        .xalign(0.0)
-        .wrap(true)
-        .build();
-    monitoring_note.add_css_class("dim-label");
-    content.append(&monitoring_note);
-
-    monitoring_toggle.connect_toggled({
-        let app = app.clone();
-        let monitoring_note = monitoring_note.clone();
-        move |toggle| {
-            let config = monitoring::MonitoringConfig {
-                enabled: toggle.is_active(),
-            };
-            match monitoring::save_config(&config) {
-                Ok(()) if config.enabled => {
-                    monitoring_note.set_text("Monitoring enabled. A check will run shortly, then every six hours while Copr Hub remains open.");
-                    launch_monitoring_check(&app);
-                }
-                Ok(()) => monitoring_note.set_text("Monitoring disabled. No background checks will run."),
-                Err(error) => {
-                    toggle.set_active(!config.enabled);
-                    monitoring_note.set_text(&format!("Could not save monitoring settings: {error}"));
-                }
-            }
-        }
-    });
-
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::SelectionMode::None);
     list.add_css_class("boxed-list");
@@ -2274,6 +2237,43 @@ fn build_saved_page(
         .build();
     feedback.add_css_class("dim-label");
     content.append(&feedback);
+
+    let monitoring_toggle =
+        gtk::CheckButton::with_label("Monitor saved projects while Copr Hub is open");
+    monitoring_toggle.set_tooltip_text(Some(
+        "Check for newly failed builds, upstream releases, and projects with no build activity for 90 days. Checks run at most every six hours and stop when the app is closed.",
+    ));
+    monitoring_toggle.set_active(monitoring::load_config().enabled);
+    content.append(&monitoring_toggle);
+
+    let monitoring_note = gtk::Label::builder()
+        .label("Optional · checks run every six hours while the app is open; notifications are sent only for changes after the first baseline.")
+        .xalign(0.0)
+        .wrap(true)
+        .build();
+    monitoring_note.add_css_class("dim-label");
+    content.append(&monitoring_note);
+
+    monitoring_toggle.connect_toggled({
+        let app = app.clone();
+        let monitoring_note = monitoring_note.clone();
+        move |toggle| {
+            let config = monitoring::MonitoringConfig {
+                enabled: toggle.is_active(),
+            };
+            match monitoring::save_config(&config) {
+                Ok(()) if config.enabled => {
+                    monitoring_note.set_text("Monitoring enabled. A check will run shortly, then every six hours while Copr Hub remains open.");
+                    launch_monitoring_check(&app);
+                }
+                Ok(()) => monitoring_note.set_text("Monitoring disabled. No background checks will run."),
+                Err(error) => {
+                    toggle.set_active(!config.enabled);
+                    monitoring_note.set_text(&format!("Could not save monitoring settings: {error}"));
+                }
+            }
+        }
+    });
 
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::SelectionMode::None);
