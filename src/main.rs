@@ -1068,27 +1068,34 @@ fn render_repositories(
                 row.add_suffix(&origin_summary);
                 {
                     let repository_id = repository.id.clone();
+                    let query_summary = origin_summary.clone();
                     gtk::glib::MainContext::default().spawn_local(async move {
                         let result = gtk::gio::spawn_blocking(move || {
                             system::installed_packages_from_repository(&repository_id)
-                        }).await;
+                        })
+                        .await;
                         match result {
                             Ok(Ok(packages)) if packages.is_empty() => {
-                                origin_summary.set_text("No installed packages attributed to this repo");
-                                origin_summary.set_tooltip_text(Some("DNF reports no installed RPMs with this source repository ID."));
+                                query_summary.set_text("No installed packages attributed to this repo");
+                                query_summary.set_tooltip_text(Some(
+                                    "DNF reports no installed RPMs with this source repository ID.",
+                                ));
                             }
                             Ok(Ok(packages)) => {
                                 let names = packages.join(", ");
-                                origin_summary.set_text(&format!("{} installed package(s) from this repo", packages.len()));
-                                origin_summary.set_tooltip_text(Some(&names));
-                             }
+                                query_summary.set_text(&format!(
+                                    "{} installed package(s) from this repo",
+                                    packages.len()
+                                ));
+                                query_summary.set_tooltip_text(Some(&names));
+                            }
                             Ok(Err(error)) => {
-                                origin_summary.set_text("Installed package origins unavailable");
-                                origin_summary.set_tooltip_text(Some(&error));
-                             }
+                                query_summary.set_text("Installed package origins unavailable");
+                                query_summary.set_tooltip_text(Some(&error));
+                            }
                             Err(_) => {
-                                origin_summary.set_text("Installed package origins unavailable");
-                                origin_summary.set_tooltip_text(Some("The background DNF query failed."));
+                                query_summary.set_text("Installed package origins unavailable");
+                                query_summary.set_tooltip_text(Some("The background DNF query failed."));
                             }
                         }
                     });
