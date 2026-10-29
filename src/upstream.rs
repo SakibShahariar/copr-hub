@@ -569,7 +569,10 @@ mod tests {
             "future timestamps should not be treated as fresh cache entries"
         );
         assert_eq!(
-            persisted_entry_age(1_000 - MAX_STALE_CACHE_AGE.as_secs() - 1, 1_000),
+            persisted_entry_age(
+                1_000,
+                1_000 + MAX_STALE_CACHE_AGE.as_secs() + 1
+            ),
             None,
             "entries older than the stale-cache window should be discarded"
         );
