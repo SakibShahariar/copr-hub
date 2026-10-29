@@ -760,10 +760,7 @@ fn render_installed_package_rows(
     }
 }
 
-fn show_package_dependency_impact(
-    parent: &adw::ApplicationWindow,
-    package_name: &str,
-) {
+fn show_package_dependency_impact(parent: &adw::ApplicationWindow, package_name: &str) {
     let window = adw::Window::builder()
         .transient_for(parent)
         .modal(true)
@@ -867,9 +864,7 @@ fn show_package_dependency_impact(
                     &impact.required_by.join("\n")
                 });
                 if impact.requirements.len() == 100 || impact.required_by.len() == 100 {
-                    status.set_text(
-                        "Dependency data loaded; each list is capped at 100 entries.",
-                    );
+                    status.set_text("Dependency data loaded; each list is capped at 100 entries.");
                 }
             }
             Ok(Err(error)) => {
@@ -885,7 +880,6 @@ fn show_package_dependency_impact(
         }
     });
 }
-
 
 fn build_repositories_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
