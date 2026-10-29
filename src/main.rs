@@ -1056,7 +1056,6 @@ fn render_repositories(
                 ));
                 row.add_prefix(&gtk::Image::from_icon_name("folder-symbolic"));
                 let status_label = gtk::Label::new(Some(status));
-                status_label.set_accessible_role(gtk::AccessibleRole::Status);
                 status_label.set_tooltip_text(Some("Repository enabled state"));
                 row.add_suffix(&status_label);
 
@@ -1066,7 +1065,6 @@ fn render_repositories(
                 origin_summary.set_wrap(true);
                 origin_summary.set_xalign(0.0);
                 origin_summary.add_css_class("dim-label");
-                origin_summary.set_accessible_role(gtk::AccessibleRole::Status);
                 row.add_suffix(&origin_summary);
                 {
                     let repository_id = repository.id.clone();
