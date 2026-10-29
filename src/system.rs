@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::{Mutex, OnceLock};
 
 const REPOSITORY_DIRECTORY: &str = "/etc/yum.repos.d";
 const MAX_COMMAND_DETAILS_CHARS: usize = 1200;
@@ -375,13 +376,39 @@ fn is_valid_copr_repository_id(repository_id: &str) -> bool {
 }
 
 
+/// Cache installed RPM origins for the current app session so each repository row
+/// does not launch a separate DNF query. Refreshing the repository page invalidates it.
+type InstalledOrigins = Result<HashMap<String, Vec<String>>, String>;
+static INSTALLED_ORIGINS: OnceLock<Mutex<Option<InstalledOrigins>>> = OnceLock::new();
+
+pub fn invalidate_installed_package_origins() {
+    if let Some(cache) = INSTALLED_ORIGINS.get() {
+        if let Ok(mut cache) = cache.lock() {
+            *cache = None;
+        }
+    }
+}
+
 /// Installed RPMs whose recorded source repository matches the supplied COPR ID.
-/// DNF metadata can be unavailable offline; in that case the caller receives an
-/// explicit error rather than a misleading empty dependency list.
+/// DNF metadata can be unavailable offline; callers receive an explicit error.
 pub fn installed_packages_from_repository(repository_id: &str) -> Result<Vec<String>, String> {
     if !is_safe_repository_id(repository_id) {
         return Err("Invalid repository ID.".to_string());
     }
+    let cache = INSTALLED_ORIGINS.get_or_init(|| Mutex::new(None));
+    let mut cached = cache
+        .lock()
+        .map_err(|_| "Installed package-origin cache is unavailable.".to_string())?;
+    if cached.is_none() {
+        *cached = Some(query_installed_package_origins());
+    }
+    match cached.as_ref().expect("cache initialized") {
+        Ok(origins) => Ok(origins.get(repository_id).cloned().unwrap_or_default()),
+        Err(error) => Err(error.clone()),
+    }
+}
+
+fn query_installed_package_origins() -> InstalledOrigins {
     let output = Command::new("dnf")
         .args(["repoquery", "--installed", "--queryformat", "%{name}|%{from_repo}"])
         .output()
@@ -392,17 +419,20 @@ pub fn installed_packages_from_repository(repository_id: &str) -> Result<Vec<Str
             bounded_command_details(&String::from_utf8_lossy(&output.stderr))
         ));
     }
-    let mut packages = String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .filter_map(|line| {
-            let (name, origin) = line.split_once('|')?;
-            (origin.trim() == repository_id).then(|| name.trim().to_string())
-        })
-        .filter(|name| !name.is_empty())
-        .collect::<Vec<_>>();
-    packages.sort();
-    packages.dedup();
-    Ok(packages)
+    let mut origins: HashMap<String, Vec<String>> = HashMap::new();
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let Some((name, origin)) = line.split_once('|') else { continue };
+        let name = name.trim();
+        let origin = origin.trim();
+        if is_valid_package_name(name) && is_safe_repository_id(origin) {
+            origins.entry(origin.to_string()).or_default().push(name.to_string());
+        }
+    }
+    for packages in origins.values_mut() {
+        packages.sort();
+        packages.dedup();
+    }
+    Ok(origins)
 }
 
 fn is_safe_repository_id(value: &str) -> bool {
