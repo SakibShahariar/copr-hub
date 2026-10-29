@@ -496,9 +496,8 @@ fn build_installed_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     feedback.add_css_class("dim-label");
     content.append(&feedback);
 
-    let monitoring_toggle = gtk::CheckButton::with_label(
-        "Monitor saved projects while Copr Hub is open",
-    );
+    let monitoring_toggle =
+        gtk::CheckButton::with_label("Monitor saved projects while Copr Hub is open");
     monitoring_toggle.set_tooltip_text(Some(
         "Check for newly failed builds, upstream releases, and projects with no build activity for 90 days. Checks run at most every six hours and stop when the app is closed.",
     ));
@@ -1299,7 +1298,12 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                         &timeline_status,
                         &project_data,
                         &builds,
-                        Some(SystemTime::now().duration_since(UNIX_EPOCH).map(|v| v.as_secs()).unwrap_or(0)),
+                        Some(
+                            SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .map(|v| v.as_secs())
+                                .unwrap_or(0),
+                        ),
                         false,
                     );
                 }
@@ -1319,7 +1323,8 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                                 timeline_status.text()
                             ));
                         } else {
-                            timeline_status.set_text(&format!("Could not load build history: {error}"));
+                            timeline_status
+                                .set_text(&format!("Could not load build history: {error}"));
                         }
                     } else {
                         timeline_status.set_text(&format!("Could not load build history: {error}"));
@@ -1341,10 +1346,13 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                                 timeline_status.text()
                             ));
                         } else {
-                            timeline_status.set_text("The background build-history lookup failed unexpectedly.");
+                            timeline_status.set_text(
+                                "The background build-history lookup failed unexpectedly.",
+                            );
                         }
                     } else {
-                        timeline_status.set_text("The background build-history lookup failed unexpectedly.");
+                        timeline_status
+                            .set_text("The background build-history lookup failed unexpectedly.");
                     }
                 }
             }
@@ -1388,7 +1396,10 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
             } else {
                 " · cached snapshot"
             };
-            status.set_text(&format!("{} · Offline-capable data: {cache_note}{stale_note}", status.text()));
+            status.set_text(&format!(
+                "{} · Offline-capable data: {cache_note}{stale_note}",
+                status.text()
+            ));
         }
         if let Some(release) = snapshot.upstream_release.as_ref() {
             upstream_status.set_text(&format!(
