@@ -51,6 +51,8 @@ This document describes Copr Hub's detailed functionality. The [README](../READM
 - Enable or disable a repository after explicit confirmation, using `pkexec` and DNF's config-manager rather than running the app as root.
 - Remove supported standard Fedora COPR repositories after separate confirmation. This removes repository configuration only; it does not uninstall packages installed from that source. Unrecognized repository IDs are not offered the removal action.
 - List installed packages whose recorded source is a COPR repository using DNF's read-only `repoquery` command.
+- Check enabled repositories for available upgrade candidates for those installed COPR packages. The check runs in the background, reports candidate versions and repositories, and leaves the installed-package list visible if update lookup fails. DNF resolves RPM version ordering; this is not a security advisory feed, and network-backed metadata may be needed.
+- Inspect an installed COPR package's direct RPM requirements and installed packages that declare a dependency on it. This reads the local RPM database without refreshing repositories, caps each list at 100 entries, and is an impact hint rather than a full DNF transaction preview.
 - Install packages from project details and remove installed COPR packages after explicit confirmation. DNF runs through `pkexec`; the application itself never runs as root.
 - Package removal uses DNF cache-only mode to avoid refreshing remote repositories, but can fail offline if cached metadata or packages are insufficient.
 
@@ -95,4 +97,6 @@ Files are written atomically with owner-only (`0600`) permissions, including whe
 - Build and freshness indicators are heuristics, not security assessments. A 90-day-old build does not prove that a project is abandoned or unsafe.
 - COPR may omit timestamps. When timestamps are missing, the app reports them as unavailable rather than guessing.
 - Project package names do not always match installable binary RPM names; DNF reports package-resolution and transaction failures.
+- Installed-package update checks only consider upgrade candidates returned by DNF from enabled repositories. They do not independently assess CVEs, advisories, or whether an update is safe.
+- The dependency-impact view uses installed RPM metadata and reports direct relationships only; it is not a complete dependency solver or a prediction of every package DNF would remove in a future transaction.
 - Offline support is partial, not a full local mirror of COPR. Live searches, refreshes, repository changes, and package operations that require network metadata remain unavailable offline.
