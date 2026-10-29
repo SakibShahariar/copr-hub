@@ -447,10 +447,7 @@ mod tests {
         assert!(is_retryable_response(StatusCode::FORBIDDEN, &headers));
 
         headers.clear();
-        headers.insert(
-            reqwest::header::RETRY_AFTER,
-            HeaderValue::from_static("2"),
-        );
+        headers.insert(reqwest::header::RETRY_AFTER, HeaderValue::from_static("2"));
         assert!(is_retryable_response(StatusCode::FORBIDDEN, &headers));
         assert!(!is_retryable_response(StatusCode::NOT_FOUND, &headers));
     }
