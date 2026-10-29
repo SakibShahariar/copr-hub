@@ -45,10 +45,15 @@ fn parse_backup(contents: &str) -> Result<Vec<CoprProject>, String> {
             || project.owner.trim().is_empty()
             || project.name.len() > 512
             || project.owner.len() > 512
-            || project.description.as_ref().is_some_and(|value| value.len() > 16_384)
-            || project.homepage.as_ref().is_some_and(|value| value.len() > 4096)
-    })
-    {
+            || project
+                .description
+                .as_ref()
+                .is_some_and(|value| value.len() > 16_384)
+            || project
+                .homepage
+                .as_ref()
+                .is_some_and(|value| value.len() > 4096)
+    }) {
         return Err("The backup contains an invalid or oversized project entry.".to_string());
     }
     Ok(imported)
