@@ -227,6 +227,43 @@ pub fn record_observation(
         current.upstream_version = previous.upstream_version.clone();
     }
 
+    if let Some(previous) = previous.as_ref() {
+        let mut changes = Vec::new();
+        if previous.target_states != current.target_states {
+            let failed_before = previous.target_states.values().filter(|value| is_failed(value)).count();
+            let failed_now = current.target_states.values().filter(|value| is_failed(value)).count();
+            changes.push(format!("failed targets: {failed_before} → {failed_now}"));
+        }
+        if previous.latest_build_state != current.latest_build_state {
+            changes.push(format!(
+                "latest build: {} → {}",
+                previous.latest_build_state.as_deref().unwrap_or("unknown"),
+                current.latest_build_state.as_deref().unwrap_or("unknown")
+            ));
+        }
+        if previous.stale != current.stale {
+            changes.push(if current.stale {
+                format!("build activity became stale after {} days", current.stale_after_days)
+            } else {
+                "build activity is no longer stale".to_string()
+            });
+        }
+        if previous.upstream_version != current.upstream_version {
+            changes.push(format!(
+                "upstream release: {} → {}",
+                previous.upstream_version.as_deref().unwrap_or("unknown"),
+                current.upstream_version.as_deref().unwrap_or("unknown")
+            ));
+        }
+        if !changes.is_empty() {
+            let _ = crate::activity::record(
+                "Project health change",
+                &format!("{}/{}", project.owner, project.name),
+                &changes.join("; "),
+            );
+        }
+    }
+
     let alerts = compare_states(previous.as_ref(), &current);
     state.projects.insert(key, current);
     save_state(&state)?;
