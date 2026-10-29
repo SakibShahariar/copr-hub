@@ -783,7 +783,7 @@ mod tests {
         );
         assert_eq!(
             compare_package_version(
-                "https://github.com/demo/python-tool",
+                "https://github.com/demo/tool",
                 "2.0.0",
                 "python3-tool",
                 "1.0.0-1"
