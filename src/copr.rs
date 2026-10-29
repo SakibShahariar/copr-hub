@@ -52,6 +52,32 @@ struct BuildListResponse {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct ProjectBuildEvent {
+    #[serde(default)]
+    pub id: Option<i64>,
+    #[serde(default)]
+    pub state: Option<String>,
+    #[serde(default)]
+    pub submitted_on: Option<i64>,
+    #[serde(default)]
+    pub started_on: Option<i64>,
+    #[serde(default)]
+    pub ended_on: Option<i64>,
+    #[serde(default)]
+    pub chroots: Vec<String>,
+    #[serde(default)]
+    pub source_package: Option<BuildSourcePackage>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct BuildSourcePackage {
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub version: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct MonitoredPackage {
     pub name: String,
     #[serde(default)]
@@ -168,6 +194,50 @@ pub fn search_projects(pattern: &str) -> Result<Vec<CoprProject>, String> {
         .map_err(|error| format!("Could not read the COPR response: {error}"))?;
 
     Ok(result.projects)
+}
+
+/// Fetch recent real project build records for a chronological build timeline.
+pub fn fetch_project_build_history(
+    owner: &str,
+    project: &str,
+) -> Result<Vec<ProjectBuildEvent>, String> {
+    #[derive(Deserialize)]
+    struct BuildHistoryResponse {
+        #[serde(default)]
+        builds: Vec<ProjectBuildEvent>,
+    }
+
+    let response = send_with_retry(
+        client()?
+            .get(format!("{}/build/list/", COPR_API_BASE))
+            .query(&[
+                ("ownername", owner),
+                ("projectname", project),
+                ("limit", "20"),
+            ]),
+    )?
+    .error_for_status()
+    .map_err(|error| service_response_error(error, "build history"))?;
+
+    let result: BuildHistoryResponse = response
+        .json()
+        .map_err(|error| format!("Could not read project build history: {error}"))?;
+    let mut builds = result.builds;
+    builds.sort_by(|left, right| {
+        right
+            .submitted_on
+            .or(right.started_on)
+            .or(right.ended_on)
+            .unwrap_or(0)
+            .cmp(
+                &left
+                    .submitted_on
+                    .or(left.started_on)
+                    .or(left.ended_on)
+                    .unwrap_or(0),
+            )
+    });
+    Ok(builds)
 }
 
 pub fn fetch_project_monitor(owner: &str, project: &str) -> Result<ProjectMonitor, String> {
