@@ -1709,7 +1709,10 @@ fn refresh_saved_projects(
             feedback.set_text("No saved projects yet. Save a project from its details window.");
         }
         Ok(projects) => {
-            feedback.set_text(&format!("{} saved project(s)", projects.len()));
+            feedback.set_text(&format!(
+                "{} saved project(s). Select Check health on a project to inspect its latest COPR build status.",
+                projects.len()
+            ));
             for project in projects {
                 let row = adw::ActionRow::builder()
                     .title(project.name.as_str())
@@ -1727,11 +1730,99 @@ fn refresh_saved_projects(
                     project.description.as_deref().unwrap_or("")
                 ));
                 row.add_prefix(&gtk::Image::from_icon_name("starred-symbolic"));
-                row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
                 row.connect_activated({
                     let parent = parent.clone();
+                    let project = project.clone();
                     move |_| show_project_details(&parent, &project)
                 });
+
+                let health = gtk::Button::with_label("Check health");
+                health.set_tooltip_text(Some(
+                    "Fetch current build status and target health from COPR",
+                ));
+                health.set_valign(gtk::Align::Center);
+                health.add_css_class("flat");
+                health.connect_clicked({
+                    let row = row.clone();
+                    let feedback = feedback.clone();
+                    let owner = project.owner.clone();
+                    let name = project.name.clone();
+                    move |button| {
+                        button.set_sensitive(false);
+                        button.set_label("Checking…");
+                        row.set_subtitle(Some("Fetching current build health from COPR…"));
+                        let row = row.clone();
+                        let feedback = feedback.clone();
+                        let button = button.clone();
+                        let owner = owner.clone();
+                        let name = name.clone();
+                        gtk::glib::MainContext::default().spawn_local(async move {
+                            let result = gtk::gio::spawn_blocking(move || {
+                                copr::fetch_project_monitor(&owner, &name)
+                            })
+                            .await;
+                            button.set_sensitive(true);
+                            button.set_label("Check health");
+                            match result {
+                                Ok(Ok(monitor)) => {
+                                    let now = gtk::glib::DateTime::now_local()
+                                        .map(|date| date.to_unix())
+                                        .unwrap_or(0);
+                                    let freshness = copr::build_freshness_message(
+                                        monitor.latest_build.as_ref(),
+                                        now,
+                                    );
+                                    let targets = copr::build_target_health_summary(
+                                        &monitor.packages,
+                                    );
+                                    let failed = monitor
+                                        .packages
+                                        .iter()
+                                        .flat_map(|package| package.chroots.values())
+                                        .filter(|build| {
+                                            matches!(
+                                                build.state.as_deref().unwrap_or("unknown")
+                                                    .to_ascii_lowercase().as_str(),
+                                                "failed" | "error"
+                                            )
+                                        })
+                                        .count();
+                                    let summary = format!(
+                                        "{} package(s) · {} · {}",
+                                        monitor.packages.len(),
+                                        freshness,
+                                        targets
+                                    );
+                                    row.set_subtitle(Some(&summary));
+                                    feedback.set_text(&format!(
+                                        "Health checked for {}/{}: {} failed target(s) reported. Build status is informational, not a security assessment.",
+                                        name, owner, failed
+                                    ));
+                                    let _ = activity::record(
+                                        "Project health check",
+                                        &format!("{owner}/{name}"),
+                                        &format!("{} package(s); {failed} failed target(s)", monitor.packages.len()),
+                                    );
+                                }
+                                Ok(Err(error)) => {
+                                    row.set_subtitle(Some(&format!("Health check failed: {error}")));
+                                    feedback.set_text(&format!(
+                                        "Could not check {}/{}: {error}",
+                                        name, owner
+                                    ));
+                                }
+                                Err(_) => {
+                                    row.set_subtitle(Some(
+                                        "Health check failed: background task error.",
+                                    ));
+                                    feedback.set_text("The background health-check task failed.");
+                                }
+                            }
+                        });
+                    }
+                });
+                row.add_suffix(&health);
+                row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
                 list.append(&row);
             }
         }
