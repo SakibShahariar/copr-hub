@@ -22,6 +22,17 @@ Copr Hub is a native Linux desktop application for discovering Fedora COPR proje
 
 COPR build status and freshness are informational and are **not** a security or trust assessment. The 90-day freshness threshold is a heuristic, not a claim that a project is abandoned or unsafe; timestamps that COPR does not provide are reported as unavailable. Package names exposed by a COPR project may not always correspond to installable binary RPM names; DNF reports resolution and transaction failures to the app.
 
+## Offline behavior
+
+Copr Hub can open without an internet connection, and its local features remain available:
+
+- Saved projects and activity history are stored on the device and can be viewed, edited, exported, or imported offline.
+- The Repositories tab reads local DNF repository configuration files.
+- The Installed tab queries the local DNF database; listing installed packages does not itself require downloading repository metadata.
+- Search results already displayed remain visible when a search or refresh fails during the current app session.
+
+Live COPR searches, fresh project build details, upstream release lookups, and package operations that need remote repositories require connectivity or usable local DNF metadata/packages. The current search-result list is not persisted between launches, and upstream release caching is in memory only; release metadata cached during a session can be used as a stale fallback for up to 24 hours if a refresh fails, but it is not available after restarting the app. Cached metadata is identified as potentially out of date. Offline support is therefore partial rather than a full offline mirror of COPR.
+
 ## Build and run on Fedora
 
 Install native development dependencies:
