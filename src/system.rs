@@ -265,8 +265,16 @@ pub fn set_package_installed(package_name: &str, install: bool) -> Result<(), St
     }
 
     let action = if install { "install" } else { "remove" };
-    let output = Command::new("pkexec")
-        .args(["dnf", action, "--assumeyes", package_name])
+    let mut command = Command::new("pkexec");
+    command.args(["dnf", action, "--assumeyes"]);
+    if !install {
+        // Removing a package should use local metadata when offline instead of
+        // attempting a repository refresh. DNF may still fail if its cache is
+        // insufficient to resolve the transaction.
+        command.arg("--cacheonly");
+    }
+    let output = command
+        .arg(package_name)
         .output()
         .map_err(|error| format!("Could not start the privileged DNF helper: {error}"))?;
 
