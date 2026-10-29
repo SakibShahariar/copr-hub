@@ -32,6 +32,12 @@ This document describes Copr Hub's detailed functionality. The [README](../READM
 - Validate saved metadata and cap the saved-project file at 10 MiB to help prevent oversized data from making the list unreadable.
 - Export saved projects to portable JSON. Import backups by merging new entries without duplicates or replacing existing saved projects; reject imports that exceed the storage cap without changing existing data.
 
+## Compare saved projects
+
+- Select two or three saved COPR projects and compare their live package counts, succeeded/failed/in-progress/unknown build-target totals, and latest-build freshness side by side.
+- Each project is fetched independently; a failed lookup is labeled unavailable instead of preventing other projects from being compared.
+- Comparison data is fetched on demand and is not presented as a security or trust ranking.
+
 ## Manage repositories and packages
 
 - Read enabled and disabled COPR repository definitions from `/etc/yum.repos.d`, including DNF5 repository enablement overrides.
