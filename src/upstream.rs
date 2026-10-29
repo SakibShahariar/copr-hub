@@ -67,13 +67,29 @@ fn is_retryable_status(status: reqwest::StatusCode) -> bool {
     status == reqwest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error()
 }
 
+fn is_retryable_response(
+    status: reqwest::StatusCode,
+    headers: &reqwest::header::HeaderMap,
+) -> bool {
+    is_retryable_status(status)
+        || (status == reqwest::StatusCode::FORBIDDEN
+            && (headers.contains_key(reqwest::header::RETRY_AFTER)
+                || headers
+                    .get("x-ratelimit-remaining")
+                    .and_then(|value| value.to_str().ok())
+                    .is_some_and(|remaining| remaining == "0")))
+}
+
 /// Retry one time for temporary upstream failures; release lookups are safe GET requests.
 fn send_with_retry(
     request: reqwest::blocking::RequestBuilder,
 ) -> Result<reqwest::blocking::Response, reqwest::Error> {
     let retry_request = request.try_clone();
     match request.send() {
-        Ok(response) if is_retryable_status(response.status()) && retry_request.is_some() => {
+        Ok(response)
+            if is_retryable_response(response.status(), response.headers())
+                && retry_request.is_some() =>
+        {
             let delay = retry_delay(
                 response
                     .headers()
@@ -416,6 +432,27 @@ mod tests {
 
         let expired_at = Instant::now() - MAX_STALE_CACHE_AGE - Duration::from_secs(1);
         assert!(stale_cache_fallback(expired_at, Some(release())).is_none());
+    }
+
+    #[test]
+    fn retries_github_forbidden_responses_only_when_rate_limited() {
+        use super::is_retryable_response;
+        use reqwest::header::{HeaderMap, HeaderValue};
+        use reqwest::StatusCode;
+
+        let mut headers = HeaderMap::new();
+        assert!(!is_retryable_response(StatusCode::FORBIDDEN, &headers));
+
+        headers.insert("x-ratelimit-remaining", HeaderValue::from_static("0"));
+        assert!(is_retryable_response(StatusCode::FORBIDDEN, &headers));
+
+        headers.clear();
+        headers.insert(
+            reqwest::header::RETRY_AFTER,
+            HeaderValue::from_static("2"),
+        );
+        assert!(is_retryable_response(StatusCode::FORBIDDEN, &headers));
+        assert!(!is_retryable_response(StatusCode::NOT_FOUND, &headers));
     }
 
     #[test]
