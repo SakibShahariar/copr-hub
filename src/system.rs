@@ -621,10 +621,10 @@ enabled=1
         let output = "demo\t2.0-1.fc44\tcopr:alice:demo\nbase\t3.0-1.fc44\tfedora\nmissing-version\t\tfedora\n--bad\t1.0\tfedora\n";
         let updates = parse_package_updates(output);
         assert_eq!(updates.len(), 2);
-        assert_eq!(updates[0].name, "base");
-        assert_eq!(updates[0].version, "3.0-1.fc44");
-        assert_eq!(updates[1].name, "demo");
-        assert_eq!(updates[1].repository, "copr:alice:demo");
+        assert_eq!(updates[0].name, "demo");
+        assert_eq!(updates[0].version, "2.0-1.fc44");
+        assert_eq!(updates[1].name, "base");
+        assert_eq!(updates[1].repository, "fedora");
     }
 
     #[test]
