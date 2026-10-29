@@ -28,8 +28,6 @@ struct ProjectState {
     #[serde(default)]
     latest_build_state: Option<String>,
     #[serde(default)]
-    latest_build_timestamp: Option<i64>,
-    #[serde(default)]
     upstream_version: Option<String>,
     #[serde(default)]
     stale: bool,
@@ -106,7 +104,7 @@ fn is_failed(value: &str) -> bool {
     matches!(value.to_ascii_lowercase().as_str(), "failed" | "error")
 }
 
-fn current_state(project: &copr::CoprProject, monitor: &copr::ProjectMonitor) -> ProjectState {
+fn current_state(monitor: &copr::ProjectMonitor) -> ProjectState {
     let mut target_states = HashMap::new();
     for package in &monitor.packages {
         for (target, build) in &package.chroots {
@@ -121,13 +119,11 @@ fn current_state(project: &copr::CoprProject, monitor: &copr::ProjectMonitor) ->
     let stale = latest_build_timestamp
         .and_then(|timestamp| i64::try_from(now_unix()).ok().map(|now| now - timestamp))
         .is_some_and(|age| age >= STALE_AFTER_SECS);
-    let _ = project;
     ProjectState {
         target_states,
         latest_build_state: latest
             .and_then(|build| build.state.clone())
             .map(|state| state.to_ascii_lowercase()),
-        latest_build_timestamp,
         upstream_version: None,
         stale,
     }
@@ -143,7 +139,7 @@ pub fn record_observation(
     let mut state = load_state();
     let key = project_key(project);
     let previous = state.projects.get(&key).cloned();
-    let mut current = current_state(project, monitor);
+    let mut current = current_state(monitor);
     if let Some(release) = release.filter(|release| !release.stale_cache) {
         current.upstream_version = Some(release.version.clone());
     } else if let Some(previous) = previous.as_ref() {
@@ -177,10 +173,7 @@ pub fn record_observation(
             ));
         }
 
-        if !previous.stale
-            && current.stale
-            && current.latest_build_timestamp.is_some()
-        {
+        if !previous.stale && current.stale {
             alerts.push("Project build activity has become stale (no build in at least 90 days).".to_string());
         }
 
@@ -211,18 +204,6 @@ pub fn record_observation(
     Ok(alerts)
 }
 
-pub fn last_check_label() -> String {
-    let state = load_state();
-    let latest = state
-        .projects
-        .values()
-        .filter_map(|project| project.latest_build_timestamp)
-        .max();
-    let Some(timestamp) = latest else {
-        return "No monitoring baseline yet".to_string();
-    };
-    format!("Monitoring baseline contains build data through Unix timestamp {timestamp}")
-}
 
 #[cfg(test)]
 mod tests {
