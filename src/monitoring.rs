@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::hash::{Hash, Hasher};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAX_STATE_BYTES: u64 = 2 * 1024 * 1024;
@@ -69,7 +69,7 @@ fn read_json<T: for<'de> Deserialize<'de>>(path: &PathBuf, max_bytes: u64) -> Op
     serde_json::from_slice(&contents).ok()
 }
 
-fn write_json<T: Serialize>(path: &PathBuf, value: &T) -> Result<(), String> {
+fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
     let contents = serde_json::to_vec_pretty(value)
         .map_err(|error| format!("Could not encode monitoring data: {error}"))?;
     if contents.len() as u64 > MAX_STATE_BYTES {
