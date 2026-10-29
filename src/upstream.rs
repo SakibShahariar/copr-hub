@@ -52,6 +52,15 @@ fn client() -> Result<reqwest::blocking::Client, String> {
         .map_err(|error| format!("Could not prepare upstream release lookup: {error}"))
 }
 
+fn retry_delay(retry_after: Option<&str>) -> Duration {
+    retry_after
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .map(Duration::from_secs)
+        .map(|delay| delay.min(Duration::from_secs(3)))
+        .filter(|delay| !delay.is_zero())
+        .unwrap_or(Duration::from_millis(350))
+}
+
 fn is_retryable_status(status: reqwest::StatusCode) -> bool {
     status == reqwest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error()
 }
@@ -63,8 +72,14 @@ fn send_with_retry(
     let retry_request = request.try_clone();
     match request.send() {
         Ok(response) if is_retryable_status(response.status()) && retry_request.is_some() => {
+            let delay = retry_delay(
+                response
+                    .headers()
+                    .get(reqwest::header::RETRY_AFTER)
+                    .and_then(|value| value.to_str().ok()),
+            );
             drop(response);
-            thread::sleep(Duration::from_millis(350));
+            thread::sleep(delay);
             retry_request
                 .expect("retry request was checked above")
                 .send()
@@ -352,6 +367,18 @@ mod tests {
         assert!(!is_retryable_status(StatusCode::NOT_FOUND));
         assert!(!is_retryable_status(StatusCode::FORBIDDEN));
         assert!(!is_retryable_status(StatusCode::OK));
+    }
+
+    #[test]
+    fn bounds_retry_after_delays_and_uses_a_safe_default() {
+        use super::retry_delay;
+        use std::time::Duration;
+
+        assert_eq!(retry_delay(Some("2")), Duration::from_secs(2));
+        assert_eq!(retry_delay(Some("30")), Duration::from_secs(3));
+        assert_eq!(retry_delay(Some("invalid")), Duration::from_millis(350));
+        assert_eq!(retry_delay(Some("0")), Duration::from_millis(350));
+        assert_eq!(retry_delay(None), Duration::from_millis(350));
     }
 
     #[test]
