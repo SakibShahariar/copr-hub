@@ -613,6 +613,7 @@ mod tests {
             published_at: Some("2026-10-01T12:00:00Z".into()),
             url: Some("https://github.com/example/project/releases/tag/v2.4.1".into()),
             stale_cache: false,
+            prerelease: false,
         };
         let payload = PersistedReleaseCache {
             entries: HashMap::from([(
@@ -647,6 +648,7 @@ mod tests {
             published_at: Some("2026-09-01T00:00:00Z".into()),
             url: Some("https://github.com/demo/tool/releases/tag/v1.2.3".into()),
             stale_cache: false,
+            prerelease: false,
         };
 
         let cached = stale_cache_fallback(Instant::now(), Some(release())).unwrap();
