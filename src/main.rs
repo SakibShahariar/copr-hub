@@ -1758,9 +1758,11 @@ fn refresh_saved_projects(
                         let name = name.clone();
                         let activity_owner = owner.clone();
                         let activity_name = name.clone();
+                        let fetch_owner = owner.clone();
+                        let fetch_name = name.clone();
                         gtk::glib::MainContext::default().spawn_local(async move {
                             let result = gtk::gio::spawn_blocking(move || {
-                                copr::fetch_project_monitor(&owner, &name)
+                                copr::fetch_project_monitor(&fetch_owner, &fetch_name)
                             })
                             .await;
                             button.set_sensitive(true);
