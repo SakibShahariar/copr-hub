@@ -25,10 +25,16 @@ pub fn is_saved(project: &CoprProject) -> Result<bool, String> {
         .any(|saved| saved.owner == project.owner && saved.name == project.name))
 }
 
-fn merge_projects(projects: &mut Vec<CoprProject>, imported: impl IntoIterator<Item = CoprProject>) -> usize {
+fn merge_projects(
+    projects: &mut Vec<CoprProject>,
+    imported: impl IntoIterator<Item = CoprProject>,
+) -> usize {
     let mut added = 0;
     for project in imported {
-        if !projects.iter().any(|saved| saved.owner == project.owner && saved.name == project.name) {
+        if !projects
+            .iter()
+            .any(|saved| saved.owner == project.owner && saved.name == project.name)
+        {
             projects.push(project);
             added += 1;
         }
@@ -72,7 +78,8 @@ pub fn export_to(path: &std::path::Path) -> Result<usize, String> {
     let projects = load()?;
     let contents = serde_json::to_vec_pretty(&projects)
         .map_err(|error| format!("Could not encode saved projects: {error}"))?;
-    fs::write(path, contents).map_err(|error| format!("Could not export saved projects: {error}"))?;
+    fs::write(path, contents)
+        .map_err(|error| format!("Could not export saved projects: {error}"))?;
     Ok(projects.len())
 }
 
@@ -82,7 +89,10 @@ pub fn import_from(path: &std::path::Path) -> Result<usize, String> {
         .map_err(|error| format!("Could not read the selected backup: {error}"))?;
     let imported: Vec<CoprProject> = serde_json::from_str(&contents)
         .map_err(|error| format!("This is not a valid Copr Hub saved-project backup: {error}"))?;
-    if imported.iter().any(|project| project.name.trim().is_empty() || project.owner.trim().is_empty()) {
+    if imported
+        .iter()
+        .any(|project| project.name.trim().is_empty() || project.owner.trim().is_empty())
+    {
         return Err("The backup contains a project without a name or owner.".to_string());
     }
 
@@ -131,8 +141,12 @@ mod tests {
 
         assert_eq!(added, 2);
         assert_eq!(projects.len(), 3);
-        assert!(projects.iter().any(|item| item.owner == "bob" && item.name == "demo"));
-        assert!(projects.iter().any(|item| item.owner == "carol" && item.name == "tool"));
+        assert!(projects
+            .iter()
+            .any(|item| item.owner == "bob" && item.name == "demo"));
+        assert!(projects
+            .iter()
+            .any(|item| item.owner == "carol" && item.name == "tool"));
     }
 
     #[test]
