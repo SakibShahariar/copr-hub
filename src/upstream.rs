@@ -1,8 +1,10 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const CACHE_TTL: Duration = Duration::from_secs(15 * 60);
@@ -12,8 +14,93 @@ const CACHE_CAPACITY: usize = 128;
 type ReleaseCache = Mutex<HashMap<String, (Instant, Option<UpstreamRelease>)>>;
 
 static RELEASE_CACHE: OnceLock<ReleaseCache> = OnceLock::new();
+static CACHE_LOADED: OnceLock<()> = OnceLock::new();
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
+struct PersistedCacheEntry {
+    cached_at_unix: u64,
+    release: Option<UpstreamRelease>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct PersistedReleaseCache {
+    entries: HashMap<String, PersistedCacheEntry>,
+}
+
+fn persistent_cache_path() -> PathBuf {
+    gtk::glib::user_cache_dir()
+        .join("copr-hub")
+        .join("upstream-releases.json")
+}
+
+fn unix_now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or(0)
+}
+
+/// Load recent release metadata once so offline launches can still show useful
+/// version/date information. The cache is advisory and can always be discarded.
+fn load_persistent_cache() {
+    let path = persistent_cache_path();
+    let Ok(metadata) = fs::metadata(&path) else {
+        return;
+    };
+    if metadata.len() > 2 * 1024 * 1024 {
+        return;
+    }
+    let Ok(contents) = fs::read_to_string(path) else {
+        return;
+    };
+    let Ok(saved) = serde_json::from_str::<PersistedReleaseCache>(&contents) else {
+        return;
+    };
+    let now = unix_now();
+    let entries = saved.entries.into_iter().filter_map(|(key, entry)| {
+        let age = now.saturating_sub(entry.cached_at_unix);
+        if age > MAX_STALE_CACHE_AGE.as_secs() || key.len() > 1024 {
+            return None;
+        }
+        Some((key, (Instant::now() - Duration::from_secs(age), entry.release)))
+    }).take(CACHE_CAPACITY).collect::<HashMap<_, _>>();
+    if let Ok(mut cache) = RELEASE_CACHE.get_or_init(|| Mutex::new(HashMap::new())).lock() {
+        cache.extend(entries);
+    }
+}
+
+fn save_persistent_cache() {
+    let Some(cache) = RELEASE_CACHE.get() else {
+        return;
+    };
+    let Ok(cache) = cache.lock() else {
+        return;
+    };
+    let now = unix_now();
+    let entries = cache.iter().filter_map(|(key, (stored_at, release))| {
+        let age = stored_at.elapsed().as_secs();
+        (age <= MAX_STALE_CACHE_AGE.as_secs()).then(|| (
+            key.clone(),
+            PersistedCacheEntry {
+                cached_at_unix: now.saturating_sub(age),
+                release: release.clone(),
+            },
+        ))
+    }).collect();
+    let saved = PersistedReleaseCache { entries };
+    let Ok(contents) = serde_json::to_vec(&saved) else {
+        return;
+    };
+    let path = persistent_cache_path();
+    let Some(parent) = path.parent() else {
+        return;
+    };
+    if fs::create_dir_all(parent).is_ok() {
+        let _ = crate::storage::atomic_write(&path, &contents);
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpstreamRelease {
     pub version: String,
     pub name: String,
@@ -187,6 +274,7 @@ pub fn latest_release(homepage: &str) -> Result<Option<UpstreamRelease>, String>
         "{}:{owner}/{repo}",
         if is_gitlab { "gitlab" } else { "github" }
     );
+    CACHE_LOADED.get_or_init(load_persistent_cache);
     let cache = RELEASE_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
 
     if let Ok(cache) = cache.lock() {
@@ -217,6 +305,7 @@ pub fn latest_release(homepage: &str) -> Result<Option<UpstreamRelease>, String>
             }
             cache.insert(key, (Instant::now(), release.clone()));
         }
+        save_persistent_cache();
         return result;
     }
 
