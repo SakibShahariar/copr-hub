@@ -2048,22 +2048,27 @@ fn update_intelligence_summary(
     now: i64,
 ) -> String {
     let mut newer_packages = 0;
+    let mut compared_packages = 0;
+    let mut unsupported_packages = 0;
     let mut failed_targets = 0;
     let mut active_targets = 0;
 
     for package in packages {
-        let has_newer_release = release.zip(homepage).is_some_and(|(release, homepage)| {
-            package.chroots.values().any(|build| {
-                build.pkg_version.as_deref().is_some_and(|version| {
-                    upstream::compare_package_version(
-                        homepage,
-                        &release.version,
-                        &package.name,
-                        version,
-                    ) == Some(std::cmp::Ordering::Greater)
-                })
-            })
-        });
+        let mut has_newer_release = false;
+        if let Some((release, homepage)) = release.zip(homepage) {
+            let versions: Vec<_> = package.chroots.values().filter_map(|build| build.pkg_version.as_deref()).collect();
+            if !versions.is_empty() {
+                let comparisons: Vec<_> = versions.iter().map(|version| {
+                    upstream::compare_package_version(homepage, &release.version, &package.name, version)
+                }).collect();
+                if comparisons.iter().any(Option::is_some) {
+                    compared_packages += 1;
+                    has_newer_release = comparisons.iter().any(|value| *value == Some(std::cmp::Ordering::Greater));
+                } else {
+                    unsupported_packages += 1;
+                }
+            }
+        }
         if has_newer_release {
             newer_packages += 1;
         }
@@ -2086,12 +2091,16 @@ fn update_intelligence_summary(
     }
 
     let update_summary = match (homepage.is_some(), release) {
-        (true, Some(release)) if release.stale_cache => format!(
-            "{newer_packages} package(s) with a newer matched upstream release (cached metadata; may be out of date)"
+        (true, Some(release)) if release.prerelease => format!(
+            "upstream tag {} is a prerelease; stable update comparison skipped",
+            release.version
         ),
-        (true, Some(_)) => {
-            format!("{newer_packages} package(s) with a newer matched upstream release")
-        }
+        (true, Some(release)) if release.stale_cache => format!(
+            "{newer_packages} package(s) with a newer matched upstream release; {compared_packages} compared and {unsupported_packages} unsupported/unmatched (cached metadata; may be out of date)"
+        ),
+        (true, Some(_)) => format!(
+            "{newer_packages} package(s) with a newer matched upstream release; {compared_packages} compared and {unsupported_packages} unsupported/unmatched"
+        ),
         _ => "upstream update comparison unavailable".to_string(),
     };
     let build_age = copr::build_freshness_message(latest_build, now);
