@@ -575,12 +575,7 @@ fn render_repositories(
                         let list = list.clone();
                         let feedback = feedback.clone();
                         move |_| {
-                            confirm_repository_removal(
-                                &parent,
-                                &repository,
-                                &list,
-                                &feedback,
-                            );
+                            confirm_repository_removal(&parent, &repository, &list, &feedback);
                         }
                     });
                     row.add_suffix(&remove);

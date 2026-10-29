@@ -234,9 +234,9 @@ fn copr_project_spec_from_repository_id(repository_id: &str) -> Option<String> {
             .chars()
             .all(|character| character.is_ascii_alphanumeric() || "@._-".contains(character));
     let valid_project = !project.is_empty()
-        && project.chars().all(|character| {
-            character.is_ascii_alphanumeric() || ":._-".contains(character)
-        });
+        && project
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || ":._-".contains(character));
     (valid_owner && valid_project).then(|| format!("{owner}/{project}"))
 }
 
@@ -380,9 +380,7 @@ mod tests {
     #[test]
     fn converts_only_standard_fedora_copr_ids_to_project_specs() {
         assert_eq!(
-            copr_project_spec_from_repository_id(
-                "copr:copr.fedorainfracloud.org:alice:demo"
-            ),
+            copr_project_spec_from_repository_id("copr:copr.fedorainfracloud.org:alice:demo"),
             Some("alice/demo".to_string())
         );
         assert_eq!(
@@ -396,9 +394,7 @@ mod tests {
             None
         );
         assert_eq!(
-            copr_project_spec_from_repository_id(
-                "copr:copr.fedorainfracloud.org:alice:../unsafe"
-            ),
+            copr_project_spec_from_repository_id("copr:copr.fedorainfracloud.org:alice:../unsafe"),
             None
         );
         assert_eq!(copr_project_spec_from_repository_id("fedora"), None);
