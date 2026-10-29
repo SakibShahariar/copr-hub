@@ -40,6 +40,11 @@ fn unix_now() -> u64 {
         .unwrap_or(0)
 }
 
+fn persisted_entry_age(cached_at_unix: u64, now_unix: u64) -> Option<Duration> {
+    let age = now_unix.checked_sub(cached_at_unix)?;
+    (age <= MAX_STALE_CACHE_AGE.as_secs()).then(|| Duration::from_secs(age))
+}
+
 /// Load recent release metadata once so offline launches can still show useful
 /// version/date information. The cache is advisory and can always be discarded.
 fn load_persistent_cache() {
@@ -58,11 +63,11 @@ fn load_persistent_cache() {
     };
     let now = unix_now();
     let entries = saved.entries.into_iter().filter_map(|(key, entry)| {
-        let age = now.saturating_sub(entry.cached_at_unix);
-        if age > MAX_STALE_CACHE_AGE.as_secs() || key.len() > 1024 {
+        let age = persisted_entry_age(entry.cached_at_unix, now)?;
+        if key.len() > 1024 {
             return None;
         }
-        Some((key, (Instant::now() - Duration::from_secs(age), entry.release)))
+        Some((key, (Instant::now() - age, entry.release)))
     }).take(CACHE_CAPACITY).collect::<HashMap<_, _>>();
     if let Ok(mut cache) = RELEASE_CACHE.get_or_init(|| Mutex::new(HashMap::new())).lock() {
         cache.extend(entries);
@@ -534,6 +539,55 @@ mod tests {
         assert!(!is_retryable_status(StatusCode::NOT_FOUND));
         assert!(!is_retryable_status(StatusCode::FORBIDDEN));
         assert!(!is_retryable_status(StatusCode::OK));
+    }
+
+    #[test]
+    fn persisted_cache_entries_reject_future_and_expired_timestamps() {
+        use super::{persisted_entry_age, MAX_STALE_CACHE_AGE};
+        use std::time::Duration;
+
+        assert_eq!(persisted_entry_age(900, 1_000), Some(Duration::from_secs(100)));
+        assert_eq!(
+            persisted_entry_age(1_000, 900),
+            None,
+            "future timestamps should not be treated as fresh cache entries"
+        );
+        assert_eq!(
+            persisted_entry_age(1_000 - MAX_STALE_CACHE_AGE.as_secs() - 1, 1_000),
+            None,
+            "entries older than the stale-cache window should be discarded"
+        );
+    }
+
+    #[test]
+    fn persisted_cache_payload_round_trips_release_metadata() {
+        use super::{PersistedCacheEntry, PersistedReleaseCache, UpstreamRelease};
+        use std::collections::HashMap;
+
+        let release = UpstreamRelease {
+            version: "v2.4.1".into(),
+            name: "Stable release".into(),
+            published_at: Some("2026-10-01T12:00:00Z".into()),
+            url: Some("https://github.com/example/project/releases/tag/v2.4.1".into()),
+            stale_cache: false,
+        };
+        let payload = PersistedReleaseCache {
+            entries: HashMap::from([(
+                "github:example/project".into(),
+                PersistedCacheEntry {
+                    cached_at_unix: 1_800_000_000,
+                    release: Some(release),
+                },
+            )]),
+        };
+
+        let encoded = serde_json::to_vec(&payload).unwrap();
+        let decoded: PersistedReleaseCache = serde_json::from_slice(&encoded).unwrap();
+        let entry = decoded.entries.get("github:example/project").unwrap();
+        assert_eq!(entry.cached_at_unix, 1_800_000_000);
+        let release = entry.release.as_ref().unwrap();
+        assert_eq!(release.version, "v2.4.1");
+        assert_eq!(release.published_at.as_deref(), Some("2026-10-01T12:00:00Z"));
     }
 
     #[test]
