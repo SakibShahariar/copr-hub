@@ -1150,8 +1150,10 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
         let timeline = timeline.clone();
         let timeline_status = timeline_status.clone();
         gtk::glib::MainContext::default().spawn_local(async move {
+            let fetch_owner = history_owner.clone();
+            let fetch_project = history_project.clone();
             let response = gtk::gio::spawn_blocking(move || {
-                copr::fetch_project_build_history(&history_owner, &history_project)
+                copr::fetch_project_build_history(&fetch_owner, &fetch_project)
             })
             .await;
             clear_list_box(&timeline);
@@ -1245,6 +1247,7 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
         let status = status.clone();
         let intelligence = intelligence.clone();
         let homepage = homepage_for_comparison.clone();
+        let matrix = matrix.clone();
         gtk::glib::MainContext::default().spawn_local(async move {
             let response =
                 gtk::gio::spawn_blocking(move || copr::fetch_project_monitor(&owner, &name)).await;
@@ -1279,6 +1282,7 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
         let status = status.clone();
         let intelligence = intelligence.clone();
         let homepage_for_comparison = Some(homepage.clone());
+        let matrix = matrix.clone();
         gtk::glib::MainContext::default().spawn_local(async move {
             let response =
                 gtk::gio::spawn_blocking(move || upstream::latest_release(&homepage)).await;
