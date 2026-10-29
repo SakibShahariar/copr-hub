@@ -177,6 +177,47 @@ pub fn export_to(path: &std::path::Path) -> Result<usize, String> {
     Ok(projects.len())
 }
 
+/// A non-mutating preview of a saved-project backup.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportPreview {
+    pub incoming: usize,
+    pub already_saved: usize,
+    pub new_projects: usize,
+}
+
+/// Validate an import file and report the merge impact without changing saved data.
+pub fn preview_import(path: &std::path::Path) -> Result<ImportPreview, String> {
+    let metadata = fs::metadata(path)
+        .map_err(|error| format!("Could not inspect the selected backup: {error}"))?;
+    if metadata.len() > MAX_BACKUP_BYTES as u64 {
+        return Err("The saved-project backup is larger than the 5 MiB import limit.".to_string());
+    }
+    let contents = fs::read_to_string(path)
+        .map_err(|error| format!("Could not read the selected backup: {error}"))?;
+    let imported = parse_backup(&contents)?;
+    let existing = load()?;
+    let existing_keys: HashSet<(String, String)> = existing
+        .iter()
+        .map(|project| (project.owner.to_ascii_lowercase(), project.name.to_ascii_lowercase()))
+        .collect();
+    let mut seen = HashSet::new();
+    let mut already_saved = 0;
+    let mut new_projects = 0;
+    for project in &imported {
+        let key = (project.owner.to_ascii_lowercase(), project.name.to_ascii_lowercase());
+        if existing_keys.contains(&key) || !seen.insert(key) {
+            already_saved += 1;
+        } else {
+            new_projects += 1;
+        }
+    }
+    Ok(ImportPreview {
+        incoming: imported.len(),
+        already_saved,
+        new_projects,
+    })
+}
+
 /// Import a JSON backup, merging by owner/project identity without duplicating entries.
 pub fn import_from(path: &std::path::Path) -> Result<usize, String> {
     let metadata = fs::metadata(path)
