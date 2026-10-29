@@ -65,12 +65,12 @@ fn send_with_retry(
         Ok(response) if is_retryable_status(response.status()) && retry_request.is_some() => {
             drop(response);
             thread::sleep(Duration::from_millis(350));
-            retry_request.expect("retry request was checked above").send()
+            retry_request
+                .expect("retry request was checked above")
+                .send()
         }
         Ok(response) => Ok(response),
-        Err(error)
-            if (error.is_timeout() || error.is_connect()) && retry_request.is_some() =>
-        {
+        Err(error) if (error.is_timeout() || error.is_connect()) && retry_request.is_some() => {
             thread::sleep(Duration::from_millis(350));
             retry_request.expect("retry request was checked above").send()
         }
