@@ -1395,7 +1395,10 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                 "Cached upstream release: {} ({}) · {} · {}{}",
                 release.version,
                 release.name,
-                release.published_at.as_deref().unwrap_or("release date unavailable"),
+                release
+                    .published_at
+                    .as_deref()
+                    .unwrap_or("release date unavailable"),
                 snapshots::cache_age_label(snapshot.upstream_fetched_at_unix),
                 if snapshots::cache_is_stale(snapshot.upstream_fetched_at_unix) {
                     " · STALE SNAPSHOT"
@@ -1432,8 +1435,8 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                     (Ok(monitor), None)
                 }
                 Ok(Err(error)) => {
-                    let cached = snapshots::load(&project_data)
-                        .and_then(|snapshot| snapshot.monitor.map(|monitor| {
+                    let cached = snapshots::load(&project_data).and_then(|snapshot| {
+                        snapshot.monitor.map(|monitor| {
                             let note = format!(
                                 "Live refresh failed: {error} · showing offline snapshot: {}{}",
                                 snapshots::cache_age_label(snapshot.monitor_fetched_at_unix),
@@ -1444,7 +1447,8 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                                 }
                             );
                             (monitor, note)
-                        }));
+                        })
+                    });
                     match cached {
                         Some((monitor, note)) => (Ok(monitor), Some(note)),
                         None => (Err(error), None),
@@ -1452,8 +1456,8 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                 }
                 Err(_) => {
                     let error = "The background project lookup failed unexpectedly.".to_string();
-                    let cached = snapshots::load(&project_data)
-                        .and_then(|snapshot| snapshot.monitor.map(|monitor| {
+                    let cached = snapshots::load(&project_data).and_then(|snapshot| {
+                        snapshot.monitor.map(|monitor| {
                             let note = format!(
                                 "Live refresh failed · showing offline snapshot: {}{}",
                                 snapshots::cache_age_label(snapshot.monitor_fetched_at_unix),
@@ -1464,7 +1468,8 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                                 }
                             );
                             (monitor, note)
-                        }));
+                        })
+                    });
                     match cached {
                         Some((monitor, note)) => (Ok(monitor), Some(note)),
                         None => (Err(error), None),
@@ -1665,13 +1670,16 @@ fn render_build_history(
             .subtitle(format!("{state} · {date} · {target_summary}"))
             .build();
         row.add_prefix(&gtk::Image::from_icon_name(
-            if matches!(state.to_ascii_lowercase().as_str(), "succeeded" | "success" | "complete" | "completed") {
+            if matches!(
+                state.to_ascii_lowercase().as_str(),
+                "succeeded" | "success" | "complete" | "completed"
+            ) {
                 "emblem-ok-symbolic"
             } else if matches!(state.to_ascii_lowercase().as_str(), "failed" | "error") {
                 "dialog-error-symbolic"
             } else {
                 "content-loading-symbolic"
-            }
+            },
         ));
         if let Some(build_id) = build.id {
             let url = format!(
