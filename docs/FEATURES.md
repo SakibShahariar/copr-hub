@@ -30,6 +30,10 @@ This document describes Copr Hub's detailed functionality. The [README](../READM
 
 - Save and unsave projects locally; filter saved projects by name, owner, or description.
 - Open a saved project's details or run an on-demand health check against current COPR build data.
+- Optionally monitor saved projects while the app is open. Checks run at startup (after a short delay) and then every six hours; there is no always-running daemon.
+- Send desktop notifications only when a later check detects a newly failed target/build, a changed stable upstream release, or a project crossing the 90-day no-build threshold. The first successful check establishes a baseline and does not notify about pre-existing conditions.
+- Monitoring is disabled by default and can be enabled or disabled with the checkbox on the Saved projects page. Checks run off the GTK main thread and stop after a connection failure rather than timing out on every remaining project.
+- Store monitoring comparison state locally so unchanged conditions do not repeatedly notify. Notification delivery depends on the desktop notification service.
 - Health checks summarize package count, build freshness, target states, and failed targets. Each check is recorded in local activity history.
 - Saved and Activity views refresh when opened.
 - Validate saved metadata and cap the saved-project file at 10 MiB to help prevent oversized data from making the list unreadable.
@@ -60,6 +64,9 @@ This document describes Copr Hub's detailed functionality. The [README](../READM
 - Handle temporary COPR, GitHub, and GitLab API failures with one bounded retry for rate limits, server errors, connection failures, and timeouts.
 - Retry GitHub `403` responses only when rate-limit headers indicate throttling. Rate-limit/server responses can use a `Retry-After` delay capped at three seconds; otherwise a short backoff is used.
 - Saved projects, activity history, repository configuration, and installed-package listings remain available offline to the extent they rely on local data.
+- Persist per-project snapshots of the last successful package/target monitor response, recent build history (up to 20 records), and upstream release metadata. The project details view shows cached data immediately, refreshes it in the background, and labels cached timestamps and snapshots older than six hours as stale. Snapshots are retained for up to 180 days and limited to 4 MiB per project.
+- When a live COPR or upstream request fails, use the last valid project snapshot when available rather than replacing it with an empty result. Cached data is informational and may no longer match the live project.
+- Optional monitoring also refreshes project snapshots and recent build history on its six-hour cycle, so previously saved projects can be useful offline even if their details page has not been opened recently.
 - Persist the last successful search query and up to 25 results in `$XDG_CACHE_HOME/copr-hub/last-search.json` (usually `~/.cache/copr-hub/last-search.json`) and restore them on startup for up to 30 days. Restored results are labeled as potentially stale; live searches still require connectivity. Only the most recent successful search is cached.
 - Live COPR searches, fresh build details, upstream release lookups, and package operations requiring remote repositories need connectivity or usable local DNF metadata/packages.
 - Upstream release cache files are size-limited and entries older than 24 hours are discarded. Cached information is explicitly labeled as potentially stale.
@@ -77,6 +84,9 @@ Copr Hub keeps its local data under the current user's XDG directories and does 
 - Saved projects: `$XDG_DATA_HOME/copr-hub/favorites.json`.
 - Search results cache: `$XDG_CACHE_HOME/copr-hub/last-search.json` (usually `~/.cache/copr-hub/last-search.json`).
 - Upstream release cache: `$XDG_CACHE_HOME/copr-hub/upstream-releases.json` (usually `~/.cache/copr-hub/upstream-releases.json`).
+- Project snapshots: `$XDG_CACHE_HOME/copr-hub/projects/` (hashed project filenames; cached build/target data and timestamps).
+- Monitoring preference: `$XDG_CONFIG_HOME/copr-hub/monitoring.json`.
+- Monitoring change baseline: `$XDG_DATA_HOME/copr-hub/monitoring-state.json`.
 
 Files are written atomically with owner-only (`0600`) permissions, including when replacing an older file with broader permissions. The containing directory is synced after replacement to improve persistence across abrupt shutdowns.
 
@@ -85,4 +95,4 @@ Files are written atomically with owner-only (`0600`) permissions, including whe
 - Build and freshness indicators are heuristics, not security assessments. A 90-day-old build does not prove that a project is abandoned or unsafe.
 - COPR may omit timestamps. When timestamps are missing, the app reports them as unavailable rather than guessing.
 - Project package names do not always match installable binary RPM names; DNF reports package-resolution and transaction failures.
-- Offline support is partial, not a full local mirror of COPR.
+- Offline support is partial, not a full local mirror of COPR. Live searches, refreshes, repository changes, and package operations that require network metadata remain unavailable offline.
