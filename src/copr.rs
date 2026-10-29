@@ -104,9 +104,7 @@ fn send_with_retry(
                 .map_err(request_error)
         }
         Ok(response) => Ok(response),
-        Err(error)
-            if (error.is_timeout() || error.is_connect()) && retry_request.is_some() =>
-        {
+        Err(error) if (error.is_timeout() || error.is_connect()) && retry_request.is_some() => {
             thread::sleep(Duration::from_millis(350));
             retry_request
                 .expect("retry request was checked above")
@@ -280,7 +278,9 @@ mod tests {
     fn retryable_statuses_are_limited_to_rate_limits_and_server_errors() {
         assert!(is_retryable_status(reqwest::StatusCode::TOO_MANY_REQUESTS));
         assert!(is_retryable_status(reqwest::StatusCode::BAD_GATEWAY));
-        assert!(is_retryable_status(reqwest::StatusCode::SERVICE_UNAVAILABLE));
+        assert!(is_retryable_status(
+            reqwest::StatusCode::SERVICE_UNAVAILABLE
+        ));
         assert!(!is_retryable_status(reqwest::StatusCode::NOT_FOUND));
         assert!(!is_retryable_status(reqwest::StatusCode::FORBIDDEN));
         assert!(!is_retryable_status(reqwest::StatusCode::OK));
