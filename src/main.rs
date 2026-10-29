@@ -1266,8 +1266,7 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                     &intelligence,
                     &matrix,
                     response,
-                    release.as_ref(),
-                    homepage.as_deref(),
+                    release.as_ref().zip(homepage.as_deref()),
                 );
             }
         });
@@ -1345,8 +1344,7 @@ fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprPro
                     &intelligence,
                     &matrix,
                     response,
-                    release.as_ref(),
-                    homepage_for_comparison.as_deref(),
+                    release.as_ref().zip(homepage_for_comparison.as_deref()),
                 );
             }
         });
@@ -1443,9 +1441,10 @@ fn render_project_monitor(
     intelligence: &gtk::Label,
     matrix: &gtk::Grid,
     response: Result<copr::ProjectMonitor, String>,
-    upstream_release: Option<&upstream::UpstreamRelease>,
-    homepage: Option<&str>,
+    upstream_context: Option<(&upstream::UpstreamRelease, &str)>,
 ) {
+    let upstream_release = upstream_context.map(|(release, _)| release);
+    let homepage = upstream_context.map(|(_, homepage)| homepage);
     clear_list_box(list);
     while let Some(child) = matrix.first_child() {
         matrix.remove(&child);
