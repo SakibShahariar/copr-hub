@@ -9,7 +9,7 @@ on:
 
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   rust:
@@ -29,17 +29,6 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      - name: Generate Cargo.lock
-        run: cargo generate-lockfile
-      - name: Commit Cargo.lock when missing or outdated
-        run: |
-          if [ -n "$(git status --porcelain -- Cargo.lock)" ]; then
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add Cargo.lock
-            git commit -m 'build: commit reproducible Cargo.lock (Refs #2)'
-            git push
-          fi
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
