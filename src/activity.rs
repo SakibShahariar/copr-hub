@@ -197,7 +197,8 @@ pub fn record(action: &str, target: &str, summary: &str) -> Result<(), String> {
     );
     entries.truncate(MAX_ENTRIES);
 
-    let contents = serde_json::to_vec_pretty(&entries)
+    // Activity history is machine-read; compact JSON reduces repeated write volume.
+    let contents = serde_json::to_vec(&entries)
         .map_err(|error| format!("Could not encode activity history: {error}"))?;
     storage::atomic_write(&path, &contents)
         .map_err(|error| format!("Could not save activity history: {error}"))?;
