@@ -163,7 +163,8 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
     upstream_status.add_css_class("dim-label");
     content.append(&upstream_status);
 
-    let release_notes = gtk::LinkButton::with_label("https://example.invalid/", "Release notes");
+    let release_notes =
+        gtk::LinkButton::with_label("https://example.invalid/", "Release notes");
     release_notes.set_halign(gtk::Align::Center);
     release_notes.set_visible(false);
     content.append(&release_notes);
@@ -1252,7 +1253,6 @@ pub(super) fn confirm_package_operation<F: Fn() + Clone + 'static>(
     dialog.present();
 }
 
-
 #[cfg(test)]
 mod release_notes_tests {
     use super::*;
@@ -1270,10 +1270,31 @@ mod release_notes_tests {
 
     #[test]
     fn release_notes_require_a_stable_http_or_https_url() {
-        assert_eq!(release_notes_url(&release(Some("https://example.com/releases/1.2.3"), false)), Some("https://example.com/releases/1.2.3"));
-        assert_eq!(release_notes_url(&release(Some("http://example.com/releases/1.2.3"), false)), Some("http://example.com/releases/1.2.3"));
+        assert_eq!(
+            release_notes_url(&release(
+                Some("https://example.com/releases/1.2.3"),
+                false
+            )),
+            Some("https://example.com/releases/1.2.3")
+        );
+        assert_eq!(
+            release_notes_url(&release(
+                Some("http://example.com/releases/1.2.3"),
+                false
+            )),
+            Some("http://example.com/releases/1.2.3")
+        );
         assert_eq!(release_notes_url(&release(None, false)), None);
-        assert_eq!(release_notes_url(&release(Some("javascript:alert(1)"), false)), None);
-        assert_eq!(release_notes_url(&release(Some("https://example.com/releases/1.2.3"), true)), None);
+        assert_eq!(
+            release_notes_url(&release(Some("javascript:alert(1)"), false)),
+            None
+        );
+        assert_eq!(
+            release_notes_url(&release(
+                Some("https://example.com/releases/1.2.3"),
+                true
+            )),
+            None
+        );
     }
 }
