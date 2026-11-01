@@ -1,5 +1,5 @@
-use super::*;
 use super::project_details::confirm_package_operation;
+use super::*;
 
 pub(super) fn build_installed_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
