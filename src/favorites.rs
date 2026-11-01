@@ -182,6 +182,7 @@ pub fn export_to(path: &std::path::Path) -> Result<usize, String> {
 pub struct ImportPreview {
     pub incoming: usize,
     pub already_saved: usize,
+    pub duplicate_in_backup: usize,
     pub new_projects: usize,
 }
 
@@ -196,26 +197,34 @@ pub fn preview_import(path: &std::path::Path) -> Result<ImportPreview, String> {
         .map_err(|error| format!("Could not read the selected backup: {error}"))?;
     let imported = parse_backup(&contents)?;
     let existing = load()?;
+    Ok(preview_counts(&imported, &existing))
+}
+
+fn preview_counts(imported: &[CoprProject], existing: &[CoprProject]) -> ImportPreview {
     let existing_keys: HashSet<(String, String)> = existing
         .iter()
         .map(|project| (project.owner.clone(), project.name.clone()))
         .collect();
     let mut seen = HashSet::new();
     let mut already_saved = 0;
+    let mut duplicate_in_backup = 0;
     let mut new_projects = 0;
-    for project in &imported {
+    for project in imported {
         let key = (project.owner.clone(), project.name.clone());
-        if existing_keys.contains(&key) || !seen.insert(key) {
+        if existing_keys.contains(&key) {
             already_saved += 1;
+        } else if !seen.insert(key) {
+            duplicate_in_backup += 1;
         } else {
             new_projects += 1;
         }
     }
-    Ok(ImportPreview {
+    ImportPreview {
         incoming: imported.len(),
         already_saved,
+        duplicate_in_backup,
         new_projects,
-    })
+    }
 }
 
 /// Import a JSON backup, merging by owner/project identity without duplicating entries.
@@ -264,6 +273,27 @@ mod tests {
             description: None,
             homepage: None,
         }
+    }
+
+    #[test]
+    fn backup_preview_separates_local_saves_from_internal_duplicates() {
+        let imported = vec![
+            project("alice", "saved"),
+            project("bob", "new"),
+            project("bob", "new"),
+            project("carol", "new"),
+        ];
+        let existing = vec![project("alice", "saved")];
+
+        assert_eq!(
+            preview_counts(&imported, &existing),
+            ImportPreview {
+                incoming: 4,
+                already_saved: 1,
+                duplicate_in_backup: 1,
+                new_projects: 2,
+            }
+        );
     }
 
     #[test]
