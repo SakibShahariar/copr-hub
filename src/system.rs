@@ -7,6 +7,36 @@ use std::sync::{Mutex, OnceLock};
 const REPOSITORY_DIRECTORY: &str = "/etc/yum.repos.d";
 const MAX_COMMAND_DETAILS_CHARS: usize = 1200;
 
+/// Read the major Fedora release from a parsed /etc/os-release file.
+pub fn parse_fedora_release(os_release: &str) -> Option<u32> {
+    let mut is_fedora = false;
+    let mut version_id = None;
+
+    for line in os_release.lines() {
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        let value = value.trim().trim_matches('"').trim_matches('\'');
+        match key.trim() {
+            "ID" => is_fedora = value.eq_ignore_ascii_case("fedora"),
+            "VERSION_ID" => version_id = Some(value.to_string()),
+            _ => {}
+        }
+    }
+
+    if !is_fedora {
+        return None;
+    }
+
+    version_id?.split('.').next()?.parse().ok()
+}
+
+pub fn current_fedora_release() -> Option<u32> {
+    fs::read_to_string("/etc/os-release")
+        .ok()
+        .and_then(|contents| parse_fedora_release(&contents))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoprRepository {
     pub id: String,
@@ -816,4 +846,19 @@ enabled=0
         assert_eq!(repositories.len(), 1);
         assert_eq!(repositories[0].name, "Project");
     }
+    
+    #[test]
+    fn detects_only_a_valid_fedora_release_from_os_release() {
+        assert_eq!(
+            parse_fedora_release("NAME=Fedora Linux\nID=fedora\nVERSION_ID=44\n"),
+            Some(44)
+        );
+        assert_eq!(
+            parse_fedora_release("ID=fedora\nVERSION_ID=44.2026\n"),
+            Some(44)
+        );
+        assert_eq!(parse_fedora_release("ID=nobara\nVERSION_ID=44\n"), None);
+        assert_eq!(parse_fedora_release("ID=fedora\nVERSION_ID=rawhide\n"), None);
+    }
+
 }

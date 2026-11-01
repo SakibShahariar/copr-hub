@@ -35,6 +35,39 @@ pub struct ProjectMonitor {
     pub latest_build: Option<ProjectBuildSummary>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FedoraCompatibility {
+    Compatible,
+    Incompatible,
+    Unknown,
+}
+
+pub fn fedora_compatibility(
+    monitor: &ProjectMonitor,
+    fedora_release: Option<u32>,
+) -> FedoraCompatibility {
+    let Some(fedora_release) = fedora_release else {
+        return FedoraCompatibility::Unknown;
+    };
+    let target_prefix = format!("fedora-{fedora_release}-");
+    let mut has_targets = false;
+
+    for package in &monitor.packages {
+        for target in package.chroots.keys() {
+            has_targets = true;
+            if target.starts_with(&target_prefix) {
+                return FedoraCompatibility::Compatible;
+            }
+        }
+    }
+
+    if has_targets {
+        FedoraCompatibility::Incompatible
+    } else {
+        FedoraCompatibility::Unknown
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct ProjectBuildSummary {
     #[serde(default)]
@@ -582,4 +615,34 @@ mod tests {
         assert_eq!(build.state.as_deref(), Some("succeeded"));
         assert_eq!(build.pkg_version.as_deref(), Some("1.2-1"));
     }
+    
+    #[test]
+    fn detects_fedora_compatibility_without_guessing_missing_targets() {
+        let monitor: ProjectMonitor = serde_json::from_str(
+            r#"{"packages":[{"name":"demo","chroots":{"fedora-44-x86_64":{"state":"succeeded"},"fedora-43-aarch64":{"state":"failed"}}}]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            fedora_compatibility(&monitor, Some(44)),
+            FedoraCompatibility::Compatible
+        );
+        assert_eq!(
+            fedora_compatibility(&monitor, Some(45)),
+            FedoraCompatibility::Incompatible
+        );
+        assert_eq!(
+            fedora_compatibility(&monitor, None),
+            FedoraCompatibility::Unknown
+        );
+
+        let empty = ProjectMonitor {
+            packages: Vec::new(),
+            latest_build: None,
+        };
+        assert_eq!(
+            fedora_compatibility(&empty, Some(44)),
+            FedoraCompatibility::Unknown
+        );
+    }
+
 }
