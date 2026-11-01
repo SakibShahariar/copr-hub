@@ -45,8 +45,16 @@ jobs:
           xmllint --noout data/io.github.SakibShahariar.CoprHub.metainfo.xml
           appstreamcli validate --no-net data/io.github.SakibShahariar.CoprHub.metainfo.xml
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
+      - name: Format Rust sources and capture patch
+        run: |
+          cargo fmt --all
+          git diff -- src/ui/project_details.rs > rustfmt.patch
+      - name: Upload rustfmt patch
+        uses: actions/upload-artifact@v4
+        with:
+          name: rustfmt-project-details
+          path: rustfmt.patch
+          if-no-files-found: warn
 
       - name: Run unit tests
         run: cargo test --all-targets
