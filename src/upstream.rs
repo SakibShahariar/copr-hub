@@ -292,6 +292,25 @@ fn repository_parts(homepage: &str) -> Option<(String, String, bool)> {
 }
 
 pub fn latest_release(homepage: &str) -> Result<Option<UpstreamRelease>, String> {
+    latest_release_internal(homepage, true)
+}
+
+/// Look up release metadata without writing the persistent cache after each project.
+/// Call `flush_persistent_cache` once when the monitoring batch finishes.
+pub fn latest_release_for_monitoring_batch(
+    homepage: &str,
+) -> Result<Option<UpstreamRelease>, String> {
+    latest_release_internal(homepage, false)
+}
+
+pub fn flush_persistent_cache() {
+    save_persistent_cache();
+}
+
+fn latest_release_internal(
+    homepage: &str,
+    persist_after_fetch: bool,
+) -> Result<Option<UpstreamRelease>, String> {
     let Some((owner, repo, is_gitlab)) = repository_parts(homepage) else {
         return Ok(None);
     };
@@ -330,7 +349,9 @@ pub fn latest_release(homepage: &str) -> Result<Option<UpstreamRelease>, String>
             }
             cache.insert(key, (SystemTime::now(), release.clone()));
         }
-        save_persistent_cache();
+        if persist_after_fetch {
+            save_persistent_cache();
+        }
         return result;
     }
 
