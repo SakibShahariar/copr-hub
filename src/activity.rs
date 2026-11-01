@@ -78,7 +78,9 @@ fn matches_filter(entry: &ActivityEntry, query: &str) -> bool {
 /// Classify activity actions for the Activity page's category filter.
 pub fn category_for_action(action: &str) -> &'static str {
     match action {
-        "Project search" | "Saved projects" | "Project health check" | "Project health change" => "Projects",
+        "Project search" | "Saved projects" | "Project health check" | "Project health change" => {
+            "Projects"
+        }
         "Package operation" => "Packages",
         "Repository configuration" => "Repositories",
         _ => "Other",
@@ -273,7 +275,10 @@ mod tests {
         assert_eq!(category_for_action("Project search"), "Projects");
         assert_eq!(category_for_action("Project health change"), "Projects");
         assert_eq!(category_for_action("Package operation"), "Packages");
-        assert_eq!(category_for_action("Repository configuration"), "Repositories");
+        assert_eq!(
+            category_for_action("Repository configuration"),
+            "Repositories"
+        );
         assert_eq!(category_for_action("Imported legacy action"), "Other");
     }
 

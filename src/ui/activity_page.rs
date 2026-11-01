@@ -38,17 +38,14 @@ pub(super) fn build_activity_page(
         .placeholder_text("Filter activity by action, target, or summary")
         .tooltip_text("Search the locally recorded activity without changing history")
         .build();
-    let category = gtk::DropDown::from_strings(&["All", "Projects", "Packages", "Repositories", "Other"]);
+    let category =
+        gtk::DropDown::from_strings(&["All", "Projects", "Packages", "Repositories", "Other"]);
     category.set_tooltip_text(Some("Filter activity by event category"));
     let filters = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     filters.append(&filter);
     filters.append(&category);
-    let time_range = gtk::DropDown::from_strings(&[
-        "Any time",
-        "Past 24 hours",
-        "Past 7 days",
-        "Past 30 days",
-    ]);
+    let time_range =
+        gtk::DropDown::from_strings(&["Any time", "Past 24 hours", "Past 7 days", "Past 30 days"]);
     time_range.set_tooltip_text(Some("Filter activity by age"));
     let clear_filters = gtk::Button::with_label("Clear filters");
     clear_filters.set_tooltip_text(Some("Reset text, category, and time filters"));
@@ -89,7 +86,8 @@ pub(super) fn build_activity_page(
                 3 => "Repositories",
                 4 => "Other",
                 _ => "All",
-            }.to_string();
+            }
+            .to_string();
             let range = match time_range.selected() {
                 1 => "Past 24 hours",
                 2 => "Past 7 days",
@@ -162,7 +160,12 @@ pub(super) fn build_activity_page(
                 move |dialog, response| {
                     if response == gtk::ResponseType::Accept {
                         match dialog.file().and_then(|file| file.path()) {
-                            Some(path) => match activity::export_filtered_to(&path, &query, &category_name, &range) {
+                            Some(path) => match activity::export_filtered_to(
+                &path,
+                &query,
+                &category_name,
+                &range,
+            ) {
                                 Ok(count) => feedback.set_text(&format!(
                                     "Exported {count} activity event(s) to {}.",
                                     path.display()
