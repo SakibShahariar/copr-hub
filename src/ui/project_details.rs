@@ -170,6 +170,14 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
     status.add_css_class("dim-label");
     content.append(&status);
 
+    let compatibility_status = gtk::Label::builder()
+        .label("Fedora compatibility: waiting for COPR build targets…")
+        .xalign(0.0)
+        .wrap(true)
+        .build();
+    compatibility_status.add_css_class("dim-label");
+    content.append(&compatibility_status);
+
     let intelligence = gtk::Label::builder()
         .label("Update intelligence will appear when COPR build data and upstream release metadata are available.")
         .xalign(0.0)
@@ -408,7 +416,10 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
                 &window,
                 &packages,
                 &status,
+                &compatibility_status,
+&status,
                 &intelligence,
+&status,
                 &matrix,
                 Ok(monitor),
                 release_state
@@ -456,6 +467,7 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
         let parent = parent.clone();
         let packages = packages.clone();
         let status = status.clone();
+        let compatibility_status = compatibility_status.clone();
         let intelligence = intelligence.clone();
         let homepage = homepage_for_comparison.clone();
         let matrix = matrix.clone();
@@ -522,7 +534,10 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
                     &parent,
                     &packages,
                     &status,
+                    &compatibility_status,
+&status,
                     &intelligence,
+&status,
                     &matrix,
                     response,
                     release.as_ref().zip(homepage.as_deref()),
@@ -542,6 +557,7 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
         let parent = parent.clone();
         let packages = packages.clone();
         let status = status.clone();
+        let compatibility_status = compatibility_status.clone();
         let intelligence = intelligence.clone();
         let homepage_for_comparison = Some(homepage.clone());
         let matrix = matrix.clone();
@@ -650,7 +666,10 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
                     &parent,
                     &packages,
                     &status,
+                    &compatibility_status,
+&status,
                     &intelligence,
+&status,
                     &matrix,
                     response,
                     release.as_ref().zip(homepage_for_comparison.as_deref()),
@@ -841,10 +860,33 @@ pub(super) fn update_intelligence_summary(
     )
 }
 
+fn update_fedora_compatibility_status(
+    label: &gtk::Label,
+    monitor: &copr::ProjectMonitor,
+) {
+    match system::current_fedora_release() {
+        Some(release) => match copr::fedora_compatibility(monitor, Some(release)) {
+            copr::FedoraCompatibility::Compatible => label.set_text(&format!(
+                "Fedora compatibility: compatible · COPR reports Fedora {release} build targets."
+            )),
+            copr::FedoraCompatibility::Incompatible => label.set_text(&format!(
+                "Fedora compatibility: not compatible · no Fedora {release} build targets were reported."
+            )),
+            copr::FedoraCompatibility::Unknown => label.set_text(
+                "Fedora compatibility: unknown · this project has no reported build-target data.",
+            ),
+        },
+        None => label.set_text(
+            "Fedora compatibility: unknown · the current Fedora release could not be detected.",
+        ),
+    }
+}
+
 fn render_project_monitor(
     parent: &adw::Window,
     list: &gtk::ListBox,
     status: &gtk::Label,
+    compatibility_status: &gtk::Label,
     intelligence: &gtk::Label,
     matrix: &gtk::Grid,
     response: Result<copr::ProjectMonitor, String>,
@@ -852,6 +894,12 @@ fn render_project_monitor(
 ) {
     let upstream_release = upstream_context.map(|(release, _)| release);
     let homepage = upstream_context.map(|(_, homepage)| homepage);
+    match &response {
+        Ok(monitor) => update_fedora_compatibility_status(compatibility_status, monitor),
+        Err(_) => compatibility_status.set_text(
+            "Fedora compatibility: unknown · COPR build-target data is unavailable.",
+        ),
+    }
     clear_list_box(list);
     while let Some(child) = matrix.first_child() {
         matrix.remove(&child);
