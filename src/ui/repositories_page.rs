@@ -209,6 +209,33 @@ fn render_repositories(
                 });
                 row.add_suffix(&toggle);
 
+                if let Some(command) =
+                    system::copr_repository_command(&repository.id, !repository.enabled)
+                {
+                    let label = if repository.enabled {
+                        "Copy disable command"
+                    } else {
+                        "Copy enable command"
+                    };
+                    let copy_command = gtk::Button::with_label(label);
+                    copy_command.set_valign(gtk::Align::Center);
+                    copy_command.add_css_class("flat");
+                    copy_command.set_tooltip_text(Some(&command));
+                    copy_command.connect_clicked({
+                        let command = command.clone();
+                        let feedback = feedback.clone();
+                        move |_| {
+                            if let Some(display) = gtk::gdk::Display::default() {
+                                display.clipboard().set_text(&command);
+                                feedback.set_text("Command copied to clipboard.");
+                            } else {
+                                feedback.set_text("The system clipboard is unavailable.");
+                            }
+                        }
+                    });
+                    row.add_suffix(&copy_command);
+                }
+
                 if system::copr_project_spec_from_repository_id(&repository.id).is_some() {
                     let remove = gtk::Button::with_label("Remove");
                     remove.set_valign(gtk::Align::Center);

@@ -123,6 +123,32 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
     copr_link.set_halign(gtk::Align::Center);
     content.append(&copr_link);
 
+    let repository_id = format!(
+        "copr:copr.fedorainfracloud.org:{}:{}",
+        project.owner, project.name
+    );
+    if let Some(command) = system::copr_repository_command(&repository_id, true) {
+        let copy_command = gtk::Button::with_label("Copy enable command");
+        copy_command.set_halign(gtk::Align::Center);
+        copy_command.set_tooltip_text(Some("Copy the equivalent DNF command to the clipboard"));
+        let command_feedback = gtk::Label::new(None);
+        command_feedback.add_css_class("dim-label");
+        copy_command.connect_clicked({
+            let command = command.clone();
+            let command_feedback = command_feedback.clone();
+            move |_| {
+                if let Some(display) = gtk::gdk::Display::default() {
+                    display.clipboard().set_text(&command);
+                    command_feedback.set_text("Command copied to clipboard.");
+                } else {
+                    command_feedback.set_text("The system clipboard is unavailable.");
+                }
+            }
+        });
+        content.append(&copy_command);
+        content.append(&command_feedback);
+    }
+
     if let Some(homepage) = project.homepage.as_deref().filter(|url| is_web_url(url)) {
         let link = gtk::LinkButton::with_label(homepage, "Open project homepage");
         link.set_halign(gtk::Align::Center);

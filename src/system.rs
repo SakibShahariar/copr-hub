@@ -472,6 +472,13 @@ pub fn copr_project_spec_from_repository_id(repository_id: &str) -> Option<Strin
     (valid_owner && valid_project).then(|| format!("{owner}/{project}"))
 }
 
+/// Build a copyable DNF command for a supported standard COPR repository.
+pub fn copr_repository_command(repository_id: &str, enable: bool) -> Option<String> {
+    let project_spec = copr_project_spec_from_repository_id(repository_id)?;
+    let action = if enable { "enable" } else { "disable" };
+    Some(format!("dnf copr {action} {project_spec}"))
+}
+
 pub fn remove_copr_repository(repository_id: &str) -> Result<(), String> {
     let project_spec = copr_project_spec_from_repository_id(repository_id).ok_or_else(|| {
         "This repository ID is not a supported standard Fedora COPR project; it was left unchanged."
@@ -747,6 +754,23 @@ enabled=1
         let packages = parse_installed_copr_packages(output);
         assert_eq!(packages.len(), 1);
         assert_eq!(packages[0].name, "valid");
+    }
+
+    #[test]
+    fn builds_copyable_commands_only_for_standard_copr_repositories() {
+        let id = "copr:copr.fedorainfracloud.org:alice:demo";
+        assert_eq!(
+            copr_repository_command(id, true).as_deref(),
+            Some("dnf copr enable alice/demo")
+        );
+        assert_eq!(
+            copr_repository_command(id, false).as_deref(),
+            Some("dnf copr disable alice/demo")
+        );
+        assert_eq!(
+            copr_repository_command("copr:example:alice:demo", true),
+            None
+        );
     }
 
     #[test]
