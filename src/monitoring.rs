@@ -337,7 +337,10 @@ mod tests {
             ]),
         };
 
-        assert!(prune_inactive_projects(&mut state, std::slice::from_ref(&active)));
+        assert!(prune_inactive_projects(
+            &mut state,
+            std::slice::from_ref(&active)
+        ));
         assert_eq!(state.projects.len(), 1);
         assert!(state.projects.contains_key(&project_key(&active)));
         assert!(!state.projects.contains_key(&project_key(&removed)));
