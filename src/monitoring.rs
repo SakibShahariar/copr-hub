@@ -413,6 +413,41 @@ mod tests {
     }
 
     #[test]
+    fn batched_observations_update_each_project_baseline() {
+        let first = copr::CoprProject {
+            owner: "alice".into(),
+            name: "first".into(),
+            description: None,
+            homepage: None,
+        };
+        let second = copr::CoprProject {
+            owner: "bob".into(),
+            name: "second".into(),
+            description: None,
+            homepage: None,
+        };
+        let monitor = copr::ProjectMonitor {
+            packages: Vec::new(),
+            latest_build: None,
+        };
+        let config = MonitoringConfig::default();
+        let mut state = PersistedMonitoringState::default();
+
+        let (first_alerts, first_activity) =
+            update_observation(&mut state, &first, &monitor, None, &config);
+        let (second_alerts, second_activity) =
+            update_observation(&mut state, &second, &monitor, None, &config);
+
+        assert!(first_alerts.is_empty());
+        assert!(second_alerts.is_empty());
+        assert!(first_activity.is_none());
+        assert!(second_activity.is_none());
+        assert_eq!(state.projects.len(), 2);
+        assert!(state.projects.contains_key(&project_key(&first)));
+        assert!(state.projects.contains_key(&project_key(&second)));
+    }
+
+    #[test]
     fn failure_state_normalization_is_case_insensitive() {
         assert!(is_failed("FAILED"));
         assert!(is_failed("Error"));
