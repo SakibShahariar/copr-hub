@@ -229,7 +229,7 @@ mod tests {
 
         assert!(snapshot.monitor.is_some());
         assert_eq!(snapshot.monitor_fetched_at_unix, Some(10));
-        assert_eq!(snapshot.build_history, Some(Vec::new()));
+        assert_eq!(snapshot.build_history.as_ref().map(Vec::len), Some(0));
         assert_eq!(snapshot.history_fetched_at_unix, Some(2));
         assert_eq!(snapshot.upstream_fetched_at_unix, Some(3));
         assert_eq!(snapshot.saved_at_unix, 10);
