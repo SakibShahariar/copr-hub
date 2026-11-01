@@ -258,10 +258,11 @@ fn check_saved_projects() -> Vec<(String, String, String)> {
                     break;
                 }
             };
-        let release = project
-            .homepage
-            .as_deref()
-            .and_then(|homepage| upstream::latest_release_for_monitoring_batch(homepage).ok().flatten());
+        let release = project.homepage.as_deref().and_then(|homepage| {
+            upstream::latest_release_for_monitoring_batch(homepage)
+                .ok()
+                .flatten()
+        });
         let cached_release = release
             .as_ref()
             .filter(|release| !release.stale_cache)
