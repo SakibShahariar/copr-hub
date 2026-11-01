@@ -92,6 +92,9 @@ fn main() {
 }
 
 fn build_ui(app: &adw::Application) {
+    if let Ok(projects) = favorites::load() {
+        let _ = monitoring::prune_to_projects(&projects);
+    }
     let window = adw::ApplicationWindow::builder()
         .application(app)
         .title("Copr Hub")
