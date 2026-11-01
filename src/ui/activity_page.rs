@@ -101,18 +101,19 @@ pub(super) fn build_activity_page(
                 _ => "Any time",
             };
             let metadata = row.widget_name().to_lowercase();
-            let timestamp = metadata
-                .split('|')
-                .nth(1)
+            let mut parts = metadata.splitn(3, '|');
+            let row_category = parts.next().unwrap_or_default();
+            let timestamp = parts
+                .next()
                 .and_then(|value| value.parse::<u64>().ok())
                 .unwrap_or(0);
+            let searchable = parts.next().unwrap_or_default();
             let now = gtk::glib::DateTime::now_utc()
                 .and_then(|date_time| date_time.to_unix())
                 .unwrap_or_default()
                 .max(0) as u64;
-            (query.is_empty() || metadata.contains(&query))
-                && (category_name == "All"
-                    || metadata.starts_with(&format!("{}|", category_name.to_lowercase())))
+            (query.is_empty() || searchable.contains(&query))
+                && (category_name == "All" || row_category == category_name.to_lowercase())
                 && activity::matches_time_range(timestamp, range, now)
         }
     });
