@@ -7,10 +7,6 @@ on:
     branches: [master, main]
   workflow_dispatch:
 
-# New commits supersede older runs for the same branch, avoiding redundant GTK installs.
-concurrency:
-  group: copr-hub-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -48,16 +44,8 @@ jobs:
           xmllint --noout data/io.github.SakibShahariar.CoprHub.metainfo.xml
           appstreamcli validate --no-net data/io.github.SakibShahariar.CoprHub.metainfo.xml
 
-      - name: Format Rust sources and capture patch
-        run: |
-          cargo fmt --all
-          git diff -- src > rustfmt.patch
-      - name: Upload rustfmt patch
-        uses: actions/upload-artifact@v4
-        with:
-          name: rustfmt-patch
-          path: rustfmt.patch
-          if-no-files-found: warn
+      - name: Check formatting
+        run: cargo fmt --all -- --check
 
       - name: Run unit tests
         run: cargo test --all-targets
