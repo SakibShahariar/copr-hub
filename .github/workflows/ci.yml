@@ -29,6 +29,16 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Generate and capture Cargo.lock
+        run: |
+          cargo generate-lockfile
+          cp Cargo.lock cargo-lock.generated
+      - name: Upload generated Cargo.lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-lock
+          path: cargo-lock.generated
+
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
 
