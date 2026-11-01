@@ -10,7 +10,7 @@ on:
 # New commits supersede older runs for the same branch, avoiding redundant GTK installs.
 concurrency:
   group: copr-hub-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
