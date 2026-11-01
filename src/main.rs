@@ -262,13 +262,16 @@ fn check_saved_projects() -> Vec<(String, String, String)> {
             .homepage
             .as_deref()
             .and_then(|homepage| upstream::latest_release(homepage).ok().flatten());
-        let _ = snapshots::save_monitor(&project, monitor.clone());
-        if let Some(release) = release.as_ref().filter(|release| !release.stale_cache) {
-            let _ = snapshots::save_release(&project, Some(release.clone()));
-        }
-        if let Some(history) = history {
-            let _ = snapshots::save_history(&project, history);
-        }
+        let cached_release = release
+            .as_ref()
+            .filter(|release| !release.stale_cache)
+            .cloned();
+        let _ = snapshots::save_monitoring_data(
+            &project,
+            monitor.clone(),
+            history,
+            cached_release,
+        );
         let alerts = monitoring::record_observation(&project, &monitor, release.as_ref())
             .unwrap_or_default();
         if !alerts.is_empty() {
