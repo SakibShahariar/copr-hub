@@ -70,7 +70,8 @@ fn backup_timestamp(file_name: &std::ffi::OsStr) -> Option<u64> {
         .to_str()?
         .strip_prefix("saved-projects-")?
         .strip_suffix(".json")?
-        .parse()
+        .parse::<u64>()
+        .ok()
 }
 
 /// Create a private local JSON backup when the opt-in schedule is due.
