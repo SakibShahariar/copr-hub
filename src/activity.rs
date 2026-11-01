@@ -87,7 +87,7 @@ pub fn category_for_action(action: &str) -> &'static str {
     }
 }
 
-fn matches_time_range(timestamp: u64, range: &str, now: u64) -> bool {
+pub fn matches_time_range(timestamp: u64, range: &str, now: u64) -> bool {
     let seconds = match range {
         "Past 24 hours" => 24 * 60 * 60,
         "Past 7 days" => 7 * 24 * 60 * 60,

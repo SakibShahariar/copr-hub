@@ -110,7 +110,7 @@ pub(super) fn build_activity_page(
                 .unwrap_or(0);
             let searchable = parts.next().unwrap_or_default();
             let now = gtk::glib::DateTime::now_utc()
-                .and_then(|date_time| date_time.to_unix())
+                .map(|date_time| date_time.to_unix())
                 .unwrap_or_default()
                 .max(0) as u64;
             (query.is_empty() || searchable.contains(&query))
@@ -146,6 +146,13 @@ pub(super) fn build_activity_page(
                 3 => "Repositories",
                 4 => "Other",
                 _ => "All",
+            }
+            .to_string();
+            let range = match time_range.selected() {
+                1 => "Past 24 hours",
+                2 => "Past 7 days",
+                3 => "Past 30 days",
+                _ => "Any time",
             }
             .to_string();
             let dialog = gtk::FileChooserNative::new(
