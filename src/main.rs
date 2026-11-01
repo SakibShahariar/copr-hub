@@ -6,8 +6,8 @@ mod monitoring;
 mod snapshots;
 mod storage;
 mod system;
-mod upstream;
 mod ui;
+mod upstream;
 
 use adw::prelude::*;
 
@@ -19,4 +19,3 @@ fn main() {
     app.connect_activate(ui::build_ui);
     app.run();
 }
-
