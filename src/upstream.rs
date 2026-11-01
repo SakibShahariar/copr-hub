@@ -4,14 +4,14 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 use std::thread;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const CACHE_TTL: Duration = Duration::from_secs(15 * 60);
 const MAX_STALE_CACHE_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 const CACHE_CAPACITY: usize = 128;
 
-type ReleaseCache = Mutex<HashMap<String, (Instant, Option<UpstreamRelease>)>>;
+type ReleaseCache = Mutex<HashMap<String, (SystemTime, Option<UpstreamRelease>)>>;
 
 static RELEASE_CACHE: OnceLock<ReleaseCache> = OnceLock::new();
 static CACHE_LOADED: OnceLock<()> = OnceLock::new();
@@ -70,7 +70,13 @@ fn load_persistent_cache() {
             if key.len() > 1024 {
                 return None;
             }
-            Some((key, (Instant::now() - age, entry.release)))
+            Some((
+                key,
+                (
+                    UNIX_EPOCH.checked_add(Duration::from_secs(entry.cached_at_unix))?,
+                    entry.release,
+                ),
+            ))
         })
         .take(CACHE_CAPACITY)
         .collect::<HashMap<_, _>>();
@@ -93,7 +99,7 @@ fn save_persistent_cache() {
     let entries = cache
         .iter()
         .filter_map(|(key, (stored_at, release))| {
-            let age = stored_at.elapsed().as_secs();
+            let age = stored_at.elapsed().ok()?.as_secs();
             (age <= MAX_STALE_CACHE_AGE.as_secs()).then(|| {
                 (
                     key.clone(),
@@ -299,7 +305,7 @@ pub fn latest_release(homepage: &str) -> Result<Option<UpstreamRelease>, String>
 
     if let Ok(cache) = cache.lock() {
         if let Some((stored_at, release)) = cache.get(&key) {
-            if stored_at.elapsed() < CACHE_TTL {
+            if stored_at.elapsed().is_ok_and(|age| age < CACHE_TTL) {
                 return Ok(release.clone());
             }
         }
@@ -323,7 +329,7 @@ pub fn latest_release(homepage: &str) -> Result<Option<UpstreamRelease>, String>
                     cache.remove(&oldest_key);
                 }
             }
-            cache.insert(key, (Instant::now(), release.clone()));
+            cache.insert(key, (SystemTime::now(), release.clone()));
         }
         save_persistent_cache();
         return result;
@@ -337,10 +343,10 @@ pub fn latest_release(homepage: &str) -> Result<Option<UpstreamRelease>, String>
 }
 
 fn stale_cache_fallback(
-    stored_at: Instant,
+    stored_at: SystemTime,
     release: Option<UpstreamRelease>,
 ) -> Option<UpstreamRelease> {
-    if stored_at.elapsed() > MAX_STALE_CACHE_AGE {
+    if stored_at.elapsed().map_or(true, |age| age > MAX_STALE_CACHE_AGE) {
         return None;
     }
     let mut release = release?;
@@ -646,7 +652,7 @@ mod tests {
     #[test]
     fn stale_cache_fallback_is_limited_and_marked() {
         use super::{stale_cache_fallback, UpstreamRelease, MAX_STALE_CACHE_AGE};
-        use std::time::{Duration, Instant};
+        use std::time::{Duration, SystemTime};
 
         let release = || UpstreamRelease {
             version: "v1.2.3".into(),
@@ -657,11 +663,11 @@ mod tests {
             prerelease: false,
         };
 
-        let cached = stale_cache_fallback(Instant::now(), Some(release())).unwrap();
+        let cached = stale_cache_fallback(SystemTime::now(), Some(release())).unwrap();
         assert!(cached.stale_cache);
-        assert!(stale_cache_fallback(Instant::now(), None).is_none());
+        assert!(stale_cache_fallback(SystemTime::now(), None).is_none());
 
-        let expired_at = Instant::now() - MAX_STALE_CACHE_AGE - Duration::from_secs(1);
+        let expired_at = SystemTime::now() - MAX_STALE_CACHE_AGE - Duration::from_secs(1);
         assert!(stale_cache_fallback(expired_at, Some(release())).is_none());
     }
 
