@@ -45,6 +45,29 @@ sh scripts/uninstall-local.sh
 
 Uninstalling preserves your saved projects and activity history.
 
+## Install a prebuilt release
+
+Tagged releases include an x86_64 Linux archive with the application binary and desktop integration files. The binary uses the system GTK4 and libadwaita libraries; on Fedora, install them with:
+
+```bash
+sudo dnf install gtk4 libadwaita
+```
+
+Download the archive and its `.sha256` file from [GitHub Releases](https://github.com/SakibShahariar/copr-hub/releases), then verify and install them:
+
+```bash
+ARCHIVE="copr-hub-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz"
+sha256sum -c "$ARCHIVE.sha256"
+tar -xzf "$ARCHIVE"
+
+install -Dm755 copr-hub/bin/copr-hub ~/.local/bin/copr-hub
+install -Dm644 copr-hub/share/applications/io.github.SakibShahariar.CoprHub.desktop ~/.local/share/applications/io.github.SakibShahariar.CoprHub.desktop
+install -Dm644 copr-hub/share/metainfo/io.github.SakibShahariar.CoprHub.metainfo.xml ~/.local/share/metainfo/io.github.SakibShahariar.CoprHub.metainfo.xml
+install -Dm644 copr-hub/share/icons/hicolor/scalable/apps/io.github.SakibShahariar.CoprHub.svg ~/.local/share/icons/hicolor/scalable/apps/io.github.SakibShahariar.CoprHub.svg
+```
+
+Replace `X.Y.Z` with the release version. The source installer above remains available when you prefer to build locally.
+
 ## Build from source
 
 ```bash
