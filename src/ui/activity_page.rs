@@ -164,11 +164,11 @@ pub(super) fn build_activity_page(
                     if response == gtk::ResponseType::Accept {
                         match dialog.file().and_then(|file| file.path()) {
                             Some(path) => match activity::export_filtered_to(
-                                    &path,
-                                    &query,
-                                    &category_name,
-                                    &range,
-                                ) {
+                                &path,
+                                &query,
+                                &category_name,
+                                &range,
+                            ) {
                                 Ok(count) => feedback.set_text(&format!(
                                     "Exported {count} activity event(s) to {}.",
                                     path.display()
