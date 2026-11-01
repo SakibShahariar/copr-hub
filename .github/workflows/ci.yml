@@ -33,7 +33,7 @@ jobs:
         run: cargo generate-lockfile
       - name: Commit Cargo.lock when missing or outdated
         run: |
-          if ! git diff --quiet -- Cargo.lock; then
+          if [ -n "$(git status --porcelain -- Cargo.lock)" ]; then
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
             git add Cargo.lock
