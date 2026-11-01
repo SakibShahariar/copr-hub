@@ -627,7 +627,7 @@ mod tests {
     fn persistent_release_cache_evicts_the_oldest_entry_at_capacity() {
         use super::{insert_release_cache_entry, CACHE_CAPACITY};
         use std::collections::HashMap;
-        use std::time::{Duration, SystemTime, UNIX_EPOCH};
+        use std::time::{Duration, UNIX_EPOCH};
 
         let mut cache = HashMap::new();
         for index in 0..CACHE_CAPACITY {
