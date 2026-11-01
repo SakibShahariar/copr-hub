@@ -318,23 +318,6 @@ pub struct MonitoringObservation {
     pub release: Option<upstream::UpstreamRelease>,
 }
 
-/// Compare and persist one observation. Kept for single-project callers.
-pub fn record_observation(
-    project: &copr::CoprProject,
-    monitor: &copr::ProjectMonitor,
-    release: Option<&upstream::UpstreamRelease>,
-) -> Result<Vec<String>, String> {
-    let mut state = load_state();
-    let config = load_config();
-    let (alerts, activity_summary) =
-        update_observation(&mut state, project, monitor, release, &config);
-    save_state(&state)?;
-    if let Some(summary) = activity_summary {
-        record_activity_change(project, &summary);
-    }
-    Ok(alerts)
-}
-
 fn record_observations_with_state<F>(
     observations: &[MonitoringObservation],
     mut state: PersistedMonitoringState,
