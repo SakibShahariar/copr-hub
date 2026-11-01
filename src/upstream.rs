@@ -45,6 +45,11 @@ fn persisted_entry_age(cached_at_unix: u64, now_unix: u64) -> Option<Duration> {
     (age <= MAX_STALE_CACHE_AGE.as_secs()).then(|| Duration::from_secs(age))
 }
 
+fn persisted_entry_time(cached_at_unix: u64, now_unix: u64) -> Option<SystemTime> {
+    persisted_entry_age(cached_at_unix, now_unix)?;
+    UNIX_EPOCH.checked_add(Duration::from_secs(cached_at_unix))
+}
+
 /// Load recent release metadata once so offline launches can still show useful
 /// version/date information. The cache is advisory and can always be discarded.
 fn load_persistent_cache() {
@@ -66,17 +71,11 @@ fn load_persistent_cache() {
         .entries
         .into_iter()
         .filter_map(|(key, entry)| {
-            let age = persisted_entry_age(entry.cached_at_unix, now)?;
+            let stored_at = persisted_entry_time(entry.cached_at_unix, now)?;
             if key.len() > 1024 {
                 return None;
             }
-            Some((
-                key,
-                (
-                    UNIX_EPOCH.checked_add(Duration::from_secs(entry.cached_at_unix))?,
-                    entry.release,
-                ),
-            ))
+            Some((key, (stored_at, entry.release)))
         })
         .take(CACHE_CAPACITY)
         .collect::<HashMap<_, _>>();
@@ -611,6 +610,19 @@ mod tests {
             persisted_entry_age(1_000, 1_000 + MAX_STALE_CACHE_AGE.as_secs() + 1),
             None,
             "entries older than the stale-cache window should be discarded"
+        );
+    }
+
+    #[test]
+    fn persisted_cache_timestamp_survives_reboot_independent_of_uptime() {
+        use super::persisted_entry_time;
+        use std::time::{Duration, UNIX_EPOCH};
+
+        let now = 1_800_000_000;
+        let cached_at = now - 20 * 60 * 60;
+        assert_eq!(
+            persisted_entry_time(cached_at, now),
+            UNIX_EPOCH.checked_add(Duration::from_secs(cached_at))
         );
     }
 
