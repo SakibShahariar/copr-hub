@@ -309,14 +309,18 @@ fn add_loading_bar(parent: &gtk::Box) -> gtk::ProgressBar {
     progress.add_css_class("osd");
     parent.append(&progress);
 
-    gtk::glib::timeout_add_local(std::time::Duration::from_millis(90), {
-        let progress = progress.clone();
-        move || {
-            if progress.is_visible() {
-                progress.pulse();
-            }
-            gtk::glib::ControlFlow::Continue
+    progress.connect_notify_local(Some("visible"), |progress, _| {
+        if !progress.is_visible() {
+            return;
         }
+        let progress = progress.clone();
+        gtk::glib::timeout_add_local(std::time::Duration::from_millis(90), move || {
+            if !progress.is_visible() {
+                return gtk::glib::ControlFlow::Break;
+            }
+            progress.pulse();
+            gtk::glib::ControlFlow::Continue
+        });
     });
     progress
 }
