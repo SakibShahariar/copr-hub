@@ -415,8 +415,7 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
             render_project_monitor(
                 &window,
                 &packages,
-                &status,
-                &compatibility_status,
+                (&status, &compatibility_status),
                 &intelligence,
                 &matrix,
                 Ok(monitor),
@@ -531,8 +530,7 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
                 render_project_monitor(
                     &parent,
                     &packages,
-                    &status,
-                    &compatibility_status,
+                    (&status, &compatibility_status),
                     &intelligence,
                     &matrix,
                     response,
@@ -661,8 +659,7 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
                 render_project_monitor(
                     &parent,
                     &packages,
-                    &status,
-                    &compatibility_status,
+                    (&status, &compatibility_status),
                     &intelligence,
                     &matrix,
                     response,
@@ -876,13 +873,13 @@ fn update_fedora_compatibility_status(label: &gtk::Label, monitor: &copr::Projec
 fn render_project_monitor(
     parent: &adw::Window,
     list: &gtk::ListBox,
-    status: &gtk::Label,
-    compatibility_status: &gtk::Label,
+    status: (&gtk::Label, &gtk::Label),
     intelligence: &gtk::Label,
     matrix: &gtk::Grid,
     response: Result<copr::ProjectMonitor, String>,
     upstream_context: Option<(&upstream::UpstreamRelease, &str)>,
 ) {
+    let (status, compatibility_status) = status;
     let upstream_release = upstream_context.map(|(release, _)| release);
     let homepage = upstream_context.map(|(_, homepage)| homepage);
     match &response {
