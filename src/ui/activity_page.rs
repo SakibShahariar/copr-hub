@@ -54,8 +54,8 @@ pub(super) fn build_activity_page(
     list.set_filter_func({
         let filter = filter.clone();
         move |row| {
-            let query = filter.text().trim().to_ascii_lowercase();
-            query.is_empty() || row.widget_name().to_ascii_lowercase().contains(&query)
+            let query = filter.text().trim().to_lowercase();
+            query.is_empty() || row.widget_name().to_lowercase().contains(&query)
         }
     });
     filter.connect_search_changed({
