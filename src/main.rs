@@ -249,14 +249,15 @@ fn check_saved_projects() -> Vec<(String, String, String)> {
     };
     let mut notifications = Vec::new();
     for project in projects {
-        let monitor = match copr::fetch_project_monitor(&project.owner, &project.name) {
-            Ok(monitor) => monitor,
-            Err(_) => {
-                // A connection failure usually means we're offline. Stop the scan
-                // instead of issuing one timeout per remaining saved project.
-                break;
-            }
-        };
+        let (monitor, history) =
+            match copr::fetch_project_monitor_with_history(&project.owner, &project.name) {
+                Ok(result) => result,
+                Err(_) => {
+                    // A connection failure usually means we're offline. Stop the scan
+                    // instead of issuing one timeout per remaining saved project.
+                    break;
+                }
+            };
         let release = project
             .homepage
             .as_deref()
@@ -265,7 +266,7 @@ fn check_saved_projects() -> Vec<(String, String, String)> {
         if let Some(release) = release.as_ref().filter(|release| !release.stale_cache) {
             let _ = snapshots::save_release(&project, Some(release.clone()));
         }
-        if let Ok(history) = copr::fetch_project_build_history(&project.owner, &project.name) {
+        if let Some(history) = history {
             let _ = snapshots::save_history(&project, history);
         }
         let alerts = monitoring::record_observation(&project, &monitor, release.as_ref())
