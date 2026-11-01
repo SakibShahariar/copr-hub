@@ -180,11 +180,11 @@ fn is_stale(timestamp: Option<i64>, now: u64, threshold_days: u32) -> bool {
     let Ok(now) = i64::try_from(now) else {
         return false;
     };
-    let threshold_secs = i64::from(
-        threshold_days.clamp(MIN_FRESHNESS_THRESHOLD_DAYS, MAX_FRESHNESS_THRESHOLD_DAYS),
-    ) * 24
-        * 60
-        * 60;
+    let threshold_secs =
+        i64::from(threshold_days.clamp(MIN_FRESHNESS_THRESHOLD_DAYS, MAX_FRESHNESS_THRESHOLD_DAYS))
+            * 24
+            * 60
+            * 60;
     now.saturating_sub(timestamp) >= threshold_secs
 }
 
