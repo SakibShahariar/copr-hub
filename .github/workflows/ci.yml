@@ -9,7 +9,7 @@ on:
 
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   rust:
@@ -29,15 +29,17 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      - name: Generate and capture Cargo.lock
+      - name: Generate Cargo.lock
+        run: cargo generate-lockfile
+      - name: Commit Cargo.lock when missing or outdated
         run: |
-          cargo generate-lockfile
-          cp Cargo.lock cargo-lock.generated
-      - name: Upload generated Cargo.lock
-        uses: actions/upload-artifact@v4
-        with:
-          name: cargo-lock
-          path: cargo-lock.generated
+          if ! git diff --quiet -- Cargo.lock; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add Cargo.lock
+            git commit -m 'build: commit reproducible Cargo.lock (Refs #2)'
+            git push
+          fi
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
