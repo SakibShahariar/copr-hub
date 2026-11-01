@@ -50,8 +50,21 @@ pub(super) fn build_activity_page(
         "Past 30 days",
     ]);
     time_range.set_tooltip_text(Some("Filter activity by age"));
+    let clear_filters = gtk::Button::with_label("Clear filters");
+    clear_filters.set_tooltip_text(Some("Reset text, category, and time filters"));
+    filters.append(&clear_filters);
     content.append(&filters);
     content.append(&time_range);
+    clear_filters.connect_clicked({
+        let filter = filter.clone();
+        let category = category.clone();
+        let time_range = time_range.clone();
+        move |_| {
+            filter.set_text("");
+            category.set_selected(0);
+            time_range.set_selected(0);
+        }
+    });
 
     let feedback = gtk::Label::builder()
         .label("Activity history is stored locally on this user account.")
