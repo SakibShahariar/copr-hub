@@ -335,27 +335,28 @@ pub fn record_observation(
     Ok(alerts)
 }
 
-/// Update all monitoring baselines from one cycle and write the state file once.
-/// A failed state write returns an error and suppresses the cycle's alerts.
-pub fn record_observations(
+fn record_observations_with_state<F>(
     observations: &[MonitoringObservation],
-) -> Result<Vec<(String, String, Vec<String>)>, String> {
+    mut state: PersistedMonitoringState,
+    config: &MonitoringConfig,
+    save: F,
+) -> Result<Vec<(String, String, Vec<String>)>, String>
+where
+    F: FnOnce(&PersistedMonitoringState) -> Result<(), String>,
+{
     if observations.is_empty() {
         return Ok(Vec::new());
     }
 
-    let mut state = load_state();
-    let config = load_config();
     let mut results = Vec::with_capacity(observations.len());
     let mut activity_changes = Vec::new();
-
     for observation in observations {
         let (alerts, activity_summary) = update_observation(
             &mut state,
             &observation.project,
             &observation.monitor,
             observation.release.as_ref(),
-            &config,
+            config,
         );
         results.push((
             observation.project.owner.clone(),
@@ -367,11 +368,22 @@ pub fn record_observations(
         }
     }
 
-    save_state(&state)?;
+    save(&state)?;
     for (project, summary) in activity_changes {
         record_activity_change(&project, &summary);
     }
     Ok(results)
+}
+
+/// Update all monitoring baselines from one cycle and write the state file once.
+/// A failed state write returns an error and suppresses the cycle's alerts.
+pub fn record_observations(
+    observations: &[MonitoringObservation],
+) -> Result<Vec<(String, String, Vec<String>)>, String> {
+    if observations.is_empty() {
+        return Ok(Vec::new());
+    }
+    record_observations_with_state(observations, load_state(), &load_config(), save_state)
 }
 
 #[cfg(test)]
@@ -445,6 +457,57 @@ mod tests {
         assert_eq!(state.projects.len(), 2);
         assert!(state.projects.contains_key(&project_key(&first)));
         assert!(state.projects.contains_key(&project_key(&second)));
+    }
+
+    #[test]
+    fn batched_recording_persists_once_and_propagates_save_errors() {
+        let project = |owner: &str, name: &str| copr::CoprProject {
+            owner: owner.into(),
+            name: name.into(),
+            description: None,
+            homepage: None,
+        };
+        let monitor = copr::ProjectMonitor {
+            packages: Vec::new(),
+            latest_build: None,
+        };
+        let observations = vec![
+            MonitoringObservation {
+                project: project("alice", "first"),
+                monitor: monitor.clone(),
+                release: None,
+            },
+            MonitoringObservation {
+                project: project("bob", "second"),
+                monitor,
+                release: None,
+            },
+        ];
+        let mut writes = 0;
+        let result = record_observations_with_state(
+            &observations,
+            PersistedMonitoringState::default(),
+            &MonitoringConfig::default(),
+            |state| {
+                writes += 1;
+                assert_eq!(state.projects.len(), 2);
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert_eq!(writes, 1);
+        assert_eq!(result.len(), 2);
+        assert!(result.iter().all(|(_, _, alerts)| alerts.is_empty()));
+
+        let error = record_observations_with_state(
+            &observations,
+            PersistedMonitoringState::default(),
+            &MonitoringConfig::default(),
+            |_| Err("disk full".to_string()),
+        )
+        .unwrap_err();
+        assert_eq!(error, "disk full");
     }
 
     #[test]
