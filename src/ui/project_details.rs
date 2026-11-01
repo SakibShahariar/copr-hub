@@ -6,6 +6,27 @@ pub(super) fn is_web_url(value: &str) -> bool {
         .unwrap_or(false)
 }
 
+fn release_notes_url(release: &upstream::UpstreamRelease) -> Option<&str> {
+    if release.prerelease {
+        return None;
+    }
+    release.url.as_deref().filter(|url| is_web_url(url))
+}
+
+fn update_release_notes_link(link: &gtk::LinkButton, release: &upstream::UpstreamRelease) {
+    if let Some(url) = release_notes_url(release) {
+        link.set_uri(url);
+        link.set_label(if release.stale_cache {
+            "Release notes (cached)"
+        } else {
+            "Release notes"
+        });
+        link.set_visible(true);
+    } else {
+        link.set_visible(false);
+    }
+}
+
 pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &copr::CoprProject) {
     let window = adw::Window::builder()
         .transient_for(parent)
@@ -141,6 +162,11 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
         .build();
     upstream_status.add_css_class("dim-label");
     content.append(&upstream_status);
+
+    let release_notes = gtk::LinkButton::with_label("https://example.invalid/", "Release notes");
+    release_notes.set_halign(gtk::Align::Center);
+    release_notes.set_visible(false);
+    content.append(&release_notes);
 
     let package_filter_mode = gtk::DropDown::from_strings(&[
         "All packages",
@@ -376,6 +402,7 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
             ));
         }
         if let Some(release) = snapshot.upstream_release.as_ref() {
+            update_release_notes_link(&release_notes, release);
             upstream_status.set_text(&format!(
                 "Cached upstream release: {} ({}) · {} · {}{}",
                 release.version,
@@ -483,6 +510,7 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
 
     if let Some(homepage) = homepage {
         let upstream_status = upstream_status.clone();
+        let release_notes = release_notes.clone();
         let monitor_state = monitor_state.clone();
         let release_state = release_state.clone();
         let parent = parent.clone();
@@ -515,6 +543,7 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
                     if !release.stale_cache {
                         let _ = snapshots::save_release(&project_data, Some(release.clone()));
                     }
+                    update_release_notes_link(&release_notes, &release);
                     upstream_status.set_text(&format!(
                         "Latest upstream stable release: {} ({}) · {}{}{}{}",
                         release.version,
@@ -531,6 +560,7 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
                     Some(release)
                 }
                 Ok(Ok(None)) => {
+                    release_notes.set_visible(false);
                     let _ = snapshots::save_release(&project_data, None);
                     upstream_status.set_text(
                         "No stable upstream release metadata is available for this project homepage.",
@@ -540,6 +570,7 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
                 Ok(Err(error)) => {
                     if let Some(snapshot) = snapshots::load(&project_data) {
                         if let Some(release) = snapshot.upstream_release {
+                            update_release_notes_link(&release_notes, &release);
                             upstream_status.set_text(&format!(
                                 "Could not refresh upstream releases: {error} · showing cached {} · {}{}",
                                 release.version,
@@ -563,6 +594,7 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
                 Err(_) => {
                     if let Some(snapshot) = snapshots::load(&project_data) {
                         if let Some(release) = snapshot.upstream_release {
+                            update_release_notes_link(&release_notes, &release);
                             upstream_status.set_text(&format!(
                                 "Live upstream lookup failed · showing cached {} · {}{}",
                                 release.version,
@@ -1218,4 +1250,30 @@ pub(super) fn confirm_package_operation<F: Fn() + Clone + 'static>(
         }
     });
     dialog.present();
+}
+
+
+#[cfg(test)]
+mod release_notes_tests {
+    use super::*;
+
+    fn release(url: Option<&str>, prerelease: bool) -> upstream::UpstreamRelease {
+        upstream::UpstreamRelease {
+            version: "1.2.3".into(),
+            name: "Release 1.2.3".into(),
+            published_at: None,
+            url: url.map(str::to_string),
+            stale_cache: false,
+            prerelease,
+        }
+    }
+
+    #[test]
+    fn release_notes_require_a_stable_http_or_https_url() {
+        assert_eq!(release_notes_url(&release(Some("https://example.com/releases/1.2.3"), false)), Some("https://example.com/releases/1.2.3"));
+        assert_eq!(release_notes_url(&release(Some("http://example.com/releases/1.2.3"), false)), Some("http://example.com/releases/1.2.3"));
+        assert_eq!(release_notes_url(&release(None, false)), None);
+        assert_eq!(release_notes_url(&release(Some("javascript:alert(1)"), false)), None);
+        assert_eq!(release_notes_url(&release(Some("https://example.com/releases/1.2.3"), true)), None);
+    }
 }
