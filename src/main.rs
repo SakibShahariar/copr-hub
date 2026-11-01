@@ -280,7 +280,9 @@ fn check_saved_projects() -> Vec<(String, String, String)> {
     let recorded = match monitoring::record_observations(&observations) {
         Ok(recorded) => recorded,
         Err(error) => {
-            eprintln!("Could not save monitoring state; this cycle's alerts were suppressed: {error}");
+            eprintln!(
+                "Could not save monitoring state; this cycle's alerts were suppressed: {error}"
+            );
             return Vec::new();
         }
     };
