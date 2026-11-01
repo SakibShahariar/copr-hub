@@ -240,7 +240,7 @@ pub fn fetch_project_build_history(
     Ok(builds)
 }
 
-pub fn fetch_project_monitor(owner: &str, project: &str) -> Result<ProjectMonitor, String> {
+fn fetch_project_monitor_data(owner: &str, project: &str) -> Result<ProjectMonitor, String> {
     let response = send_with_retry(
         client()?
             .get(format!("{COPR_API_BASE}/monitor"))
@@ -249,30 +249,60 @@ pub fn fetch_project_monitor(owner: &str, project: &str) -> Result<ProjectMonito
     .error_for_status()
     .map_err(|error| service_response_error(error, "project"))?;
 
-    let mut monitor: ProjectMonitor = response
+    response
         .json()
-        .map_err(|error| format!("Could not read the project build information: {error}"))?;
+        .map_err(|error| format!("Could not read the project build information: {error}"))
+}
 
-    // The monitor endpoint has no timestamps, so use the newest project build for freshness.
-    let latest_build = client()
-        .and_then(|client| {
-            send_with_retry(
-                client
-                    .get(format!("{}/build/list/", COPR_API_BASE))
-                    .query(&[
-                        ("ownername", owner),
-                        ("projectname", project),
-                        ("limit", "1"),
-                    ]),
-            )?
-            .error_for_status()
-            .map_err(|error| service_response_error(error, "recent build"))?
-            .json::<BuildListResponse>()
-            .map_err(|error| format!("Could not read recent build information: {error}"))
-        })
-        .ok()
-        .and_then(|mut response| response.builds.drain(..).next());
-    monitor.latest_build = latest_build;
+fn fetch_latest_build(owner: &str, project: &str) -> Result<Option<ProjectBuildSummary>, String> {
+    let response = send_with_retry(
+        client()?
+            .get(format!("{}/build/list/", COPR_API_BASE))
+            .query(&[
+                ("ownername", owner),
+                ("projectname", project),
+                ("limit", "1"),
+            ]),
+    )?
+    .error_for_status()
+    .map_err(|error| service_response_error(error, "recent build"))?
+    .json::<BuildListResponse>()
+    .map_err(|error| format!("Could not read recent build information: {error}"))?;
+    Ok(response.builds.into_iter().next())
+}
+
+fn build_summary_from_event(build: &ProjectBuildEvent) -> ProjectBuildSummary {
+    ProjectBuildSummary {
+        state: build.state.clone(),
+        ended_on: build.ended_on,
+        submitted_on: build.submitted_on.or(build.started_on).or(build.ended_on),
+    }
+}
+
+/// Fetch monitor and build history together so monitoring can reuse the history
+/// response for the latest-build freshness summary.
+pub fn fetch_project_monitor_with_history(
+    owner: &str,
+    project: &str,
+) -> Result<(ProjectMonitor, Option<Vec<ProjectBuildEvent>>), String> {
+    let mut monitor = fetch_project_monitor_data(owner, project)?;
+    match fetch_project_build_history(owner, project) {
+        Ok(history) => {
+            monitor.latest_build = history.first().map(build_summary_from_event);
+            Ok((monitor, Some(history)))
+        }
+        Err(_) => {
+            // Preserve monitor results when history is unavailable. Fall back to
+            // the small latest-build request used by standalone monitor lookups.
+            monitor.latest_build = fetch_latest_build(owner, project).ok().flatten();
+            Ok((monitor, None))
+        }
+    }
+}
+
+pub fn fetch_project_monitor(owner: &str, project: &str) -> Result<ProjectMonitor, String> {
+    let mut monitor = fetch_project_monitor_data(owner, project)?;
+    monitor.latest_build = fetch_latest_build(owner, project).ok().flatten();
     Ok(monitor)
 }
 
@@ -358,6 +388,24 @@ pub fn build_freshness_message(build: Option<&ProjectBuildSummary>, now: i64) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn latest_build_summary_uses_history_timestamp_fallback_order() {
+        let event = ProjectBuildEvent {
+            id: Some(7),
+            state: Some("succeeded".into()),
+            submitted_on: None,
+            started_on: Some(200),
+            ended_on: Some(300),
+            chroots: Vec::new(),
+            source_package: None,
+        };
+
+        let summary = build_summary_from_event(&event);
+        assert_eq!(summary.state.as_deref(), Some("succeeded"));
+        assert_eq!(summary.ended_on, Some(300));
+        assert_eq!(summary.submitted_on, Some(200));
+    }
 
     #[test]
     fn retryable_statuses_are_limited_to_rate_limits_and_server_errors() {
