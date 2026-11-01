@@ -63,6 +63,30 @@ This document describes Copr Hub's detailed functionality. The [README](../READM
 - Record recent project searches, saved-project changes, package operations, and successful repository changes in a local history capped at 100 entries.
 - Search activity locally, view local timestamps, export history to portable JSON, merge history backups without duplicating existing events, or clear history after confirmation.
 
+## Security and repository trust
+
+Copr Hub is a repository discovery and management tool, not a package security scanner. COPR projects are third-party build repositories; their build-health, compatibility, freshness, and upstream-release indicators do not establish that a project or its packages are safe.
+
+Before enabling an unfamiliar repository:
+
+- Review the project's COPR page, maintainer, source repository, build targets, and release history.
+- Check the project's own security and support information, and verify that the repository is intended for your Fedora release and architecture.
+- Prefer projects whose source, build process, and maintainers you can reasonably trust. A compatible build target only means that COPR reports a build for that target; it is not a security endorsement.
+
+### Privileged package and repository actions
+
+Copr Hub runs as your regular user. Repository enable/disable and package install/remove operations request authorization through `pkexec` and invoke DNF; the application does not run as root.
+
+These actions can change system-wide package and repository state. DNF may install, upgrade, or remove packages and their dependencies, and RPM package installation scripts run with system-level privileges. Review the confirmation dialog and the package/repository details before approving an operation. Removing a repository configuration does not uninstall packages previously installed from it.
+
+Copr Hub checks reported Fedora build compatibility before enabling a standard COPR project, and incompatible projects require an explicit **Enable anyway** choice. This check is a compatibility guard, not a trust or vulnerability check.
+
+### Network and local data
+
+Copr Hub requests public project/build metadata from COPR and, when a project homepage identifies a supported GitHub or GitLab repository, release metadata from those services. It does not upload saved projects, activity history, snapshots, or local monitoring state, and it has no telemetry feature.
+
+Local history and saved-project exports are ordinary files chosen or stored by the user. Treat them as potentially revealing which projects you follow; review the contents and destination before sharing an export. Local application data is stored in your XDG directories, and application data files are written with owner-only permissions.
+
 ## Network and offline behavior
 
 - Handle temporary COPR, GitHub, and GitLab API failures with one bounded retry for rate limits, server errors, connection failures, and timeouts.
