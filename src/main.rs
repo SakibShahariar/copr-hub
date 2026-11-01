@@ -277,8 +277,14 @@ fn check_saved_projects() -> Vec<(String, String, String)> {
 
     // Flush fresh release metadata even when the scan stopped early after a fetch error.
     upstream::flush_persistent_cache();
-    monitoring::record_observations(&observations)
-        .unwrap_or_default()
+    let recorded = match monitoring::record_observations(&observations) {
+        Ok(recorded) => recorded,
+        Err(error) => {
+            eprintln!("Could not save monitoring state; this cycle's alerts were suppressed: {error}");
+            return Vec::new();
+        }
+    };
+    recorded
         .into_iter()
         .filter_map(|(owner, name, alerts)| {
             if alerts.is_empty() {
