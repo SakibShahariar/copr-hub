@@ -443,6 +443,57 @@ mod tests {
     }
 
     #[test]
+    fn empty_batch_does_not_load_or_write_monitoring_state() {
+        let mut writes = 0;
+        let result = record_observations_with_state(
+            &[],
+            PersistedMonitoringState::default(),
+            &MonitoringConfig::default(),
+            |_| {
+                writes += 1;
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert!(result.is_empty());
+        assert_eq!(writes, 0);
+    }
+
+    #[test]
+    fn single_observation_uses_one_write_and_establishes_baseline() {
+        let observation = MonitoringObservation {
+            project: copr::CoprProject {
+                owner: "alice".into(),
+                name: "demo".into(),
+                description: None,
+                homepage: None,
+            },
+            monitor: copr::ProjectMonitor {
+                packages: Vec::new(),
+                latest_build: None,
+            },
+            release: None,
+        };
+        let mut writes = 0;
+        let result = record_observations_with_state(
+            &[observation],
+            PersistedMonitoringState::default(),
+            &MonitoringConfig::default(),
+            |state| {
+                writes += 1;
+                assert_eq!(state.projects.len(), 1);
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert_eq!(writes, 1);
+        assert_eq!(result.len(), 1);
+        assert!(result[0].2.is_empty());
+    }
+
+    #[test]
     fn batched_recording_persists_once_and_propagates_save_errors() {
         let project = |owner: &str, name: &str| copr::CoprProject {
             owner: owner.into(),
