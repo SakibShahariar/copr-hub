@@ -269,21 +269,115 @@ fn confirm_repository_toggle(
     list: &gtk::ListBox,
     feedback: &gtk::Label,
 ) {
+    let fedora_release = system::current_fedora_release();
+    if repository.enabled {
+        show_repository_toggle_dialog(parent, repository, list, feedback, None);
+        return;
+    }
+
+    let Some(project_spec) = system::copr_project_spec_from_repository_id(&repository.id) else {
+        show_repository_toggle_dialog(
+            parent,
+            repository,
+            list,
+            feedback,
+            Some((fedora_release, copr::FedoraCompatibility::Unknown)),
+        );
+        return;
+    };
+    let Some((owner, project)) = project_spec.split_once('/') else {
+        show_repository_toggle_dialog(
+            parent,
+            repository,
+            list,
+            feedback,
+            Some((fedora_release, copr::FedoraCompatibility::Unknown)),
+        );
+        return;
+    };
+
+    if fedora_release.is_none() {
+        show_repository_toggle_dialog(
+            parent,
+            repository,
+            list,
+            feedback,
+            Some((None, copr::FedoraCompatibility::Unknown)),
+        );
+        return;
+    }
+
+    feedback.set_text("Checking COPR build targets for Fedora compatibility…");
+    let owner = owner.to_string();
+    let project = project.to_string();
+    let parent = parent.clone();
+    let repository = repository.clone();
+    let list = list.clone();
+    let feedback = feedback.clone();
+    gtk::glib::MainContext::default().spawn_local(async move {
+        let result =
+            gtk::gio::spawn_blocking(move || copr::fetch_project_monitor(&owner, &project)).await;
+        let compatibility = match result {
+            Ok(Ok(monitor)) => copr::fedora_compatibility(&monitor, fedora_release),
+            Ok(Err(_)) | Err(_) => copr::FedoraCompatibility::Unknown,
+        };
+        show_repository_toggle_dialog(
+            &parent,
+            &repository,
+            &list,
+            &feedback,
+            Some((fedora_release, compatibility)),
+        );
+    });
+}
+
+fn show_repository_toggle_dialog(
+    parent: &adw::ApplicationWindow,
+    repository: &system::CoprRepository,
+    list: &gtk::ListBox,
+    feedback: &gtk::Label,
+    compatibility: Option<(Option<u32>, copr::FedoraCompatibility)>,
+) {
     let enabling = !repository.enabled;
     let action = if enabling { "Enable" } else { "Disable" };
     let action_past = if enabling { "enabled" } else { "disabled" };
+    let (secondary_text, action_label) = if !enabling {
+        (
+            "This changes system-wide DNF repository configuration. You will be asked to authenticate."
+                .to_string(),
+            action.to_string(),
+        )
+    } else {
+        match compatibility.unwrap_or((None, copr::FedoraCompatibility::Unknown)) {
+            (Some(release), copr::FedoraCompatibility::Compatible) => (
+                format!(
+                    "COPR reports build targets for Fedora {release}. Compatibility is informational; package availability can still vary."
+                ),
+                "Enable".to_string(),
+            ),
+            (Some(release), copr::FedoraCompatibility::Incompatible) => (
+                format!(
+                    "No Fedora {release} build targets were reported. Packages may fail to install, target another release, or stop receiving updates. Choose Enable anyway to continue."
+                ),
+                "Enable anyway".to_string(),
+            ),
+            _ => (
+                "Compatibility is unknown because the current Fedora release or COPR build-target data could not be determined. Review the project before enabling."
+                    .to_string(),
+                "Enable".to_string(),
+            ),
+        }
+    };
     let dialog = gtk::MessageDialog::builder()
         .transient_for(parent)
         .modal(true)
         .message_type(gtk::MessageType::Question)
         .buttons(gtk::ButtonsType::None)
         .text(format!("{action} {}?", repository.name))
-        .secondary_text(
-            "This changes system-wide DNF repository configuration. You will be asked to authenticate.",
-        )
+        .secondary_text(secondary_text)
         .build();
     dialog.add_button("Cancel", gtk::ResponseType::Cancel);
-    dialog.add_button(action, gtk::ResponseType::Accept);
+    dialog.add_button(&action_label, gtk::ResponseType::Accept);
 
     dialog.connect_response({
         let parent = parent.clone();
