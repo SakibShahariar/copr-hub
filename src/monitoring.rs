@@ -240,17 +240,15 @@ fn compare_states(previous: Option<&ProjectState>, current: &ProjectState) -> Ve
     alerts
 }
 
-/// Compare a successful observation with the last one. The first observation only
-/// establishes a baseline; it never emits notifications for pre-existing failures.
-pub fn record_observation(
+fn update_observation(
+    state: &mut PersistedMonitoringState,
     project: &copr::CoprProject,
     monitor: &copr::ProjectMonitor,
     release: Option<&upstream::UpstreamRelease>,
-) -> Result<Vec<String>, String> {
-    let mut state = load_state();
+    config: &MonitoringConfig,
+) -> (Vec<String>, Option<String>) {
     let key = project_key(project);
     let previous = state.projects.get(&key).cloned();
-    let config = load_config();
     let mut current = current_state(monitor, config.freshness_threshold_days);
     if let Some(release) = release.filter(|release| !release.stale_cache) {
         current.upstream_version = Some(release.version.clone());
@@ -258,8 +256,8 @@ pub fn record_observation(
         current.upstream_version = previous.upstream_version.clone();
     }
 
+    let mut changes = Vec::new();
     if let Some(previous) = previous.as_ref() {
-        let mut changes = Vec::new();
         if previous.target_states != current.target_states {
             let failed_before = previous
                 .target_states
@@ -297,19 +295,83 @@ pub fn record_observation(
                 current.upstream_version.as_deref().unwrap_or("unknown")
             ));
         }
-        if !changes.is_empty() {
-            let _ = crate::activity::record(
-                "Project health change",
-                &format!("{}/{}", project.owner, project.name),
-                &changes.join("; "),
-            );
-        }
     }
 
     let alerts = compare_states(previous.as_ref(), &current);
     state.projects.insert(key, current);
+    let activity_summary = (!changes.is_empty()).then(|| changes.join("; "));
+    (alerts, activity_summary)
+}
+
+fn record_activity_change(project: &copr::CoprProject, summary: &str) {
+    let _ = crate::activity::record(
+        "Project health change",
+        &format!("{}/{}", project.owner, project.name),
+        summary,
+    );
+}
+
+/// One successfully fetched project observation for a monitoring cycle.
+pub struct MonitoringObservation {
+    pub project: copr::CoprProject,
+    pub monitor: copr::ProjectMonitor,
+    pub release: Option<upstream::UpstreamRelease>,
+}
+
+/// Compare and persist one observation. Kept for single-project callers.
+pub fn record_observation(
+    project: &copr::CoprProject,
+    monitor: &copr::ProjectMonitor,
+    release: Option<&upstream::UpstreamRelease>,
+) -> Result<Vec<String>, String> {
+    let mut state = load_state();
+    let config = load_config();
+    let (alerts, activity_summary) =
+        update_observation(&mut state, project, monitor, release, &config);
     save_state(&state)?;
+    if let Some(summary) = activity_summary {
+        record_activity_change(project, &summary);
+    }
     Ok(alerts)
+}
+
+/// Update all monitoring baselines from one cycle and write the state file once.
+/// A failed state write returns an error and suppresses the cycle's alerts.
+pub fn record_observations(
+    observations: &[MonitoringObservation],
+) -> Result<Vec<(String, String, Vec<String>)>, String> {
+    if observations.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut state = load_state();
+    let config = load_config();
+    let mut results = Vec::with_capacity(observations.len());
+    let mut activity_changes = Vec::new();
+
+    for observation in observations {
+        let (alerts, activity_summary) = update_observation(
+            &mut state,
+            &observation.project,
+            &observation.monitor,
+            observation.release.as_ref(),
+            &config,
+        );
+        results.push((
+            observation.project.owner.clone(),
+            observation.project.name.clone(),
+            alerts,
+        ));
+        if let Some(summary) = activity_summary {
+            activity_changes.push((observation.project.clone(), summary));
+        }
+    }
+
+    save_state(&state)?;
+    for (project, summary) in activity_changes {
+        record_activity_change(&project, &summary);
+    }
+    Ok(results)
 }
 
 #[cfg(test)]
