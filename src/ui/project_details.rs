@@ -163,8 +163,7 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
     upstream_status.add_css_class("dim-label");
     content.append(&upstream_status);
 
-    let release_notes =
-        gtk::LinkButton::with_label("https://example.invalid/", "Release notes");
+    let release_notes = gtk::LinkButton::with_label("https://example.invalid/", "Release notes");
     release_notes.set_halign(gtk::Align::Center);
     release_notes.set_visible(false);
     content.append(&release_notes);
@@ -1271,17 +1270,11 @@ mod release_notes_tests {
     #[test]
     fn release_notes_require_a_stable_http_or_https_url() {
         assert_eq!(
-            release_notes_url(&release(
-                Some("https://example.com/releases/1.2.3"),
-                false
-            )),
+            release_notes_url(&release(Some("https://example.com/releases/1.2.3"), false)),
             Some("https://example.com/releases/1.2.3")
         );
         assert_eq!(
-            release_notes_url(&release(
-                Some("http://example.com/releases/1.2.3"),
-                false
-            )),
+            release_notes_url(&release(Some("http://example.com/releases/1.2.3"), false)),
             Some("http://example.com/releases/1.2.3")
         );
         assert_eq!(release_notes_url(&release(None, false)), None);
@@ -1290,10 +1283,7 @@ mod release_notes_tests {
             None
         );
         assert_eq!(
-            release_notes_url(&release(
-                Some("https://example.com/releases/1.2.3"),
-                true
-            )),
+            release_notes_url(&release(Some("https://example.com/releases/1.2.3"), true)),
             None
         );
     }
