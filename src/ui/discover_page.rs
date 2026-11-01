@@ -1,5 +1,5 @@
-use super::*;
 use super::project_details::show_project_details;
+use super::*;
 
 pub(super) fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     let content = gtk::Box::new(gtk::Orientation::Vertical, 20);
