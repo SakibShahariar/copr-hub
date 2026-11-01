@@ -75,12 +75,27 @@ fn matches_filter(entry: &ActivityEntry, query: &str) -> bool {
         || entry.summary.to_lowercase().contains(&query)
 }
 
-/// Export the local activity history, optionally narrowed by the Activity page search.
-pub fn export_filtered_to(path: &std::path::Path, query: &str) -> Result<usize, String> {
+/// Classify activity actions for the Activity page's category filter.
+pub fn category_for_action(action: &str) -> &'static str {
+    match action {
+        "Project search" | "Saved projects" | "Project health check" | "Project health change" => "Projects",
+        "Package operation" => "Packages",
+        "Repository configuration" => "Repositories",
+        _ => "Other",
+    }
+}
+
+/// Export activity narrowed by the Activity page's text and category filters.
+pub fn export_filtered_to(
+    path: &std::path::Path,
+    query: &str,
+    category: &str,
+) -> Result<usize, String> {
     let entries = load()?;
     let filtered: Vec<_> = entries
         .into_iter()
         .filter(|entry| matches_filter(entry, query))
+        .filter(|entry| category == "All" || category_for_action(&entry.action) == category)
         .collect();
     let contents = serde_json::to_vec_pretty(&filtered)
         .map_err(|error| format!("Could not encode activity history: {error}"))?;
@@ -91,7 +106,7 @@ pub fn export_filtered_to(path: &std::path::Path, query: &str) -> Result<usize, 
 
 /// Export the complete local activity history to a portable JSON file.
 pub fn export_to(path: &std::path::Path) -> Result<usize, String> {
-    export_filtered_to(path, "")
+    export_filtered_to(path, "", "All")
 }
 
 fn parse_import(contents: &str) -> Result<Vec<ActivityEntry>, String> {
@@ -240,6 +255,15 @@ mod tests {
         assert!(matches_filter(&entry, "café"));
         assert!(!matches_filter(&entry, "unrelated"));
         assert!(matches_filter(&entry, "   "));
+    }
+
+    #[test]
+    fn activity_actions_map_to_stable_categories() {
+        assert_eq!(category_for_action("Project search"), "Projects");
+        assert_eq!(category_for_action("Project health change"), "Projects");
+        assert_eq!(category_for_action("Package operation"), "Packages");
+        assert_eq!(category_for_action("Repository configuration"), "Repositories");
+        assert_eq!(category_for_action("Imported legacy action"), "Other");
     }
 
     #[test]

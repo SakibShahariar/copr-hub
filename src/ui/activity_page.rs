@@ -38,7 +38,12 @@ pub(super) fn build_activity_page(
         .placeholder_text("Filter activity by action, target, or summary")
         .tooltip_text("Search the locally recorded activity without changing history")
         .build();
-    content.append(&filter);
+    let category = gtk::DropDown::from_strings(&["All", "Projects", "Packages", "Repositories", "Other"]);
+    category.set_tooltip_text(Some("Filter activity by event category"));
+    let filters = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    filters.append(&filter);
+    filters.append(&category);
+    content.append(&filters);
 
     let feedback = gtk::Label::builder()
         .label("Activity history is stored locally on this user account.")
@@ -53,12 +58,25 @@ pub(super) fn build_activity_page(
     list.add_css_class("boxed-list");
     list.set_filter_func({
         let filter = filter.clone();
+        let category = category.clone();
         move |row| {
             let query = filter.text().trim().to_lowercase();
-            query.is_empty() || row.widget_name().to_lowercase().contains(&query)
+            let category_name = category
+                .selected_item()
+                .and_downcast::<gtk::StringObject>()
+                .map(|item| item.string().to_string())
+                .unwrap_or_else(|| "All".to_string());
+            let metadata = row.widget_name().to_lowercase();
+            (query.is_empty() || metadata.contains(&query))
+                && (category_name == "All"
+                    || metadata.starts_with(&format!("{}|", category_name.to_lowercase())))
         }
     });
     filter.connect_search_changed({
+        let list = list.clone();
+        move |_| list.invalidate_filter()
+    });
+    category.connect_selected_notify({
         let list = list.clone();
         move |_| list.invalidate_filter()
     });
@@ -68,8 +86,14 @@ pub(super) fn build_activity_page(
         let parent = parent.clone();
         let feedback = feedback.clone();
         let filter = filter.clone();
+        let category = category.clone();
         move |_| {
             let query = filter.text().to_string();
+            let category_name = category
+                .selected_item()
+                .and_downcast::<gtk::StringObject>()
+                .map(|item| item.string().to_string())
+                .unwrap_or_else(|| "All".to_string());
             let dialog = gtk::FileChooserNative::new(
                 Some("Export activity history"),
                 Some(&parent),
@@ -80,10 +104,11 @@ pub(super) fn build_activity_page(
             dialog.set_current_name("copr-hub-activity.json");
             dialog.connect_response({
                 let feedback = feedback.clone();
+                let category_name = category_name.clone();
                 move |dialog, response| {
                     if response == gtk::ResponseType::Accept {
                         match dialog.file().and_then(|file| file.path()) {
-                            Some(path) => match activity::export_filtered_to(&path, &query) {
+                            Some(path) => match activity::export_filtered_to(&path, &query, &category_name) {
                                 Ok(count) => feedback.set_text(&format!(
                                     "Exported {count} activity event(s) to {}.",
                                     path.display()
@@ -223,8 +248,11 @@ fn refresh_activity(list: &gtk::ListBox, feedback: &gtk::Label) {
                     ))
                     .build();
                 row.set_widget_name(&format!(
-                    "{} {} {}",
-                    entry.action, entry.target, entry.summary
+                    "{}|{} {} {}",
+                    activity::category_for_action(&entry.action),
+                    entry.action,
+                    entry.target,
+                    entry.summary
                 ));
                 row.add_prefix(&gtk::Image::from_icon_name("document-properties-symbolic"));
                 list.append(&row);
