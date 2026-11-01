@@ -231,10 +231,7 @@ fn launch_scheduled_backup(app: &adw::Application) {
     });
 }
 
-pub(super) fn launch_manual_monitor(
-    button: &gtk::Button,
-    feedback: &gtk::Label,
-) {
+pub(super) fn launch_manual_monitor(button: &gtk::Button, feedback: &gtk::Label) {
     button.set_sensitive(false);
     feedback.set_text("Checking saved projects…");
     let button = button.clone();
