@@ -65,6 +65,14 @@ pub fn set_enabled(enabled: bool) -> Result<(), String> {
     save_config(&config)
 }
 
+fn backup_timestamp(file_name: &std::ffi::OsStr) -> Option<u64> {
+    file_name
+        .to_str()?
+        .strip_prefix("saved-projects-")?
+        .strip_suffix(".json")?
+        .parse()
+}
+
 /// Create a private local JSON backup when the opt-in schedule is due.
 /// Runs only while the app is open; it does not install a system service or timer.
 pub fn run_if_due() -> Result<Option<PathBuf>, String> {
@@ -90,15 +98,14 @@ pub fn run_if_due() -> Result<Option<PathBuf>, String> {
         .map_err(|e| format!("Could not list scheduled backups: {e}"))?
         .flatten()
         .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_file()))
-        .filter(|entry| {
-            entry
-                .file_name()
-                .to_string_lossy()
-                .starts_with("saved-projects-")
-                && entry.path().extension().is_some_and(|ext| ext == "json")
-        })
+        .filter(|entry| backup_timestamp(&entry.file_name()).is_some())
         .collect();
-    backups.sort_by_key(|entry| entry.file_name());
+    backups.sort_by_key(|entry| {
+        (
+            backup_timestamp(&entry.file_name()).unwrap_or(u64::MAX),
+            entry.file_name(),
+        )
+    });
     while backups.len() > RETAIN_BACKUPS {
         let oldest = backups.remove(0);
         fs::remove_file(oldest.path())
@@ -110,6 +117,26 @@ pub fn run_if_due() -> Result<Option<PathBuf>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn backup_rotation_uses_numeric_timestamps_and_ignores_unrelated_files() {
+        assert_eq!(
+            backup_timestamp(std::ffi::OsStr::new("saved-projects-1700000000.json")),
+            Some(1_700_000_000)
+        );
+        assert_eq!(
+            backup_timestamp(std::ffi::OsStr::new("saved-projects-10000000000.json")),
+            Some(10_000_000_000)
+        );
+        assert_eq!(
+            backup_timestamp(std::ffi::OsStr::new("saved-projects-not-a-timestamp.json")),
+            None
+        );
+        assert_eq!(
+            backup_timestamp(std::ffi::OsStr::new("saved-projects-1700000000.txt")),
+            None
+        );
+    }
 
     #[test]
     fn scheduling_is_opt_in_and_interval_is_one_day() {
