@@ -93,13 +93,6 @@ pub(super) fn build_activity_page(
                 2 => "Past 7 days",
                 3 => "Past 30 days",
                 _ => "Any time",
-            }
-            .to_string();
-            let range = match time_range.selected() {
-                1 => "Past 24 hours",
-                2 => "Past 7 days",
-                3 => "Past 30 days",
-                _ => "Any time",
             };
             let metadata = row.widget_name().to_lowercase();
             let mut parts = metadata.splitn(3, '|');
