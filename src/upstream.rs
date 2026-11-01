@@ -345,7 +345,10 @@ fn stale_cache_fallback(
     stored_at: SystemTime,
     release: Option<UpstreamRelease>,
 ) -> Option<UpstreamRelease> {
-    if stored_at.elapsed().map_or(true, |age| age > MAX_STALE_CACHE_AGE) {
+    if stored_at
+        .elapsed()
+        .map_or(true, |age| age > MAX_STALE_CACHE_AGE)
+    {
         return None;
     }
     let mut release = release?;
