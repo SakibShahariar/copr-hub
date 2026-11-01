@@ -227,6 +227,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn activity_filter_matches_action_target_and_summary_case_insensitively() {
+        let entry = ActivityEntry {
+            timestamp: 1,
+            action: "Package Install".into(),
+            target: "Fedora COPR".into(),
+            summary: "Installed Café Tools".into(),
+        };
+
+        assert!(matches_filter(&entry, "PACKAGE"));
+        assert!(matches_filter(&entry, "copr"));
+        assert!(matches_filter(&entry, "café"));
+        assert!(!matches_filter(&entry, "unrelated"));
+        assert!(matches_filter(&entry, "   "));
+    }
+
+    #[test]
     fn import_parser_rejects_invalid_and_oversized_entries() {
         assert!(parse_import("{bad")
             .unwrap_err()
