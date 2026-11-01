@@ -350,16 +350,7 @@ fn latest_release_internal(
     let result = fetch_release(&owner, &repo, is_gitlab);
     if let Ok(release) = &result {
         if let Ok(mut cache) = cache.lock() {
-            if cache.len() >= CACHE_CAPACITY && !cache.contains_key(&key) {
-                if let Some(oldest_key) = cache
-                    .iter()
-                    .min_by_key(|(_, (stored_at, _))| *stored_at)
-                    .map(|(key, _)| key.clone())
-                {
-                    cache.remove(&oldest_key);
-                }
-            }
-            cache.insert(key, (SystemTime::now(), release.clone()));
+            insert_release_cache_entry(&mut cache, key, release.clone(), SystemTime::now());
         }
         if persist_after_fetch {
             save_persistent_cache();
@@ -372,6 +363,24 @@ fn latest_release_internal(
         return Ok(Some(release));
     }
     result
+}
+
+fn insert_release_cache_entry(
+    cache: &mut HashMap<String, (SystemTime, Option<UpstreamRelease>)>,
+    key: String,
+    release: Option<UpstreamRelease>,
+    stored_at: SystemTime,
+) {
+    if cache.len() >= CACHE_CAPACITY && !cache.contains_key(&key) {
+        if let Some(oldest_key) = cache
+            .iter()
+            .min_by_key(|(_, (stored_at, _))| *stored_at)
+            .map(|(key, _)| key.clone())
+        {
+            cache.remove(&oldest_key);
+        }
+    }
+    cache.insert(key, (stored_at, release));
 }
 
 fn stale_cache_fallback(
@@ -613,6 +622,35 @@ pub fn release_is_stale(published_at: Option<&str>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::repository_parts;
+
+    #[test]
+    fn persistent_release_cache_evicts_the_oldest_entry_at_capacity() {
+        use super::{insert_release_cache_entry, CACHE_CAPACITY};
+        use std::collections::HashMap;
+        use std::time::{Duration, SystemTime};
+
+        let mut cache = HashMap::new();
+        for index in 0..CACHE_CAPACITY {
+            insert_release_cache_entry(
+                &mut cache,
+                format!("project-{index:03}"),
+                None,
+                SystemTime::UNIX_EPOCH + Duration::from_secs(index as u64),
+            );
+        }
+
+        insert_release_cache_entry(
+            &mut cache,
+            "new-project".into(),
+            None,
+            SystemTime::UNIX_EPOCH + Duration::from_secs(CACHE_CAPACITY as u64),
+        );
+
+        assert_eq!(cache.len(), CACHE_CAPACITY);
+        assert!(!cache.contains_key("project-000"));
+        assert!(cache.contains_key("project-127"));
+        assert!(cache.contains_key("new-project"));
+    }
 
     #[test]
     fn monitoring_cache_batch_flushes_once_after_early_error() {
