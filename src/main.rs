@@ -247,7 +247,7 @@ fn check_saved_projects() -> Vec<(String, String, String)> {
     let Ok(projects) = favorites::load() else {
         return Vec::new();
     };
-    let mut notifications = Vec::new();
+    let mut observations = Vec::new();
     for project in projects {
         let (monitor, history) =
             match copr::fetch_project_monitor_with_history(&project.owner, &project.name) {
@@ -267,16 +267,27 @@ fn check_saved_projects() -> Vec<(String, String, String)> {
             .filter(|release| !release.stale_cache)
             .cloned();
         let _ = snapshots::save_monitoring_data(&project, monitor.clone(), history, cached_release);
-        let alerts = monitoring::record_observation(&project, &monitor, release.as_ref())
-            .unwrap_or_default();
-        if !alerts.is_empty() {
-            let body = alerts.join(" ");
-            let id = format!("copr-hub-{}-{}", project.owner, project.name);
-            let title = format!("{} · @{}", project.name, project.owner);
-            notifications.push((id, title, body));
-        }
+        observations.push(monitoring::MonitoringObservation {
+            project,
+            monitor,
+            release,
+        });
     }
-    notifications
+
+    monitoring::record_observations(&observations)
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|(owner, name, alerts)| {
+            if alerts.is_empty() {
+                return None;
+            }
+            Some((
+                format!("copr-hub-{owner}-{name}"),
+                format!("{name} · @{owner}"),
+                alerts.join(" "),
+            ))
+        })
+        .collect()
 }
 
 fn add_loading_bar(parent: &gtk::Box) -> gtk::ProgressBar {
