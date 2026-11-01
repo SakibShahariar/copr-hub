@@ -67,7 +67,9 @@ pub(super) fn build_activity_page(
     export.connect_clicked({
         let parent = parent.clone();
         let feedback = feedback.clone();
+        let filter = filter.clone();
         move |_| {
+            let query = filter.text().to_string();
             let dialog = gtk::FileChooserNative::new(
                 Some("Export activity history"),
                 Some(&parent),
@@ -81,7 +83,7 @@ pub(super) fn build_activity_page(
                 move |dialog, response| {
                     if response == gtk::ResponseType::Accept {
                         match dialog.file().and_then(|file| file.path()) {
-                            Some(path) => match activity::export_to(&path) {
+                            Some(path) => match activity::export_filtered_to(&path, &query) {
                                 Ok(count) => feedback.set_text(&format!(
                                     "Exported {count} activity event(s) to {}.",
                                     path.display()

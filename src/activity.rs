@@ -67,14 +67,31 @@ pub fn load() -> Result<Vec<ActivityEntry>, String> {
     }
 }
 
-/// Export the local activity history to a portable JSON file.
-pub fn export_to(path: &std::path::Path) -> Result<usize, String> {
+fn matches_filter(entry: &ActivityEntry, query: &str) -> bool {
+    let query = query.trim().to_lowercase();
+    query.is_empty()
+        || entry.action.to_lowercase().contains(&query)
+        || entry.target.to_lowercase().contains(&query)
+        || entry.summary.to_lowercase().contains(&query)
+}
+
+/// Export the local activity history, optionally narrowed by the Activity page search.
+pub fn export_filtered_to(path: &std::path::Path, query: &str) -> Result<usize, String> {
     let entries = load()?;
-    let contents = serde_json::to_vec_pretty(&entries)
+    let filtered: Vec<_> = entries
+        .into_iter()
+        .filter(|entry| matches_filter(entry, query))
+        .collect();
+    let contents = serde_json::to_vec_pretty(&filtered)
         .map_err(|error| format!("Could not encode activity history: {error}"))?;
     storage::atomic_write(path, &contents)
         .map_err(|error| format!("Could not export activity history: {error}"))?;
-    Ok(entries.len())
+    Ok(filtered.len())
+}
+
+/// Export the complete local activity history to a portable JSON file.
+pub fn export_to(path: &std::path::Path) -> Result<usize, String> {
+    export_filtered_to(path, "")
 }
 
 fn parse_import(contents: &str) -> Result<Vec<ActivityEntry>, String> {
