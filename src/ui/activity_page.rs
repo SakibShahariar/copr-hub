@@ -43,7 +43,15 @@ pub(super) fn build_activity_page(
     let filters = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     filters.append(&filter);
     filters.append(&category);
+    let time_range = gtk::DropDown::from_strings(&[
+        "Any time",
+        "Past 24 hours",
+        "Past 7 days",
+        "Past 30 days",
+    ]);
+    time_range.set_tooltip_text(Some("Filter activity by age"));
     content.append(&filters);
+    content.append(&time_range);
 
     let feedback = gtk::Label::builder()
         .label("Activity history is stored locally on this user account.")
@@ -59,6 +67,7 @@ pub(super) fn build_activity_page(
     list.set_filter_func({
         let filter = filter.clone();
         let category = category.clone();
+        let time_range = time_range.clone();
         move |row| {
             let query = filter.text().trim().to_lowercase();
             let category_name = match category.selected() {
@@ -68,10 +77,32 @@ pub(super) fn build_activity_page(
                 4 => "Other",
                 _ => "All",
             }.to_string();
+            let range = match time_range.selected() {
+                1 => "Past 24 hours",
+                2 => "Past 7 days",
+                3 => "Past 30 days",
+                _ => "Any time",
+            }.to_string();
+            let range = match time_range.selected() {
+                1 => "Past 24 hours",
+                2 => "Past 7 days",
+                3 => "Past 30 days",
+                _ => "Any time",
+            };
             let metadata = row.widget_name().to_lowercase();
+            let timestamp = metadata
+                .split('|')
+                .nth(1)
+                .and_then(|value| value.parse::<u64>().ok())
+                .unwrap_or(0);
+            let now = gtk::glib::DateTime::now_utc()
+                .and_then(|date_time| date_time.to_unix())
+                .unwrap_or_default()
+                .max(0) as u64;
             (query.is_empty() || metadata.contains(&query))
                 && (category_name == "All"
                     || metadata.starts_with(&format!("{}|", category_name.to_lowercase())))
+                && activity::matches_time_range(timestamp, range, now)
         }
     });
     filter.connect_search_changed({
@@ -82,6 +113,10 @@ pub(super) fn build_activity_page(
         let list = list.clone();
         move |_| list.invalidate_filter()
     });
+    time_range.connect_selected_notify({
+        let list = list.clone();
+        move |_| list.invalidate_filter()
+    });
     content.append(&list);
 
     export.connect_clicked({
@@ -89,6 +124,7 @@ pub(super) fn build_activity_page(
         let feedback = feedback.clone();
         let filter = filter.clone();
         let category = category.clone();
+        let time_range = time_range.clone();
         move |_| {
             let query = filter.text().to_string();
             let category_name = match category.selected() {
@@ -109,10 +145,11 @@ pub(super) fn build_activity_page(
             dialog.connect_response({
                 let feedback = feedback.clone();
                 let category_name = category_name.clone();
+                let range = range.clone();
                 move |dialog, response| {
                     if response == gtk::ResponseType::Accept {
                         match dialog.file().and_then(|file| file.path()) {
-                            Some(path) => match activity::export_filtered_to(&path, &query, &category_name) {
+                            Some(path) => match activity::export_filtered_to(&path, &query, &category_name, &range) {
                                 Ok(count) => feedback.set_text(&format!(
                                     "Exported {count} activity event(s) to {}.",
                                     path.display()

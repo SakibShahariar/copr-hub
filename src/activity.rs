@@ -85,17 +85,33 @@ pub fn category_for_action(action: &str) -> &'static str {
     }
 }
 
-/// Export activity narrowed by the Activity page's text and category filters.
+fn matches_time_range(timestamp: u64, range: &str, now: u64) -> bool {
+    let seconds = match range {
+        "Past 24 hours" => 24 * 60 * 60,
+        "Past 7 days" => 7 * 24 * 60 * 60,
+        "Past 30 days" => 30 * 24 * 60 * 60,
+        _ => return true,
+    };
+    timestamp <= now && now.saturating_sub(timestamp) <= seconds
+}
+
+/// Export activity narrowed by the Activity page's text, category, and time filters.
 pub fn export_filtered_to(
     path: &std::path::Path,
     query: &str,
     category: &str,
+    range: &str,
 ) -> Result<usize, String> {
     let entries = load()?;
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
     let filtered: Vec<_> = entries
         .into_iter()
         .filter(|entry| matches_filter(entry, query))
         .filter(|entry| category == "All" || category_for_action(&entry.action) == category)
+        .filter(|entry| matches_time_range(entry.timestamp, range, now))
         .collect();
     let contents = serde_json::to_vec_pretty(&filtered)
         .map_err(|error| format!("Could not encode activity history: {error}"))?;
@@ -259,6 +275,17 @@ mod tests {
         assert_eq!(category_for_action("Package operation"), "Packages");
         assert_eq!(category_for_action("Repository configuration"), "Repositories");
         assert_eq!(category_for_action("Imported legacy action"), "Other");
+    }
+
+    #[test]
+    fn activity_time_filter_handles_ranges_and_future_timestamps() {
+        let now = 1_800_000_000;
+        assert!(matches_time_range(now, "Past 24 hours", now));
+        assert!(matches_time_range(now - 86_400, "Past 24 hours", now));
+        assert!(!matches_time_range(now - 86_401, "Past 24 hours", now));
+        assert!(matches_time_range(now - 30 * 86_400, "Past 30 days", now));
+        assert!(!matches_time_range(now + 1, "Past 30 days", now));
+        assert!(matches_time_range(0, "Any time", now));
     }
 
     #[test]
