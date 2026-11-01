@@ -278,14 +278,15 @@ fn check_saved_projects() -> Vec<(String, String, String)> {
                 .as_ref()
                 .filter(|release| !release.stale_cache)
                 .cloned();
-            let _ = snapshots::save_monitoring_data(&project, monitor.clone(), history, cached_release);
+            let _ =
+                snapshots::save_monitoring_data(&project, monitor.clone(), history, cached_release);
             observations.push(monitoring::MonitoringObservation {
                 project,
                 monitor,
                 release,
             });
         }
-    
+
         observations
     });
     let recorded = match monitoring::record_observations(&observations) {

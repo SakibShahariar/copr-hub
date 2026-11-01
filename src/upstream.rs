@@ -619,10 +619,8 @@ mod tests {
         use super::run_cache_batch;
 
         let mut flushes = 0;
-        let result: Result<(), &str> = run_cache_batch(
-            || Err("project lookup failed"),
-            || flushes += 1,
-        );
+        let result: Result<(), &str> =
+            run_cache_batch(|| Err("project lookup failed"), || flushes += 1);
 
         assert_eq!(result, Err("project lookup failed"));
         assert_eq!(flushes, 1);
@@ -633,10 +631,7 @@ mod tests {
         use super::run_cache_batch;
 
         let mut flushes = 0;
-        let result = run_cache_batch(
-            || vec!["first", "second"],
-            || flushes += 1,
-        );
+        let result = run_cache_batch(|| vec!["first", "second"], || flushes += 1);
 
         assert_eq!(result, vec!["first", "second"]);
         assert_eq!(flushes, 1);
