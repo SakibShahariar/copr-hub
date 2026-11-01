@@ -4,7 +4,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, UNIX_EPOCH};
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const CACHE_TTL: Duration = Duration::from_secs(15 * 60);
