@@ -615,7 +615,7 @@ mod tests {
         assert_eq!(build.state.as_deref(), Some("succeeded"));
         assert_eq!(build.pkg_version.as_deref(), Some("1.2-1"));
     }
-    
+
     #[test]
     fn detects_fedora_compatibility_without_guessing_missing_targets() {
         let monitor: ProjectMonitor = serde_json::from_str(
@@ -644,5 +644,4 @@ mod tests {
             FedoraCompatibility::Unknown
         );
     }
-
 }

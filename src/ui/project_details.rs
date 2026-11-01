@@ -417,9 +417,7 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
                 &packages,
                 &status,
                 &compatibility_status,
-&status,
                 &intelligence,
-&status,
                 &matrix,
                 Ok(monitor),
                 release_state
@@ -535,9 +533,7 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
                     &packages,
                     &status,
                     &compatibility_status,
-&status,
                     &intelligence,
-&status,
                     &matrix,
                     response,
                     release.as_ref().zip(homepage.as_deref()),
@@ -667,9 +663,7 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
                     &packages,
                     &status,
                     &compatibility_status,
-&status,
                     &intelligence,
-&status,
                     &matrix,
                     response,
                     release.as_ref().zip(homepage_for_comparison.as_deref()),
@@ -860,10 +854,7 @@ pub(super) fn update_intelligence_summary(
     )
 }
 
-fn update_fedora_compatibility_status(
-    label: &gtk::Label,
-    monitor: &copr::ProjectMonitor,
-) {
+fn update_fedora_compatibility_status(label: &gtk::Label, monitor: &copr::ProjectMonitor) {
     match system::current_fedora_release() {
         Some(release) => match copr::fedora_compatibility(monitor, Some(release)) {
             copr::FedoraCompatibility::Compatible => label.set_text(&format!(
@@ -896,9 +887,8 @@ fn render_project_monitor(
     let homepage = upstream_context.map(|(_, homepage)| homepage);
     match &response {
         Ok(monitor) => update_fedora_compatibility_status(compatibility_status, monitor),
-        Err(_) => compatibility_status.set_text(
-            "Fedora compatibility: unknown · COPR build-target data is unavailable.",
-        ),
+        Err(_) => compatibility_status
+            .set_text("Fedora compatibility: unknown · COPR build-target data is unavailable."),
     }
     clear_list_box(list);
     while let Some(child) = matrix.first_child() {

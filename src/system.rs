@@ -846,7 +846,7 @@ enabled=0
         assert_eq!(repositories.len(), 1);
         assert_eq!(repositories[0].name, "Project");
     }
-    
+
     #[test]
     fn detects_only_a_valid_fedora_release_from_os_release() {
         assert_eq!(
@@ -858,7 +858,9 @@ enabled=0
             Some(44)
         );
         assert_eq!(parse_fedora_release("ID=nobara\nVERSION_ID=44\n"), None);
-        assert_eq!(parse_fedora_release("ID=fedora\nVERSION_ID=rawhide\n"), None);
+        assert_eq!(
+            parse_fedora_release("ID=fedora\nVERSION_ID=rawhide\n"),
+            None
+        );
     }
-
 }
