@@ -61,11 +61,13 @@ pub(super) fn build_activity_page(
         let category = category.clone();
         move |row| {
             let query = filter.text().trim().to_lowercase();
-            let category_name = category
-                .selected_item()
-                .and_downcast::<gtk::StringObject>()
-                .map(|item| item.string().to_string())
-                .unwrap_or_else(|| "All".to_string());
+            let category_name = match category.selected() {
+                1 => "Projects",
+                2 => "Packages",
+                3 => "Repositories",
+                4 => "Other",
+                _ => "All",
+            }.to_string();
             let metadata = row.widget_name().to_lowercase();
             (query.is_empty() || metadata.contains(&query))
                 && (category_name == "All"
@@ -89,11 +91,13 @@ pub(super) fn build_activity_page(
         let category = category.clone();
         move |_| {
             let query = filter.text().to_string();
-            let category_name = category
-                .selected_item()
-                .and_downcast::<gtk::StringObject>()
-                .map(|item| item.string().to_string())
-                .unwrap_or_else(|| "All".to_string());
+            let category_name = match category.selected() {
+                1 => "Projects",
+                2 => "Packages",
+                3 => "Repositories",
+                4 => "Other",
+                _ => "All",
+            }.to_string();
             let dialog = gtk::FileChooserNative::new(
                 Some("Export activity history"),
                 Some(&parent),
