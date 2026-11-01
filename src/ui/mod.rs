@@ -231,6 +231,29 @@ fn launch_scheduled_backup(app: &adw::Application) {
     });
 }
 
+pub(super) fn launch_manual_monitor(
+    button: &gtk::Button,
+    feedback: &gtk::Label,
+) {
+    button.set_sensitive(false);
+    feedback.set_text("Checking saved projects…");
+    let button = button.clone();
+    let feedback = feedback.clone();
+    gtk::glib::MainContext::default().spawn_local(async move {
+        match gtk::gio::spawn_blocking(check_saved_projects).await {
+            Ok(notifications) => {
+                let changed = notifications.len();
+                feedback.set_text(&format!(
+                    "Health check finished. {} project(s) reported new changes.",
+                    changed
+                ));
+            }
+            Err(error) => feedback.set_text(&format!("Health check failed: {error}")),
+        }
+        button.set_sensitive(true);
+    });
+}
+
 fn check_saved_projects() -> Vec<(String, String, String)> {
     let Ok(projects) = favorites::load() else {
         return Vec::new();

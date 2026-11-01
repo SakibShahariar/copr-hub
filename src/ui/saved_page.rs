@@ -30,11 +30,14 @@ pub(super) fn build_saved_page(
     compare.set_icon_name("view-grid-symbolic");
     let refresh = gtk::Button::with_label("Refresh");
     refresh.set_icon_name("view-refresh-symbolic");
+    let check_all = gtk::Button::with_label("Check all now");
+    check_all.set_icon_name("system-search-symbolic");
     heading.append(&title);
     heading.append(&compare);
     heading.append(&export);
     heading.append(&import);
     heading.append(&refresh);
+    heading.append(&check_all);
     content.append(&heading);
 
     let filter = gtk::SearchEntry::builder()
@@ -50,6 +53,12 @@ pub(super) fn build_saved_page(
         .build();
     feedback.add_css_class("dim-label");
     content.append(&feedback);
+
+    check_all.connect_clicked({
+        let feedback = feedback.clone();
+        let check_all = check_all.clone();
+        move |_| super::launch_manual_monitor(&check_all, &feedback)
+    });
 
     let monitoring_toggle =
         gtk::CheckButton::with_label("Monitor saved projects while Copr Hub is open");
