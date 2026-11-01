@@ -627,7 +627,7 @@ mod tests {
     fn persistent_release_cache_evicts_the_oldest_entry_at_capacity() {
         use super::{insert_release_cache_entry, CACHE_CAPACITY};
         use std::collections::HashMap;
-        use std::time::{Duration, SystemTime};
+        use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
         let mut cache = HashMap::new();
         for index in 0..CACHE_CAPACITY {
@@ -635,7 +635,7 @@ mod tests {
                 &mut cache,
                 format!("project-{index:03}"),
                 None,
-                SystemTime::UNIX_EPOCH + Duration::from_secs(index as u64),
+                UNIX_EPOCH + Duration::from_secs(index as u64),
             );
         }
 
@@ -643,7 +643,7 @@ mod tests {
             &mut cache,
             "new-project".into(),
             None,
-            SystemTime::UNIX_EPOCH + Duration::from_secs(CACHE_CAPACITY as u64),
+            UNIX_EPOCH + Duration::from_secs(CACHE_CAPACITY as u64),
         );
 
         assert_eq!(cache.len(), CACHE_CAPACITY);
