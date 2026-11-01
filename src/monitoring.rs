@@ -161,9 +161,7 @@ fn current_state(monitor: &copr::ProjectMonitor, threshold_days: u32) -> Project
     let latest_build_timestamp = latest.and_then(|build| build.ended_on.or(build.submitted_on));
     let threshold_days =
         threshold_days.clamp(MIN_FRESHNESS_THRESHOLD_DAYS, MAX_FRESHNESS_THRESHOLD_DAYS);
-    let stale = latest_build_timestamp
-        .and_then(|timestamp| i64::try_from(now_unix()).ok().map(|now| now - timestamp))
-        .is_some_and(|age| age >= i64::from(threshold_days) * 24 * 60 * 60);
+    let stale = is_stale(latest_build_timestamp, now_unix(), threshold_days);
     ProjectState {
         target_states,
         latest_build_state: latest
@@ -173,6 +171,21 @@ fn current_state(monitor: &copr::ProjectMonitor, threshold_days: u32) -> Project
         stale,
         stale_after_days: threshold_days,
     }
+}
+
+fn is_stale(timestamp: Option<i64>, now: u64, threshold_days: u32) -> bool {
+    let Some(timestamp) = timestamp else {
+        return false;
+    };
+    let Ok(now) = i64::try_from(now) else {
+        return false;
+    };
+    let threshold_secs = i64::from(
+        threshold_days.clamp(MIN_FRESHNESS_THRESHOLD_DAYS, MAX_FRESHNESS_THRESHOLD_DAYS),
+    ) * 24
+        * 60
+        * 60;
+    now.saturating_sub(timestamp) >= threshold_secs
 }
 
 fn compare_states(previous: Option<&ProjectState>, current: &ProjectState) -> Vec<String> {
@@ -603,6 +616,17 @@ mod tests {
             .iter()
             .any(|alert| alert.contains("New upstream release")));
         assert!(alerts.iter().any(|alert| alert.contains("become stale")));
+    }
+
+    #[test]
+    fn stale_detection_handles_threshold_and_future_timestamps() {
+        let threshold = i64::from(DEFAULT_FRESHNESS_THRESHOLD_DAYS) * 24 * 60 * 60;
+        let now = 1_800_000_000_u64;
+        assert!(!is_stale(Some(now as i64 - threshold + 1), now, 90));
+        assert!(is_stale(Some(now as i64 - threshold), now, 90));
+        assert!(!is_stale(Some(now as i64 + 60), now, 90));
+        assert!(!is_stale(None, now, 90));
+        assert!(is_stale(Some(i64::MIN), now, 90));
     }
 
     #[test]
