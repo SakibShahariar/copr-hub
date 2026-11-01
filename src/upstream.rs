@@ -307,6 +307,18 @@ pub fn flush_persistent_cache() {
     save_persistent_cache();
 }
 
+/// Run a monitoring operation and flush deferred release-cache updates exactly once
+/// after it returns, including when the operation returns an error.
+pub fn monitoring_cache_batch<T>(operation: impl FnOnce() -> T) -> T {
+    run_cache_batch(operation, flush_persistent_cache)
+}
+
+fn run_cache_batch<T>(operation: impl FnOnce() -> T, flush: impl FnOnce()) -> T {
+    let result = operation();
+    flush();
+    result
+}
+
 fn latest_release_internal(
     homepage: &str,
     persist_after_fetch: bool,
@@ -601,6 +613,34 @@ pub fn release_is_stale(published_at: Option<&str>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::repository_parts;
+
+    #[test]
+    fn monitoring_cache_batch_flushes_once_after_early_error() {
+        use super::run_cache_batch;
+
+        let mut flushes = 0;
+        let result: Result<(), &str> = run_cache_batch(
+            || Err("project lookup failed"),
+            || flushes += 1,
+        );
+
+        assert_eq!(result, Err("project lookup failed"));
+        assert_eq!(flushes, 1);
+    }
+
+    #[test]
+    fn monitoring_cache_batch_flushes_once_after_success() {
+        use super::run_cache_batch;
+
+        let mut flushes = 0;
+        let result = run_cache_batch(
+            || vec!["first", "second"],
+            || flushes += 1,
+        );
+
+        assert_eq!(result, vec!["first", "second"]);
+        assert_eq!(flushes, 1);
+    }
 
     #[test]
     fn retries_only_rate_limits_and_server_errors() {

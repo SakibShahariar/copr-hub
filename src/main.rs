@@ -247,8 +247,9 @@ fn check_saved_projects() -> Vec<(String, String, String)> {
     let Ok(projects) = favorites::load() else {
         return Vec::new();
     };
-    let mut observations = Vec::new();
-    for project in projects {
+    let observations = upstream::monitoring_cache_batch(|| {
+        let mut observations = Vec::new();
+        for project in projects {
         let (monitor, history) =
             match copr::fetch_project_monitor_with_history(&project.owner, &project.name) {
                 Ok(result) => result,
@@ -285,8 +286,8 @@ fn check_saved_projects() -> Vec<(String, String, String)> {
         });
     }
 
-    // Flush fresh release metadata even when the scan stopped early after a fetch error.
-    upstream::flush_persistent_cache();
+        observations
+    });
     let recorded = match monitoring::record_observations(&observations) {
         Ok(recorded) => recorded,
         Err(error) => {
