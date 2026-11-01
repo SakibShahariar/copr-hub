@@ -1,6 +1,9 @@
 use super::*;
 
-pub(super) fn build_activity_page(parent: &adw::ApplicationWindow, stack: &adw::ViewStack) -> gtk::Widget {
+pub(super) fn build_activity_page(
+    parent: &adw::ApplicationWindow,
+    stack: &adw::ViewStack,
+) -> gtk::Widget {
     let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
     content.set_margin_top(24);
     content.set_margin_bottom(24);
