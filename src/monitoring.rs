@@ -1,6 +1,6 @@
 use crate::{copr, storage, upstream};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
@@ -77,6 +77,26 @@ fn project_key(project: &copr::CoprProject) -> String {
     "/".hash(&mut hasher);
     project.name.hash(&mut hasher);
     format!("{:016x}", hasher.finish())
+}
+
+fn prune_inactive_projects(
+    state: &mut PersistedMonitoringState,
+    active_projects: &[copr::CoprProject],
+) -> bool {
+    let active_keys: HashSet<String> = active_projects.iter().map(project_key).collect();
+    let previous_len = state.projects.len();
+    state.projects.retain(|key, _| active_keys.contains(key));
+    state.projects.len() != previous_len
+}
+
+/// Remove monitoring baselines for projects that are no longer saved.
+pub fn prune_to_projects(projects: &[copr::CoprProject]) -> Result<bool, String> {
+    let mut state = load_state();
+    if !prune_inactive_projects(&mut state, projects) {
+        return Ok(false);
+    }
+    save_state(&state)?;
+    Ok(true)
 }
 
 fn read_json<T: for<'de> Deserialize<'de>>(path: &PathBuf, max_bytes: u64) -> Option<T> {
@@ -295,6 +315,37 @@ pub fn record_observation(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pruning_removes_only_projects_that_are_no_longer_saved() {
+        let active = copr::CoprProject {
+            owner: "alice".into(),
+            name: "active".into(),
+            description: None,
+            homepage: None,
+        };
+        let removed = copr::CoprProject {
+            owner: "bob".into(),
+            name: "removed".into(),
+            description: None,
+            homepage: None,
+        };
+        let mut state = PersistedMonitoringState {
+            projects: HashMap::from([
+                (project_key(&active), ProjectState::default()),
+                (project_key(&removed), ProjectState::default()),
+            ]),
+        };
+
+        assert!(prune_inactive_projects(&mut state, std::slice::from_ref(&active)));
+        assert_eq!(state.projects.len(), 1);
+        assert!(state.projects.contains_key(&project_key(&active)));
+        assert!(!state.projects.contains_key(&project_key(&removed)));
+        assert!(!prune_inactive_projects(
+            &mut state,
+            std::slice::from_ref(&active)
+        ));
+    }
 
     #[test]
     fn failure_state_normalization_is_case_insensitive() {
