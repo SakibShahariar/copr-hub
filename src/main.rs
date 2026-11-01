@@ -261,7 +261,7 @@ fn check_saved_projects() -> Vec<(String, String, String)> {
         let release = project
             .homepage
             .as_deref()
-            .and_then(|homepage| upstream::latest_release(homepage).ok().flatten());
+            .and_then(|homepage| upstream::latest_release_for_monitoring_batch(homepage).ok().flatten());
         let cached_release = release
             .as_ref()
             .filter(|release| !release.stale_cache)
@@ -274,6 +274,8 @@ fn check_saved_projects() -> Vec<(String, String, String)> {
         });
     }
 
+    // Flush fresh release metadata even when the scan stopped early after a fetch error.
+    upstream::flush_persistent_cache();
     monitoring::record_observations(&observations)
         .unwrap_or_default()
         .into_iter()
