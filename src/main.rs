@@ -2801,8 +2801,8 @@ fn build_saved_page(
                                         .buttons(gtk::ButtonsType::None)
                                         .text("Preview import changes")
                                         .secondary_text(format!(
-                                            "{} project entries in backup\n{} new project(s) will be added\n{} duplicate/already-saved entry(s) will be skipped\n\nYour current saved projects will be preserved.",
-                                            preview.incoming, preview.new_projects, preview.already_saved
+                                            "{} project entries in backup\n{} new project(s) will be added\n{} already saved locally\n{} duplicate entry/entries within the backup will be skipped\n\nYour current saved projects will be preserved.",
+                                            preview.incoming, preview.new_projects, preview.already_saved, preview.duplicate_in_backup
                                         ))
                                         .build();
                                     confirmation.add_button("Cancel", gtk::ResponseType::Cancel);
