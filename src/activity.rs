@@ -104,11 +104,6 @@ pub fn export_filtered_to(
     Ok(filtered.len())
 }
 
-/// Export the complete local activity history to a portable JSON file.
-pub fn export_to(path: &std::path::Path) -> Result<usize, String> {
-    export_filtered_to(path, "", "All")
-}
-
 fn parse_import(contents: &str) -> Result<Vec<ActivityEntry>, String> {
     if contents.len() > MAX_IMPORT_BYTES {
         return Err("The activity backup is larger than the 1 MiB import limit.".to_string());
