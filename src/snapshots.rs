@@ -105,6 +105,39 @@ fn load_or_create(project: &copr::CoprProject) -> Result<ProjectSnapshot, String
     }))
 }
 
+fn update_monitoring_data(
+    snapshot: &mut ProjectSnapshot,
+    monitor: copr::ProjectMonitor,
+    history: Option<Vec<copr::ProjectBuildEvent>>,
+    release: Option<UpstreamRelease>,
+    fetched_at_unix: u64,
+) {
+    snapshot.monitor = Some(monitor);
+    snapshot.monitor_fetched_at_unix = Some(fetched_at_unix);
+    if let Some(history) = history {
+        snapshot.build_history = Some(history);
+        snapshot.history_fetched_at_unix = Some(fetched_at_unix);
+    }
+    if let Some(release) = release {
+        snapshot.upstream_release = Some(release);
+        snapshot.upstream_fetched_at_unix = Some(fetched_at_unix);
+    }
+    snapshot.saved_at_unix = fetched_at_unix;
+}
+
+/// Persist all successful monitoring-cycle data with one snapshot read and write.
+/// Missing optional results preserve the last successful cached copy.
+pub fn save_monitoring_data(
+    project: &copr::CoprProject,
+    monitor: copr::ProjectMonitor,
+    history: Option<Vec<copr::ProjectBuildEvent>>,
+    release: Option<UpstreamRelease>,
+) -> Result<(), String> {
+    let mut snapshot = load_or_create(project)?;
+    update_monitoring_data(&mut snapshot, monitor, history, release, now_unix());
+    write_snapshot(&snapshot)
+}
+
 pub fn save_monitor(
     project: &copr::CoprProject,
     monitor: copr::ProjectMonitor,
@@ -172,6 +205,34 @@ mod tests {
             description: None,
             homepage: None,
         }
+    }
+
+    #[test]
+    fn combined_monitoring_update_preserves_optional_data_when_fetches_fail() {
+        let project = project();
+        let mut snapshot = ProjectSnapshot {
+            project,
+            saved_at_unix: 1,
+            monitor: None,
+            monitor_fetched_at_unix: None,
+            build_history: Some(Vec::new()),
+            history_fetched_at_unix: Some(2),
+            upstream_release: None,
+            upstream_fetched_at_unix: Some(3),
+        };
+        let monitor = copr::ProjectMonitor {
+            packages: Vec::new(),
+            latest_build: None,
+        };
+
+        update_monitoring_data(&mut snapshot, monitor, None, None, 10);
+
+        assert!(snapshot.monitor.is_some());
+        assert_eq!(snapshot.monitor_fetched_at_unix, Some(10));
+        assert_eq!(snapshot.build_history, Some(Vec::new()));
+        assert_eq!(snapshot.history_fetched_at_unix, Some(2));
+        assert_eq!(snapshot.upstream_fetched_at_unix, Some(3));
+        assert_eq!(snapshot.saved_at_unix, 10);
     }
 
     #[test]
