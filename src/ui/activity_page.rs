@@ -289,8 +289,9 @@ fn refresh_activity(list: &gtk::ListBox, feedback: &gtk::Label) {
                     ))
                     .build();
                 row.set_widget_name(&format!(
-                    "{}|{} {} {}",
+                    "{}|{}|{} {} {}",
                     activity::category_for_action(&entry.action),
+                    entry.timestamp,
                     entry.action,
                     entry.target,
                     entry.summary
