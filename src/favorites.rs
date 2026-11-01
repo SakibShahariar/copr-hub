@@ -211,10 +211,10 @@ fn preview_counts(imported: &[CoprProject], existing: &[CoprProject]) -> ImportP
     let mut new_projects = 0;
     for project in imported {
         let key = (project.owner.clone(), project.name.clone());
-        if existing_keys.contains(&key) {
-            already_saved += 1;
-        } else if !seen.insert(key) {
+        if !seen.insert(key.clone()) {
             duplicate_in_backup += 1;
+        } else if existing_keys.contains(&key) {
+            already_saved += 1;
         } else {
             new_projects += 1;
         }
@@ -279,6 +279,7 @@ mod tests {
     fn backup_preview_separates_local_saves_from_internal_duplicates() {
         let imported = vec![
             project("alice", "saved"),
+            project("alice", "saved"),
             project("bob", "new"),
             project("bob", "new"),
             project("carol", "new"),
@@ -288,9 +289,9 @@ mod tests {
         assert_eq!(
             preview_counts(&imported, &existing),
             ImportPreview {
-                incoming: 4,
+                incoming: 5,
                 already_saved: 1,
-                duplicate_in_backup: 1,
+                duplicate_in_backup: 2,
                 new_projects: 2,
             }
         );
