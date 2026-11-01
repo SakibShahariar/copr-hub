@@ -245,7 +245,7 @@ pub(super) fn launch_manual_monitor(button: &gtk::Button, feedback: &gtk::Label)
                     changed
                 ));
             }
-            Err(error) => feedback.set_text(&format!("Health check failed: {error}")),
+            Err(error) => feedback.set_text(&format!("Health check failed: {error:?}")),
         }
         button.set_sensitive(true);
     });
