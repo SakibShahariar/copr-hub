@@ -48,6 +48,7 @@ This document describes Copr Hub's detailed functionality. The [README](../READM
 
 ## Manage repositories and packages
 
+- Before enabling a standard COPR repository, compare its reported build targets with the detected Fedora release. Show Compatible, Not compatible, or Unknown; incompatible projects require an explicit **Enable anyway** choice, and missing data is never guessed.
 - Read enabled and disabled COPR repository definitions from `/etc/yum.repos.d`, including DNF5 repository enablement overrides. Show DNF-reported installed package origins on each repository row before repository changes; unavailable origin metadata is labeled as unavailable rather than treated as an empty list.
 - Enable or disable a repository after explicit confirmation, using `pkexec` and DNF's config-manager rather than running the app as root.
 - Remove supported standard Fedora COPR repositories after separate confirmation. This removes repository configuration only; it does not uninstall packages installed from that source. Unrecognized repository IDs are not offered the removal action.
