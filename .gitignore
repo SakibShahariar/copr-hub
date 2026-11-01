@@ -1,1 +1,16 @@
 /target
+
+# Editor and IDE files
+*.swp
+*.swo
+*~
+*.orig
+.idea/
+*.iml
+.vscode/
+
+# Operating-system files
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
