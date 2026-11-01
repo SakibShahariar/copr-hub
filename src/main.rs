@@ -252,10 +252,20 @@ fn check_saved_projects() -> Vec<(String, String, String)> {
         let (monitor, history) =
             match copr::fetch_project_monitor_with_history(&project.owner, &project.name) {
                 Ok(result) => result,
-                Err(_) => {
-                    // A connection failure usually means we're offline. Stop the scan
-                    // instead of issuing one timeout per remaining saved project.
+                Err(error) if copr::should_stop_monitoring_scan(&error) => {
+                    // Network failures, rate limits, and service outages affect the
+                    // whole scan. Avoid repeating the same failing request per project.
+                    eprintln!("Stopping COPR monitoring scan: {error}");
                     break;
+                }
+                Err(error) => {
+                    // A project-specific failure (for example, a missing project or
+                    // permission error) should not prevent checks for later projects.
+                    eprintln!(
+                        "Skipping COPR monitoring for @{} / {}: {error}",
+                        project.owner, project.name
+                    );
+                    continue;
                 }
             };
         let release = project.homepage.as_deref().and_then(|homepage| {

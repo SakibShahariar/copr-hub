@@ -100,6 +100,16 @@ fn client() -> Result<reqwest::blocking::Client, String> {
         .map_err(|error| format!("Could not prepare the network client: {error}"))
 }
 
+/// Whether a monitoring error is likely to affect every saved project.
+pub fn should_stop_monitoring_scan(error: &str) -> bool {
+    let error = error.to_ascii_lowercase();
+    error.contains("timed out")
+        || error.contains("could not connect to copr")
+        || error.contains("could not prepare the network client")
+        || error.contains("too many requests")
+        || error.contains("temporarily unavailable")
+}
+
 fn request_error(error: reqwest::Error) -> String {
     if error.is_timeout() {
         "The COPR request timed out. Check your connection and try again.".to_string()
@@ -405,6 +415,28 @@ mod tests {
         assert_eq!(summary.state.as_deref(), Some("succeeded"));
         assert_eq!(summary.ended_on, Some(300));
         assert_eq!(summary.submitted_on, Some(200));
+    }
+
+    #[test]
+    fn monitoring_scan_stops_only_for_scan_wide_failures() {
+        assert!(should_stop_monitoring_scan(
+            "Could not connect to COPR. Check your network connection."
+        ));
+        assert!(should_stop_monitoring_scan(
+            "The COPR request timed out. Check your connection and try again."
+        ));
+        assert!(should_stop_monitoring_scan(
+            "COPR is receiving too many requests. Wait a moment and try again."
+        ));
+        assert!(should_stop_monitoring_scan(
+            "COPR is temporarily unavailable (HTTP 503). Try again later."
+        ));
+        assert!(!should_stop_monitoring_scan(
+            "COPR could not find the requested project."
+        ));
+        assert!(!should_stop_monitoring_scan(
+            "COPR rejected the project request (HTTP 403)."
+        ));
     }
 
     #[test]
