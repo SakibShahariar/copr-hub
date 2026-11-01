@@ -1,4 +1,4 @@
-use crate::{activity, backups, copr, favorites, monitoring, snapshots, storage, system, upstream};
+use crate::{activity, backups, copr, favorites, monitoring, snapshots, system, upstream};
 use adw::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
