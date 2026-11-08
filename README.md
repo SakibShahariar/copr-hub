@@ -10,39 +10,15 @@ Copr Hub combines COPR search, build and upstream information, saved-project mon
 
 ## Features
 
-### Discover and inspect
+- **Project discovery:** Search COPR, inspect build status and Fedora targets, and review recent builds.
+- **Upstream intelligence:** Compare package versions with GitHub/GitLab releases and spot potentially outdated projects.
+- **Project monitoring:** Save and compare projects, track build-health changes, and receive optional notifications.
+- **Repository and package management:** Check Fedora compatibility, manage COPR repositories, inspect installed packages, and handle package operations.
+- **History and offline access:** Keep local activity history, backups, and cached project information available between sessions.
 
-- Search public COPR projects, sort results, and filter locally by name, owner, or description.
-- Inspect package versions, Fedora build targets, build states, and a package-by-target matrix.
-- Review recent build records, available timestamps, and direct COPR build links.
-- Compare package versions with stable GitHub or GitLab releases when a project links to a supported upstream repository.
-- See build-age and upstream-freshness hints. Uncertain package matches and unsupported version formats are not guessed.
+Copr Hub uses `pkexec` for privileged operations rather than running as root. COPR build-health and freshness indicators are informational, not security assessments.
 
-### Track projects
-
-- Save projects locally and run on-demand health checks.
-- Optionally monitor saved projects while the app is open (disabled by default; checks every six hours).
-- Get change-only notifications for newly failed builds, changed stable upstream releases, or projects crossing the configured no-build threshold.
-- Compare two or three saved projects by package count, build-target state, and latest-build freshness.
-- Export/import saved projects, preview imports, and optionally schedule local JSON backups while the app is running.
-
-### Manage repositories and packages
-
-- Check reported Fedora build targets before enabling a COPR repository. Incompatible targets require an explicit **Enable anyway** choice.
-- Inspect repository definitions and installed package origins reported by DNF.
-- Enable, disable, or remove supported COPR repository definitions with confirmation.
-- Find installed COPR packages, check enabled repositories for available upgrades, and inspect direct dependency impact.
-- Install or remove packages from project details with explicit confirmation.
-
-Privileged actions use `pkexec` and DNF; Copr Hub itself does not run as root. Removing a repository definition does not uninstall packages installed from it.
-
-### History and offline access
-
-Search, export, import, or clear a local activity history of recent searches and changes. Saved projects, history, repository configuration, installed-package listings, and cached project details remain available offline where possible. Cached data is labeled because it may be stale; live searches and fresh remote data require connectivity.
-
-**Trust matters:** COPR projects are third-party repositories. Build health, Fedora compatibility, and upstream freshness are not security assessments. Review a project's maintainer, source, and build history before enabling an unfamiliar repository.
-
-See the [features and limitations guide](docs/FEATURES.md) for detailed behavior, security notes, offline limits, and local data paths.
+See the [features and limitations guide](docs/FEATURES.md) for detailed functionality, security considerations, and offline behavior.
 
 ## Install on Fedora
 
