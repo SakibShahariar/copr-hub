@@ -291,9 +291,16 @@ pub fn dnf5_system_state_permissions_need_repair() -> bool {
     };
 
     dnf5_state_files_are_safe(&files, &directory)
-        && files
-            .iter()
-            .any(|(_, file)| file.mode() & 0o7777 != DNF5_SYSTEM_STATE_MODE)
+        && files.iter().any(|(_, file)| {
+            dnf5_state_file_is_repair_candidate(
+                file.uid(),
+                file.mode(),
+                file.file_type().is_file(),
+                directory.uid(),
+                directory.mode(),
+                directory.file_type().is_dir(),
+            )
+        })
 }
 
 fn dnf5_state_error_is_permission_related(error: &str) -> bool {
