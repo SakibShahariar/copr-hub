@@ -204,14 +204,48 @@ fn client() -> Result<reqwest::blocking::Client, String> {
         .map_err(|error| format!("Could not prepare the network client: {error}"))
 }
 
-/// Whether a monitoring error is likely to affect every saved project.
-pub fn should_stop_monitoring_scan(error: &str) -> bool {
-    let error = error.to_ascii_lowercase();
-    error.contains("timed out")
-        || error.contains("could not connect to copr")
-        || error.contains("could not prepare the network client")
-        || error.contains("too many requests")
-        || error.contains("temporarily unavailable")
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CoprErrorKind {
+    ClientUnavailable,
+    Network,
+    RateLimited,
+    ServiceUnavailable,
+    ProjectNotFound,
+    RequestRejected,
+    InvalidResponse,
+    InvalidInput,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct CoprError {
+    kind: CoprErrorKind,
+    message: String,
+}
+
+impl CoprError {
+    fn new(kind: CoprErrorKind, message: impl Into<String>) -> Self {
+        Self {
+            kind,
+            message: message.into(),
+        }
+    }
+}
+
+impl std::fmt::Display for CoprError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+/// Whether a typed COPR failure is likely to affect every saved project.
+pub(crate) fn should_stop_monitoring_scan(error: &CoprError) -> bool {
+    matches!(
+        error.kind,
+        CoprErrorKind::ClientUnavailable
+            | CoprErrorKind::Network
+            | CoprErrorKind::RateLimited
+            | CoprErrorKind::ServiceUnavailable
+    )
 }
 
 fn request_error(error: reqwest::Error) -> String {
@@ -222,6 +256,66 @@ fn request_error(error: reqwest::Error) -> String {
     } else {
         format!("The COPR service request failed: {error}")
     }
+}
+
+fn typed_request_error(error: reqwest::Error) -> CoprError {
+    let kind = if error.is_timeout() || error.is_connect() {
+        CoprErrorKind::Network
+    } else {
+        CoprErrorKind::RequestRejected
+    };
+    let message = request_error(error);
+    CoprError::new(kind, message)
+}
+
+fn typed_service_response_error(error: reqwest::Error, operation: &str) -> CoprError {
+    let Some(status) = error.status() else {
+        return typed_request_error(error);
+    };
+    let kind = match status {
+        reqwest::StatusCode::TOO_MANY_REQUESTS => CoprErrorKind::RateLimited,
+        reqwest::StatusCode::NOT_FOUND => CoprErrorKind::ProjectNotFound,
+        status if status.is_server_error() => CoprErrorKind::ServiceUnavailable,
+        _ => CoprErrorKind::RequestRejected,
+    };
+    CoprError::new(kind, service_status_message(status, operation))
+}
+
+fn send_with_retry_typed(
+    request: reqwest::blocking::RequestBuilder,
+) -> Result<reqwest::blocking::Response, CoprError> {
+    let retry_request = request.try_clone();
+    match request.send() {
+        Ok(response) if is_retryable_status(response.status()) && retry_request.is_some() => {
+            let Some(delay) = retry_delay(
+                response
+                    .headers()
+                    .get(reqwest::header::RETRY_AFTER)
+                    .and_then(|value| value.to_str().ok()),
+            ) else {
+                return Ok(response);
+            };
+            drop(response);
+            thread::sleep(delay);
+            retry_request
+                .expect("retry request was checked above")
+                .send()
+                .map_err(typed_request_error)
+        }
+        Ok(response) => Ok(response),
+        Err(error) if (error.is_timeout() || error.is_connect()) && retry_request.is_some() => {
+            thread::sleep(Duration::from_millis(350));
+            retry_request
+                .expect("retry request was checked above")
+                .send()
+                .map_err(typed_request_error)
+        }
+        Err(error) => Err(typed_request_error(error)),
+    }
+}
+
+fn client_for_monitoring() -> Result<reqwest::blocking::Client, CoprError> {
+    client().map_err(|message| CoprError::new(CoprErrorKind::ClientUnavailable, message))
 }
 
 const MAX_RETRY_AFTER_SECS: u64 = 30;
@@ -377,19 +471,30 @@ pub fn fetch_project_build_history(
     Ok(builds)
 }
 
-fn fetch_project_monitor_data(owner: &str, project: &str) -> Result<ProjectMonitor, String> {
-    validate_project_identity(owner, project)?;
-    let response = send_with_retry(
-        client()?
+fn fetch_project_monitor_data_typed(
+    owner: &str,
+    project: &str,
+) -> Result<ProjectMonitor, CoprError> {
+    validate_project_identity(owner, project)
+        .map_err(|message| CoprError::new(CoprErrorKind::InvalidInput, message))?;
+    let response = send_with_retry_typed(
+        client_for_monitoring()?
             .get(format!("{COPR_API_BASE}/monitor"))
             .query(&[("ownername", owner), ("projectname", project)]),
     )?
     .error_for_status()
-    .map_err(|error| service_response_error(error, "project"))?;
+    .map_err(|error| typed_service_response_error(error, "project"))?;
 
-    response
-        .json()
-        .map_err(|error| format!("Could not read the project build information: {error}"))
+    response.json().map_err(|error| {
+        CoprError::new(
+            CoprErrorKind::InvalidResponse,
+            format!("Could not read the project build information: {error}"),
+        )
+    })
+}
+
+fn fetch_project_monitor_data(owner: &str, project: &str) -> Result<ProjectMonitor, String> {
+    fetch_project_monitor_data_typed(owner, project).map_err(|error| error.to_string())
 }
 
 fn fetch_latest_build(owner: &str, project: &str) -> Result<Option<ProjectBuildSummary>, String> {
@@ -421,11 +526,11 @@ fn build_summary_from_event(build: &ProjectBuildEvent) -> ProjectBuildSummary {
 
 /// Fetch monitor and build history together so monitoring can reuse the history
 /// response for the latest-build freshness summary.
-pub fn fetch_project_monitor_with_history(
+pub(crate) fn fetch_project_monitor_with_history(
     owner: &str,
     project: &str,
-) -> Result<(ProjectMonitor, Option<Vec<ProjectBuildEvent>>), String> {
-    let mut monitor = fetch_project_monitor_data(owner, project)?;
+) -> Result<(ProjectMonitor, Option<Vec<ProjectBuildEvent>>), CoprError> {
+    let mut monitor = fetch_project_monitor_data_typed(owner, project)?;
     match fetch_project_build_history(owner, project) {
         Ok(history) => {
             monitor.latest_build = history.first().map(build_summary_from_event);
@@ -691,6 +796,29 @@ mod tests {
     #[test]
     fn empty_search_does_not_make_a_request() {
         assert!(search_projects("   ").unwrap().is_empty());
+    }
+
+    #[test]
+    fn monitoring_scan_error_classification_uses_typed_kinds() {
+        for kind in [
+            CoprErrorKind::ClientUnavailable,
+            CoprErrorKind::Network,
+            CoprErrorKind::RateLimited,
+            CoprErrorKind::ServiceUnavailable,
+        ] {
+            let error = CoprError::new(kind, "generic failure");
+            assert!(should_stop_monitoring_scan(&error), "{kind:?}");
+        }
+
+        for kind in [
+            CoprErrorKind::ProjectNotFound,
+            CoprErrorKind::RequestRejected,
+            CoprErrorKind::InvalidResponse,
+            CoprErrorKind::InvalidInput,
+        ] {
+            let error = CoprError::new(kind, "generic failure");
+            assert!(!should_stop_monitoring_scan(&error), "{kind:?}");
+        }
     }
 
     #[test]
