@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -10,6 +10,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const CACHE_TTL: Duration = Duration::from_secs(15 * 60);
 const MAX_STALE_CACHE_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 const CACHE_CAPACITY: usize = 128;
+const MAX_PERSISTED_CACHE_BYTES: u64 = 2 * 1024 * 1024;
 
 type ReleaseCache = Mutex<HashMap<String, (SystemTime, Option<UpstreamRelease>)>>;
 
@@ -50,23 +51,22 @@ fn persisted_entry_time(cached_at_unix: u64, now_unix: u64) -> Option<SystemTime
     UNIX_EPOCH.checked_add(Duration::from_secs(cached_at_unix))
 }
 
-/// Load recent release metadata once so offline launches can still show useful
-/// version/date information. The cache is advisory and can always be discarded.
-fn load_persistent_cache() {
-    let path = persistent_cache_path();
-    let Ok(metadata) = fs::metadata(&path) else {
-        return;
+fn read_persistent_cache(
+    path: &Path,
+    now: u64,
+) -> Result<Option<HashMap<String, (SystemTime, Option<UpstreamRelease>)>>, String> {
+    let metadata = match fs::metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("could not inspect cache file: {error}")),
     };
-    if metadata.len() > 2 * 1024 * 1024 {
-        return;
+    if metadata.len() > MAX_PERSISTED_CACHE_BYTES {
+        return Err("cache file exceeds the 2 MiB safety limit".to_string());
     }
-    let Ok(contents) = fs::read_to_string(path) else {
-        return;
-    };
-    let Ok(saved) = serde_json::from_str::<PersistedReleaseCache>(&contents) else {
-        return;
-    };
-    let now = unix_now();
+    let contents = fs::read_to_string(path)
+        .map_err(|error| format!("could not read cache file: {error}"))?;
+    let saved = serde_json::from_str::<PersistedReleaseCache>(&contents)
+        .map_err(|error| format!("cache file contains invalid JSON: {error}"))?;
     let entries = saved
         .entries
         .into_iter()
@@ -79,6 +79,24 @@ fn load_persistent_cache() {
         })
         .take(CACHE_CAPACITY)
         .collect::<HashMap<_, _>>();
+    Ok(Some(entries))
+}
+
+/// Load recent release metadata once so offline launches can still show useful
+/// version/date information. The cache is advisory and can always be discarded.
+fn load_persistent_cache() {
+    let path = persistent_cache_path();
+    let entries = match read_persistent_cache(&path, unix_now()) {
+        Ok(Some(entries)) => entries,
+        Ok(None) => return,
+        Err(error) => {
+            eprintln!(
+                "Could not load persistent upstream release cache {}: {error}",
+                path.display()
+            );
+            return;
+        }
+    };
     if let Ok(mut cache) = RELEASE_CACHE
         .get_or_init(|| Mutex::new(HashMap::new()))
         .lock()
@@ -631,6 +649,32 @@ pub fn release_is_stale(published_at: Option<&str>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::repository_parts;
+
+    #[test]
+    fn persistent_cache_reader_reports_corrupt_and_oversized_files() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "copr-hub-upstream-cache-{}-{unique}.json",
+            std::process::id()
+        ));
+
+        fs::write(&path, "{not json").unwrap();
+        assert!(matches!(
+            read_persistent_cache(&path, unix_now()),
+            Err(error) if error.contains("invalid JSON")
+        ));
+
+        fs::write(&path, vec![b'x'; MAX_PERSISTED_CACHE_BYTES as usize + 1]).unwrap();
+        assert!(matches!(
+            read_persistent_cache(&path, unix_now()),
+            Err(error) if error.contains("2 MiB safety limit")
+        ));
+
+        fs::remove_file(path).unwrap();
+    }
 
     #[test]
     fn persistent_release_cache_evicts_the_oldest_entry_at_capacity() {

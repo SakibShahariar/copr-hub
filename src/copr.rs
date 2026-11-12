@@ -42,6 +42,30 @@ pub fn valid_project_identity(owner: &str, project: &str) -> bool {
     valid_identifier(owner) && valid_identifier(project)
 }
 
+/**
+ * Remove control and invisible formatting characters from untrusted project
+ * descriptions while preserving normal whitespace, Unicode text, and ZWJ
+ * sequences used by many scripts and emoji.
+ */
+pub fn sanitize_project_description(value: &str) -> String {
+    value
+        .chars()
+        .filter(|character| {
+            (!character.is_control() || matches!(character, '\n' | '\r' | '\t'))
+                && !matches!(
+                    character,
+                    '\u{061c}'
+                        | '\u{200b}'
+                        | '\u{200e}'..='\u{200f}'
+                        | '\u{202a}'..='\u{202e}'
+                        | '\u{2060}'..='\u{206f}'
+                        | '\u{feff}'
+                        | '\u{fff9}'..='\u{fffb}'
+                )
+        })
+        .collect()
+}
+
 fn validate_project_identity(owner: &str, project: &str) -> Result<(), String> {
     if valid_project_identity(owner, project) {
         Ok(())
@@ -298,6 +322,12 @@ pub fn search_projects(pattern: &str) -> Result<Vec<CoprProject>, String> {
         .items
         .into_iter()
         .filter(|project| valid_project_identity(&project.owner, &project.name))
+        .map(|mut project| {
+            if let Some(description) = project.description.as_mut() {
+                *description = sanitize_project_description(description);
+            }
+            project
+        })
         .collect())
 }
 
@@ -727,6 +757,15 @@ mod tests {
 
         assert!(project.description.is_none());
         assert!(project.homepage.is_none());
+    }
+
+    #[test]
+    fn project_descriptions_strip_invisible_controls_and_preserve_unicode_text() {
+        let description = "A\\u{200b}B\\u{202e}C\\u{0007}\\nemoji 👩‍💻 and فارسی";
+        assert_eq!(
+            sanitize_project_description(description),
+            "ABC\\nemoji 👩‍💻 and فارسی"
+        );
     }
 
     #[test]

@@ -25,12 +25,21 @@ fn homepage_is_valid(value: &str) -> bool {
             .is_ok_and(|url| matches!(url.scheme(), "http" | "https") && url.host_str().is_some())
 }
 
+fn sanitize_project_metadata(project: &mut CoprProject) {
+    if let Some(description) = project.description.as_mut() {
+        *description = crate::copr::sanitize_project_description(description);
+    }
+}
+
 fn project_has_valid_fields(project: &CoprProject) -> bool {
     crate::copr::valid_project_identity(&project.owner, &project.name)
         && project
             .description
             .as_ref()
-            .is_none_or(|value| value.len() <= 16_384)
+            .is_none_or(|value| {
+                value.len() <= 16_384
+                    && crate::copr::sanitize_project_description(value) == value.as_str()
+            })
         && project.homepage.as_deref().is_none_or(homepage_is_valid)
 }
 
@@ -84,8 +93,11 @@ fn load_unlocked() -> Result<Vec<CoprProject>, String> {
     }
     match fs::read_to_string(&path) {
         Ok(contents) => {
-            let projects: Vec<CoprProject> = serde_json::from_str(&contents)
+            let mut projects: Vec<CoprProject> = serde_json::from_str(&contents)
                 .map_err(|error| format!("Could not read saved projects: {error}"))?;
+            for project in &mut projects {
+                sanitize_project_metadata(project);
+            }
             ensure_saved_project_limit(projects.len())?;
             validate_project_entries(&projects)?;
             Ok(projects)
@@ -105,8 +117,11 @@ fn parse_backup(contents: &str) -> Result<Vec<CoprProject>, String> {
     if contents.len() > MAX_BACKUP_BYTES {
         return Err("The saved-project backup is larger than the 5 MiB import limit.".to_string());
     }
-    let imported: Vec<CoprProject> = serde_json::from_str(contents)
+    let mut imported: Vec<CoprProject> = serde_json::from_str(contents)
         .map_err(|error| format!("This is not a valid Copr Hub saved-project backup: {error}"))?;
+    for project in &mut imported {
+        sanitize_project_metadata(project);
+    }
     if imported.len() > MAX_IMPORTED_PROJECTS {
         return Err(format!(
             "The backup contains more than {MAX_IMPORTED_PROJECTS} saved projects."
@@ -155,6 +170,8 @@ fn toggle_in_list(projects: &mut Vec<CoprProject>, project: &CoprProject) -> boo
 }
 
 pub fn toggle(project: &CoprProject) -> Result<bool, String> {
+    let mut project = project.clone();
+    sanitize_project_metadata(&mut project);
     with_favorites_lock(|| {
         let path = favorites_path();
         let parent = path
@@ -374,6 +391,20 @@ mod tests {
         assert!(projects
             .iter()
             .any(|item| item.owner == "carol" && item.name == "tool"));
+    }
+
+    #[test]
+    fn backup_parser_sanitizes_untrusted_project_descriptions() {
+        let contents = r#"[{"owner":"alice","name":"demo","description":"A\\u200bB\\u202eC\\u0007\\nline"}]"#;
+        let imported = parse_backup(contents).unwrap();
+        assert_eq!(imported[0].description.as_deref(), Some("ABC\\nline"));
+    }
+
+    #[test]
+    fn saved_project_validation_rejects_unsanitized_descriptions() {
+        let mut candidate = project("alice", "demo");
+        candidate.description = Some("unsafe\\u{200b}text".to_string());
+        assert!(!project_has_valid_fields(&candidate));
     }
 
     #[test]
