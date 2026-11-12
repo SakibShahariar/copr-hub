@@ -90,6 +90,18 @@ pub(crate) fn build_ui(app: &adw::Application) {
         .default_height(720)
         .build();
 
+    // Keep the app's interface readable even when the desktop's chosen UI font
+    // is monospace. The generic family follows the user's installed sans-serif
+    // font; colors remain entirely theme-driven for Adwaita and Matugen palettes.
+    let typography = gtk::CssProvider::new();
+    typography.load_from_data("window.copr-hub { font-family: sans-serif; }");
+    gtk::style_context_add_provider_for_display(
+        &window.display(),
+        &typography,
+        gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+    );
+    window.add_css_class("copr-hub");
+
     let stack = adw::ViewStack::new();
     stack.set_vexpand(true);
 
