@@ -79,7 +79,6 @@ pub(super) fn build_saved_page(
         .wrap(true)
         .build();
     monitoring_note.add_css_class("dim-label");
-    content.append(&monitoring_note);
 
     let freshness_row = adw::ActionRow::builder()
         .title("Mark builds stale after")
