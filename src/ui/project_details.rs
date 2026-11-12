@@ -17,7 +17,7 @@ fn update_last_checked(label: &gtk::Label, project: &copr::CoprProject) {
     ));
 }
 
-pub(super) fn is_web_url(value: &str) {
+pub(super) fn is_web_url(value: &str) -> bool {
     reqwest::Url::parse(value)
         .map(|url| matches!(url.scheme(), "http" | "https"))
         .unwrap_or(false)
