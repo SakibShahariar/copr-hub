@@ -126,7 +126,7 @@ fn parse_backup(contents: &str) -> Result<Vec<CoprProject>, String> {
     }
     if imported
         .iter()
-        .any(|project| !project_has_valid_fields(project))
+        .any(|project| !project_has_valid_fields(&project))
     {
         return Err("The backup contains an invalid or oversized project entry.".to_string());
     }
