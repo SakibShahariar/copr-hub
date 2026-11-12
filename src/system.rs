@@ -280,26 +280,6 @@ fn dnf5_state_files_are_safe(files: &[(PathBuf, fs::Metadata)], directory: &fs::
             .all(|(_, file)| file.uid() == 0 && file.file_type().is_file())
 }
 
-/// Detect restrictive permissions that prevent an ordinary user from reading
-/// any of DNF5's known system package-state TOML files.
-pub fn dnf5_system_state_permissions_need_repair() -> bool {
-    let Ok((files, directory)) = dnf5_state_metadata() else {
-        return false;
-    };
-
-    dnf5_state_files_are_safe(&files, &directory)
-        && files.iter().any(|(_, file)| {
-            dnf5_state_file_is_repair_candidate(
-                file.uid(),
-                file.mode(),
-                file.file_type().is_file(),
-                directory.uid(),
-                directory.mode(),
-                directory.file_type().is_dir(),
-            )
-        })
-}
-
 fn dnf5_state_error_is_permission_related(error: &str) -> bool {
     error.contains(DNF5_SYSTEM_STATE_DIRECTORY)
         && error.contains("error opening file")
