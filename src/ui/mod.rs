@@ -151,12 +151,11 @@ pub(crate) fn build_ui(app: &adw::Application) {
     let header = adw::HeaderBar::new();
     header.set_title_widget(Some(&switcher_title));
 
-    // ToolbarView gives the header the native Libadwaita toolbar treatment.
-    let toolbar_view = adw::ToolbarView::new();
-    toolbar_view.add_top_bar(&header);
-    toolbar_view.set_content(Some(&stack));
+    let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    root.append(&header);
+    root.append(&stack);
 
-    window.set_content(Some(&toolbar_view));
+    window.set_content(Some(&root));
     window.present();
     start_monitoring(app);
     start_scheduled_backups(app);
