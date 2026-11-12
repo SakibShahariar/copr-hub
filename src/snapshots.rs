@@ -40,7 +40,7 @@ fn stable_project_hash(project: &copr::CoprProject) -> String {
     for byte in project
         .owner
         .bytes()
-        .chain([b'/'])
+        .chain(*b"/")
         .chain(project.name.bytes())
     {
         hash ^= u64::from(byte);

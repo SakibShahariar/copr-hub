@@ -100,9 +100,10 @@ fn prune_inactive_projects(
     state: &mut PersistedMonitoringState,
     active_projects: &[copr::CoprProject],
 ) -> bool {
-    let migrated = active_projects.iter().fold(false, |changed, project| {
-        migrate_project_key(state, project) || changed
-    });
+    let mut migrated = false;
+    for project in active_projects {
+        migrated |= migrate_project_key(state, project);
+    }
     let active_keys: HashSet<String> = active_projects.iter().map(project_key).collect();
     let previous_len = state.projects.len();
     state.projects.retain(|key, _| active_keys.contains(key));
