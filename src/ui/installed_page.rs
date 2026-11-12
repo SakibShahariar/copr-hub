@@ -290,6 +290,14 @@ fn render_installed_package_rows(
             }
         ));
         row.add_prefix(&gtk::Image::from_icon_name("package-x-generic-symbolic"));
+        if updates.contains_key(&package.name) {
+            let update_badge = gtk::Label::new(Some("Update available"));
+            update_badge.add_css_class("warning");
+            update_badge.set_tooltip_text(Some(
+                "An upgrade candidate for this package was found in enabled repositories.",
+            ));
+            row.add_suffix(&update_badge);
+        }
 
         let dependencies = gtk::Button::with_label("Dependencies");
         dependencies.set_tooltip_text(Some(
