@@ -264,9 +264,9 @@ fn dnf5_state_files_are_safe(files: &[(PathBuf, fs::Metadata)], directory: &fs::
     directory.uid() == 0
         && directory.file_type().is_dir()
         && directory.mode() & 0o022 == 0
-        && files.iter().all(|(_, file)| {
-            file.uid() == 0 && file.file_type().is_file() && file.nlink() == 1
-        })
+        && files
+            .iter()
+            .all(|(_, file)| file.uid() == 0 && file.file_type().is_file() && file.nlink() == 1)
 }
 
 fn dnf5_state_error_is_permission_related(error: &str) -> bool {
@@ -650,7 +650,13 @@ pub fn remove_copr_repository(repository_id: &str) -> Result<(), String> {
     })?;
 
     let output = Command::new("pkexec")
-        .args([DNF_EXECUTABLE, "--assumeyes", "copr", "remove", &project_spec])
+        .args([
+            DNF_EXECUTABLE,
+            "--assumeyes",
+            "copr",
+            "remove",
+            &project_spec,
+        ])
         .output()
         .map_err(|error| format!("Could not start the privileged DNF helper: {error}"))?;
 
@@ -778,17 +784,18 @@ mod tests {
 
     #[test]
     fn dnf5_state_repair_rejects_hard_linked_files() {
-        let directory = std::env::temp_dir().join(format!(
-            "copr-hub-dnf5-hardlink-{}",
-            std::process::id()
-        ));
+        let directory =
+            std::env::temp_dir().join(format!("copr-hub-dnf5-hardlink-{}", std::process::id()));
         fs::create_dir_all(&directory).unwrap();
         let original = directory.join("packages.toml");
         let alias = directory.join("packages-alias.toml");
         fs::write(&original, b"state").unwrap();
 
         let single_link = fs::metadata(&original).unwrap();
-        assert!(dnf5_state_files_have_single_links(&[(original.clone(), single_link)]));
+        assert!(dnf5_state_files_have_single_links(&[(
+            original.clone(),
+            single_link
+        )]));
 
         fs::hard_link(&original, &alias).unwrap();
         let linked = fs::metadata(&original).unwrap();
