@@ -96,7 +96,7 @@ pub(crate) fn build_ui(app: &adw::Application) {
     let typography = gtk::CssProvider::new();
     typography.load_from_data("window.copr-hub { font-family: sans-serif; }");
     gtk::style_context_add_provider_for_display(
-        &window.display(),
+        &gtk::prelude::WidgetExt::display(&window),
         &typography,
         gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
