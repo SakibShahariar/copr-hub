@@ -34,7 +34,24 @@ fn now_unix() -> u64 {
         .unwrap_or(0)
 }
 
+fn stable_project_hash(project: &copr::CoprProject) -> String {
+    // FNV-1a is a deterministic cache filename hash, not a security primitive.
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in project.owner.bytes().chain([b'/']).chain(project.name.bytes()) {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("{hash:016x}")
+}
+
 fn snapshot_path(project: &copr::CoprProject) -> PathBuf {
+    gtk::glib::user_cache_dir()
+        .join("copr-hub")
+        .join("projects")
+        .join(format!("{}.json", stable_project_hash(project)))
+}
+
+fn legacy_snapshot_path(project: &copr::CoprProject) -> PathBuf {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     project.owner.hash(&mut hasher);
     "/".hash(&mut hasher);
@@ -68,14 +85,24 @@ fn write_snapshot(snapshot: &ProjectSnapshot) -> Result<(), String> {
     fs::create_dir_all(parent)
         .map_err(|error| format!("Could not create project snapshot directory: {error}"))?;
     crate::storage::atomic_write(&path, &contents)
-        .map_err(|error| format!("Could not save project snapshot: {error}"))
+        .map_err(|error| format!("Could not save project snapshot: {error}"))?;
+    let legacy_path = legacy_snapshot_path(&snapshot.project);
+    if legacy_path != path {
+        let _ = fs::remove_file(legacy_path);
+    }
+    Ok(())
 }
 
 pub fn load(project: &copr::CoprProject) -> Option<ProjectSnapshot> {
     if !valid_project(project) {
         return None;
     }
-    let path = snapshot_path(project);
+    let stable_path = snapshot_path(project);
+    let path = if stable_path.exists() {
+        stable_path
+    } else {
+        legacy_snapshot_path(project)
+    };
     let metadata = fs::metadata(&path).ok()?;
     if metadata.len() > MAX_SNAPSHOT_BYTES {
         return None;
@@ -205,6 +232,14 @@ mod tests {
             description: None,
             homepage: None,
         }
+    }
+
+    #[test]
+    fn stable_snapshot_identity_is_deterministic_and_distinct_from_legacy_path() {
+        let project = project();
+        assert_eq!(stable_project_hash(&project), stable_project_hash(&project));
+        assert_eq!(stable_project_hash(&project).len(), 16);
+        assert_ne!(snapshot_path(&project), legacy_snapshot_path(&project));
     }
 
     #[test]

@@ -72,6 +72,11 @@ fn state_path() -> PathBuf {
 }
 
 fn project_key(project: &copr::CoprProject) -> String {
+    // Length-prefix the owner to keep identities unambiguous and stable.
+    format!("{}:{}:{}", project.owner.len(), project.owner, project.name)
+}
+
+fn legacy_project_key(project: &copr::CoprProject) -> String {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     project.owner.hash(&mut hasher);
     "/".hash(&mut hasher);
@@ -79,10 +84,22 @@ fn project_key(project: &copr::CoprProject) -> String {
     format!("{:016x}", hasher.finish())
 }
 
+fn migrate_project_key(state: &mut PersistedMonitoringState, project: &copr::CoprProject) {
+    let stable_key = project_key(project);
+    if !state.projects.contains_key(&stable_key) {
+        if let Some(legacy_state) = state.projects.remove(&legacy_project_key(project)) {
+            state.projects.insert(stable_key, legacy_state);
+        }
+    }
+}
+
 fn prune_inactive_projects(
     state: &mut PersistedMonitoringState,
     active_projects: &[copr::CoprProject],
 ) -> bool {
+    for project in active_projects {
+        migrate_project_key(state, project);
+    }
     let active_keys: HashSet<String> = active_projects.iter().map(project_key).collect();
     let previous_len = state.projects.len();
     state.projects.retain(|key, _| active_keys.contains(key));
@@ -260,6 +277,7 @@ fn update_observation(
     release: Option<&upstream::UpstreamRelease>,
     config: &MonitoringConfig,
 ) -> (Vec<String>, Option<String>) {
+    migrate_project_key(state, project);
     let key = project_key(project);
     let previous = state.projects.get(&key).cloned();
     let mut current = current_state(monitor, config.freshness_threshold_days);
@@ -418,6 +436,35 @@ mod tests {
             &mut state,
             std::slice::from_ref(&active)
         ));
+    }
+
+    #[test]
+    fn legacy_project_baselines_migrate_to_stable_identity_keys() {
+        let project = copr::CoprProject {
+            owner: "alice".into(),
+            name: "demo".into(),
+            description: None,
+            homepage: None,
+        };
+        let legacy_key = legacy_project_key(&project);
+        let expected_state = ProjectState {
+            latest_build_state: Some("failed".into()),
+            ..ProjectState::default()
+        };
+        let mut state = PersistedMonitoringState {
+            projects: HashMap::from([(legacy_key.clone(), expected_state.clone())]),
+        };
+
+        migrate_project_key(&mut state, &project);
+
+        let stable_key = project_key(&project);
+        assert_ne!(stable_key, legacy_key);
+        assert_eq!(state.projects.len(), 1);
+        assert_eq!(
+            state.projects.get(&stable_key).unwrap().latest_build_state,
+            expected_state.latest_build_state
+        );
+        assert!(!state.projects.contains_key(&legacy_key));
     }
 
     #[test]
