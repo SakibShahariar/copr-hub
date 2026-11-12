@@ -415,14 +415,14 @@ mod tests {
     fn relevance_ranks_exact_and_prefix_project_names_first() {
         let mut projects = vec![
             project("applications", "alice", "Includes Zen Browser"),
-            project("zen-browser-nightly", "bob", "Nightly builds"),
+            project("zen-browser-alpha", "bob", "Nightly builds"),
             project("zen-browser", "carol", "The browser"),
         ];
 
         rank_projects(&mut projects, "zen-browser");
 
         assert_eq!(projects[0].name, "zen-browser");
-        assert_eq!(projects[1].name, "zen-browser-nightly");
+        assert_eq!(projects[1].name, "zen-browser-alpha");
         assert_eq!(projects[2].name, "applications");
     }
 
@@ -454,14 +454,14 @@ mod tests {
     #[test]
     fn equal_relevance_preserves_copr_server_order() {
         let mut projects = vec![
-            project("zen-browser-nightly", "alice", "Nightly"),
-            project("zen-browser-stable", "bob", "Stable"),
+            project("zen-browser-alpha", "alice", "Nightly"),
+            project("zen-browser-bravo", "bob", "Stable"),
         ];
 
         rank_projects(&mut projects, "zen-browser");
 
-        assert_eq!(projects[0].name, "zen-browser-nightly");
-        assert_eq!(projects[1].name, "zen-browser-stable");
+        assert_eq!(projects[0].name, "zen-browser-alpha");
+        assert_eq!(projects[1].name, "zen-browser-bravo");
     }
 
     #[test]
