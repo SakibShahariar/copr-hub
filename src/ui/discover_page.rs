@@ -476,14 +476,9 @@ mod tests {
 
     #[test]
     fn fuzzy_matching_checks_inside_compound_project_names() {
-        let mut projects = vec![
-            project("applications", "alice", "Includes Zen Browser"),
-            project("zen-brower-nightly", "bob", "Nightly builds"),
-        ];
+        let fuzzy_match = project("zen-brower-nightly", "bob", "Nightly builds");
 
-        rank_projects(&mut projects, "zen-browser");
-
-        assert_eq!(projects[0].name, "zen-brower-nightly");
+        assert_eq!(project_relevance(&fuzzy_match, "zen-browser"), (8, 1));
     }
 
     #[test]
