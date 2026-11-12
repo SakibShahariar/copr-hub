@@ -41,7 +41,11 @@ pub(super) fn build_repositories_page(parent: &adw::ApplicationWindow) -> gtk::W
         let filter = filter.clone();
         move |row| {
             let query = filter.text().trim().to_ascii_lowercase();
-            query.is_empty() || row.widget_name().to_ascii_lowercase().contains(&query)
+            let name = row.widget_name().to_ascii_lowercase();
+            if name == "repository-section" {
+                return query.is_empty();
+            }
+            query.is_empty() || name.contains(&query)
         }
     });
     filter.connect_search_changed({
@@ -112,15 +116,46 @@ fn render_repositories(
                 "No COPR repositories were found in /etc/yum.repos.d. Add a COPR repository with DNF to see it here.",
             );
         }
-        Ok(repositories) => {
+        Ok(mut repositories) => {
+            repositories.sort_by(|left, right| {
+                right.enabled.cmp(&left.enabled).then_with(|| {
+                    left.name
+                        .to_ascii_lowercase()
+                        .cmp(&right.name.to_ascii_lowercase())
+                })
+            });
             let enabled = repositories.iter().filter(|repo| repo.enabled).count();
+            let disabled = repositories.len() - enabled;
             feedback.set_text(&format!(
                 "{} COPR repositories found · {} enabled",
                 repositories.len(),
                 enabled
             ));
 
+            let mut current_section = None;
             for repository in repositories {
+                if current_section != Some(repository.enabled) {
+                    current_section = Some(repository.enabled);
+                    let section_title = if repository.enabled {
+                        format!("Enabled · {enabled}")
+                    } else {
+                        format!("Disabled · {disabled}")
+                    };
+                    let section_label = gtk::Label::new(Some(&section_title));
+                    section_label.set_xalign(0.0);
+                    section_label.set_margin_top(16);
+                    section_label.set_margin_bottom(4);
+                    section_label.set_margin_start(12);
+                    section_label.add_css_class("heading");
+                    section_label.add_css_class("dim-label");
+                    let section_row = gtk::ListBoxRow::new();
+                    section_row.set_child(Some(&section_label));
+                    section_row.set_selectable(false);
+                    section_row.set_activatable(false);
+                    section_row.set_widget_name("repository-section");
+                    list.append(&section_row);
+                }
+
                 let status = if repository.enabled {
                     "Enabled"
                 } else {
