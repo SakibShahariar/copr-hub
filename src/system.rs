@@ -106,9 +106,41 @@ pub fn scan_copr_repositories() -> Result<Vec<CoprRepository>, String> {
     Ok(repositories)
 }
 
+fn strip_repo_inline_comment(value: &str) -> &str {
+    let mut quote = None;
+    let mut escaped = false;
+    let mut previous = None;
+
+    for (index, character) in value.char_indices() {
+        if escaped {
+            escaped = false;
+            previous = Some(character);
+            continue;
+        }
+        if quote.is_some() && character == '\\' {
+            escaped = true;
+            continue;
+        }
+        if let Some(delimiter) = quote {
+            if character == delimiter {
+                quote = None;
+            }
+        } else if matches!(character, '"' | '\'') {
+            quote = Some(character);
+        } else if matches!(character, '#' | ';')
+            && previous.is_none_or(char::is_whitespace)
+        {
+            return value[..index].trim_end();
+        }
+        previous = Some(character);
+    }
+
+    value
+}
+
 fn parse_enabled_value(value: &str) -> bool {
     !matches!(
-        value.trim().to_ascii_lowercase().as_str(),
+        strip_repo_inline_comment(value).trim().to_ascii_lowercase().as_str(),
         "0" | "false" | "no" | "off"
     )
 }
@@ -118,10 +150,13 @@ fn parse_enabled_overrides(contents: &str) -> HashMap<String, bool> {
     let mut current_id: Option<String> = None;
 
     for line in contents.lines() {
-        let line = line.trim();
+        let line = strip_repo_inline_comment(line.trim()).trim();
+        if line.is_empty() {
+            continue;
+        }
         if line.starts_with('[') && line.ends_with(']') {
             let id = &line[1..line.len() - 1];
-            current_id = if id.starts_with("copr:") {
+            current_id = if id.starts_with("copr:") && is_safe_repository_id(id) {
                 Some(id.to_string())
             } else {
                 None
@@ -166,7 +201,10 @@ fn parse_copr_repositories(contents: &str, path: &Path) -> Vec<CoprRepository> {
     };
 
     for line in contents.lines() {
-        let line = line.trim();
+        let line = strip_repo_inline_comment(line.trim()).trim();
+        if line.is_empty() {
+            continue;
+        }
         if line.starts_with('[') && line.ends_with(']') {
             flush(
                 &mut repositories,
@@ -175,7 +213,7 @@ fn parse_copr_repositories(contents: &str, path: &Path) -> Vec<CoprRepository> {
                 &mut current_enabled,
             );
             let id = &line[1..line.len() - 1];
-            if id.starts_with("copr:") {
+            if id.starts_with("copr:") && is_safe_repository_id(id) {
                 current_id = Some(id.to_string());
             }
             continue;
@@ -619,7 +657,8 @@ fn is_safe_repository_id(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 200
         && value.bytes().all(|byte| {
-            byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'+' | b':')
+            byte.is_ascii_alphanumeric()
+                || matches!(byte, b'-' | b'_' | b'.' | b'+' | b':' | b'@')
         })
 }
 
@@ -873,6 +912,55 @@ mod tests {
     fn rejects_package_names_with_option_or_shell_characters() {
         assert!(set_package_installed("--assumeyes", true).is_err());
         assert!(set_package_installed("demo;touch /tmp/bad", true).is_err());
+    }
+
+    #[test]
+    fn repository_parser_strips_inline_comments_but_preserves_quoted_markers() {
+        let contents = r#"
+[copr:copr.fedorainfracloud.org:alice:demo] # section comment
+name=Theme # trailing comment
+enabled=0 ; disabled comment
+
+[copr:copr.fedorainfracloud.org:alice:hash]
+name=C# Tools
+enabled=1 # enabled comment
+
+[copr:copr.fedorainfracloud.org:alice:quoted]
+name="Theme #1" # trailing comment
+enabled="false # literal"
+"#;
+        let repositories = parse_copr_repositories(contents, Path::new("/tmp/test.repo"));
+        assert_eq!(repositories.len(), 3);
+        assert_eq!(repositories[0].name, "Theme");
+        assert!(!repositories[0].enabled);
+        assert_eq!(repositories[1].name, "C# Tools");
+        assert!(repositories[1].enabled);
+        assert_eq!(repositories[2].name, r#""Theme #1""#);
+        assert!(repositories[2].enabled);
+    }
+
+    #[test]
+    fn repository_overrides_reject_unsafe_ids_and_accept_at_owners() {
+        let contents = r#"
+[copr:copr.fedorainfracloud.org:@team:demo]
+enabled=0
+[copr:copr.fedorainfracloud.org:alice:bad project]
+enabled=0
+[copr:copr.fedorainfracloud.org:alice:demo;touch]
+enabled=0
+"#;
+        let overrides = parse_enabled_overrides(contents);
+        assert_eq!(
+            overrides.get("copr:copr.fedorainfracloud.org:@team:demo"),
+            Some(&false)
+        );
+        assert_eq!(overrides.len(), 1);
+        assert!(is_safe_repository_id(
+            "copr:copr.fedorainfracloud.org:@team:demo"
+        ));
+        assert!(copr_project_spec_from_repository_id(
+            "copr:copr.fedorainfracloud.org:@team:demo"
+        ).is_some());
     }
 
     #[test]
