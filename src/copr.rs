@@ -225,9 +225,11 @@ pub fn search_projects(pattern: &str) -> Result<Vec<CoprProject>, String> {
         return Ok(Vec::new());
     }
 
+    // COPR's project/list endpoint only lists projects; full-text discovery
+    // belongs to project/search and uses the "query" parameter.
     let response = client()?
-        .get(format!("{COPR_API_BASE}/project/list/"))
-        .query(&[("pattern", pattern), ("limit", SEARCH_LIMIT)]);
+        .get(format!("{COPR_API_BASE}/project/search"))
+        .query(&[("query", pattern), ("limit", SEARCH_LIMIT)]);
     let response = send_with_retry(response)?
         .error_for_status()
         .map_err(|error| service_response_error(error, "search"))?;
@@ -558,6 +560,21 @@ mod tests {
     #[test]
     fn empty_search_does_not_make_a_request() {
         assert!(search_projects("   ").unwrap().is_empty());
+    }
+
+    #[test]
+    fn project_search_response_deserializes_full_text_results() {
+        let response: ProjectListResponse = serde_json::from_str(
+            r#"{"projects":[
+                {"projectname":"applications","ownername":"aahsnr-work",
+                 "description":"Desktop applications including Zen Browser"}
+            ]}"#,
+        )
+        .unwrap();
+
+        assert_eq!(response.projects.len(), 1);
+        assert_eq!(response.projects[0].name, "applications");
+        assert_eq!(response.projects[0].owner, "aahsnr-work");
     }
 
     #[test]
