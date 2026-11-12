@@ -300,3 +300,20 @@ This section records every direct-to-master commit after the previous ledger tab
 
 - Reviewed through: `86c6d6c4b6acdec32b83de7451814160b2a21ca9` (green).
 - Next review: commits after `86c6d6c4b6acdec32b83de7451814160b2a21ca9`.
+
+
+## Follow-up review after `86c6d6c`
+
+| Commit SHA | Subject | CI result / workflow run |
+|---|---|---|
+| `bcc213e3158a06f257cdb220c7fbd4dae9ac335a` | fix(packages): prevent duplicate package operations | green (#43318379172) |
+
+### Package and dependency action follow-up
+
+- `bcc213e` passed formatting, unit tests, compilation, and Clippy. Installed-page Remove and Project Details Install buttons are disabled through confirmation and DNF completion, then restored on cancellation/failure or refreshed on success.
+- This commit prevents duplicate dependency windows by disabling the originating Dependencies button until its modal window closes. CI outcome will be recorded in the next ledger update.
+
+### Checkpoint
+
+- Reviewed through: `bcc213e3158a06f257cdb220c7fbd4dae9ac335a` (green).
+- Next review: commits after `bcc213e3158a06f257cdb220c7fbd4dae9ac335a`.

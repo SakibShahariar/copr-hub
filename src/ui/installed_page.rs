@@ -397,7 +397,8 @@ fn render_installed_package_rows(
         dependencies.connect_clicked({
             let parent = parent.clone();
             let package_name = package.name.clone();
-            move |_| show_package_dependency_impact(&parent, &package_name)
+            let action_button = dependencies.clone();
+            move |_| show_package_dependency_impact(&parent, &package_name, &action_button)
         });
         row.add_suffix(&dependencies);
 
@@ -438,7 +439,12 @@ fn render_installed_package_rows(
     }
 }
 
-fn show_package_dependency_impact(parent: &adw::ApplicationWindow, package_name: &str) {
+fn show_package_dependency_impact(
+    parent: &adw::ApplicationWindow,
+    package_name: &str,
+    action_button: &gtk::Button,
+) {
+    action_button.set_sensitive(false);
     let window = adw::Window::builder()
         .transient_for(parent)
         .modal(true)
@@ -519,6 +525,13 @@ fn show_package_dependency_impact(parent: &adw::ApplicationWindow, package_name:
         .child(&content)
         .build();
     window.set_content(Some(&scroll));
+    window.connect_close_request({
+        let action_button = action_button.clone();
+        move |_| {
+            action_button.set_sensitive(true);
+            gtk::glib::Propagation::Proceed
+        }
+    });
     window.present();
 
     let package_name = package_name.to_string();

@@ -16,7 +16,7 @@ Scope: the 99 audit issues in #50–#148. This file records the A–E category f
 | #51 | B | Remove button stays disabled through confirmation and DNF removal; cancellation/errors restore it, success refreshes the row. Live GNOME validation remains. |
 | #52 | B | Installed-page Remove button is disabled through confirmation and DNF removal, restored on cancel/failure; live GNOME validation remains.
 | #53 | B | Save/Remove now runs off-thread and disables the button during the mutation; live GNOME validation is tracked with #61. |
-| #54 | B | Prevent duplicate dependency windows and verify modal/focus behavior. |
+| #54 | B | Dependencies button is disabled while its modal window is open and restored on close; live GNOME validation remains.
 | #55 | B | Enable button stays disabled during COPR compatibility lookup and confirmation; live GNOME validation remains. |
 | #58 | B | Disable Import during chooser/confirmation/import and verify cancellation paths. |
 | #59 | B | Disable Import/Export during chooser and file operations; verify native chooser behavior. |
