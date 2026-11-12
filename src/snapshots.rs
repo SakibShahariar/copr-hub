@@ -37,7 +37,12 @@ fn now_unix() -> u64 {
 fn stable_project_hash(project: &copr::CoprProject) -> String {
     // FNV-1a is a deterministic cache filename hash, not a security primitive.
     let mut hash = 0xcbf29ce484222325_u64;
-    for byte in project.owner.bytes().chain([b'/']).chain(project.name.bytes()) {
+    for byte in project
+        .owner
+        .bytes()
+        .chain([b'/'])
+        .chain(project.name.bytes())
+    {
         hash ^= u64::from(byte);
         hash = hash.wrapping_mul(0x100000001b3);
     }
