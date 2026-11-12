@@ -633,10 +633,14 @@ fn refresh_saved_projects(
             let empty = adw::StatusPage::builder()
                 .icon_name("starred-symbolic")
                 .title("No saved projects yet")
-                .description("Explore projects in Discover and save the ones you want to monitor here.")
+                .description(
+                    "Explore projects in Discover and save the ones you want to monitor here.",
+                )
                 .build();
-            empty.set_widget_name("saved-empty-state");
-            list.append(&empty);
+            let empty_row = gtk::ListBoxRow::new();
+            empty_row.set_widget_name("saved-empty-state");
+            empty_row.set_child(Some(&empty));
+            list.append(&empty_row);
         }
         Ok(projects) => {
             feedback.set_text(&format!(
