@@ -51,7 +51,12 @@ pub fn copr_project_url(owner: &str, project: &str) -> Option<String> {
         return None;
     }
     let mut url = reqwest::Url::parse("https://copr.fedorainfracloud.org/coprs/").ok()?;
-    url.path_segments_mut().ok()?.push(owner).push(project);
+    url.path_segments_mut()
+        .ok()?
+        .pop_if_empty()
+        .push(owner)
+        .push(project)
+        .push("");
     Some(url.to_string())
 }
 
