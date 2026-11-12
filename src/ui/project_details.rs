@@ -32,8 +32,8 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
         .transient_for(parent)
         .modal(true)
         .title(project.name.as_str())
-        .default_width(600)
-        .default_height(560)
+        .default_width(760)
+        .default_height(760)
         .build();
 
     let content = gtk::Box::new(gtk::Orientation::Vertical, 16);
@@ -42,16 +42,35 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
     content.set_margin_start(24);
     content.set_margin_end(24);
 
-    let heading = adw::StatusPage::builder()
-        .icon_name("package-x-generic-symbolic")
-        .title(project.name.as_str())
-        .description(
+    let heading = gtk::Box::new(gtk::Orientation::Horizontal, 16);
+    heading.set_hexpand(true);
+    let project_icon = gtk::Image::from_icon_name("package-x-generic-symbolic");
+    project_icon.set_pixel_size(48);
+    project_icon.set_valign(gtk::Align::Start);
+    heading.append(&project_icon);
+
+    let heading_text = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    heading_text.set_hexpand(true);
+    let project_title = gtk::Label::builder()
+        .label(project.name.as_str())
+        .xalign(0.0)
+        .wrap(true)
+        .build();
+    project_title.add_css_class("title-1");
+    heading_text.append(&project_title);
+    let project_description = gtk::Label::builder()
+        .label(
             project
                 .description
                 .as_deref()
                 .unwrap_or("This project does not provide a description."),
         )
+        .xalign(0.0)
+        .wrap(true)
         .build();
+    project_description.add_css_class("dim-label");
+    heading_text.append(&project_description);
+    heading.append(&heading_text);
     content.append(&heading);
 
     let owner = adw::ActionRow::builder()
@@ -64,6 +83,9 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
     details.append(&owner);
     content.append(&details);
 
+    let project_actions = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    project_actions.set_hexpand(true);
+
     let saved_state = favorites::is_saved(project);
     let (saved, initial_error) = match saved_state {
         Ok(saved) => (saved, None),
@@ -75,7 +97,7 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
         "Save project"
     });
     save_button.set_halign(gtk::Align::Center);
-    save_button.add_css_class("flat");
+    save_button.add_css_class("suggested-action");
     save_button.set_sensitive(initial_error.is_none());
     let save_feedback = gtk::Label::new(initial_error.as_deref());
     save_feedback.add_css_class("dim-label");
@@ -112,27 +134,28 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
             Err(error) => save_feedback.set_text(&error),
         }
     });
-    content.append(&save_button);
-    content.append(&save_feedback);
+    project_actions.append(&save_button);
 
     let copr_url = format!(
         "https://copr.fedorainfracloud.org/coprs/{}/{}/",
         project.owner, project.name
     );
     let copr_link = gtk::LinkButton::with_label(&copr_url, "Open on COPR");
-    copr_link.set_halign(gtk::Align::Center);
-    content.append(&copr_link);
+    copr_link.add_css_class("flat");
+    copr_link.set_valign(gtk::Align::Center);
+    project_actions.append(&copr_link);
 
     let repository_id = format!(
         "copr:copr.fedorainfracloud.org:{}:{}",
         project.owner, project.name
     );
+    let command_feedback = gtk::Label::new(None);
+    command_feedback.add_css_class("dim-label");
     if let Some(command) = system::copr_repository_command(&repository_id, true) {
         let copy_command = gtk::Button::with_label("Copy enable command");
-        copy_command.set_halign(gtk::Align::Center);
+        copy_command.add_css_class("flat");
+        copy_command.set_valign(gtk::Align::Center);
         copy_command.set_tooltip_text(Some("Copy the equivalent DNF command to the clipboard"));
-        let command_feedback = gtk::Label::new(None);
-        command_feedback.add_css_class("dim-label");
         copy_command.connect_clicked({
             let command = command.clone();
             let command_feedback = command_feedback.clone();
@@ -145,15 +168,19 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
                 }
             }
         });
-        content.append(&copy_command);
-        content.append(&command_feedback);
+        project_actions.append(&copy_command);
     }
 
     if let Some(homepage) = project.homepage.as_deref().filter(|url| is_web_url(url)) {
         let link = gtk::LinkButton::with_label(homepage, "Open project homepage");
-        link.set_halign(gtk::Align::Center);
-        content.append(&link);
+        link.add_css_class("flat");
+        link.set_valign(gtk::Align::Center);
+        project_actions.append(&link);
     }
+
+    content.append(&project_actions);
+    content.append(&save_feedback);
+    content.append(&command_feedback);
 
     let section_title = gtk::Label::builder()
         .label("Packages and build targets")
@@ -290,10 +317,14 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
     timeline.add_css_class("boxed-list");
     content.append(&timeline);
 
+    let clamp = adw::Clamp::builder()
+        .maximum_size(760)
+        .child(&content)
+        .build();
     let scroll = gtk::ScrolledWindow::builder()
         .hscrollbar_policy(gtk::PolicyType::Never)
         .vscrollbar_policy(gtk::PolicyType::Automatic)
-        .child(&content)
+        .child(&clamp)
         .build();
     window.set_content(Some(&scroll));
     window.present();
