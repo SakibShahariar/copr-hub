@@ -410,6 +410,7 @@ fn render_installed_package_rows(
             let list = list.clone();
             let feedback = feedback.clone();
             let repair_permissions = repair_permissions.clone();
+            let action_button = remove.clone();
             move |_| {
                 let refresh_list = list.clone();
                 let refresh_feedback = feedback.clone();
@@ -420,6 +421,7 @@ fn render_installed_package_rows(
                     package_name.clone(),
                     false,
                     feedback.clone(),
+                    &action_button,
                     move || {
                         refresh_installed_packages(
                             &refresh_parent,

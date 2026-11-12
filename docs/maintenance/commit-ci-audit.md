@@ -283,3 +283,20 @@ This section records every direct-to-master commit after the previous ledger tab
 
 - Reviewed through: `434b34f65b6ccfbb6153e33b302cc2a99c30d8fc` (green).
 - Next review: commits after `434b34f65b6ccfbb6153e33b302cc2a99c30d8fc`.
+
+
+## Follow-up review after `434b34f`
+
+| Commit SHA | Subject | CI result / workflow run |
+|---|---|---|
+| `86c6d6c4b6acdec32b83de7451814160b2a21ca9` | fix(repositories): prevent duplicate repository actions | green (#43318053837) |
+
+### Repository action follow-up
+
+- `86c6d6c` passed formatting, unit tests, compilation, and Clippy. Repository Enable/Disable/Remove actions now disable the originating button through compatibility lookup, confirmation, and privileged DNF work, restoring it on cancellation or failure.
+- The next package-action change extends the same lifecycle to Installed-page Remove and Project Details Install. Its CI result will be recorded in the next ledger update.
+
+### Checkpoint
+
+- Reviewed through: `86c6d6c4b6acdec32b83de7451814160b2a21ca9` (green).
+- Next review: commits after `86c6d6c4b6acdec32b83de7451814160b2a21ca9`.

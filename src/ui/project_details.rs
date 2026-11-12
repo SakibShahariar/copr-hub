@@ -1176,12 +1176,14 @@ fn render_project_monitor(
                     let parent = parent.clone();
                     let package_name = package.name.clone();
                     let status = status.clone();
+                    let action_button = install.clone();
                     move |_| {
                         confirm_package_operation(
                             &parent,
                             package_name.clone(),
                             true,
                             status.clone(),
+                            &action_button,
                             || {},
                         );
                     }
@@ -1358,8 +1360,10 @@ pub(super) fn confirm_package_operation<F: Fn() + Clone + 'static>(
     package_name: String,
     install: bool,
     feedback: gtk::Label,
+    action_button: &gtk::Button,
     on_success: F,
 ) {
+    action_button.set_sensitive(false);
     let action = if install { "Install" } else { "Remove" };
     let dialog = gtk::MessageDialog::builder()
         .transient_for(parent)
@@ -1377,9 +1381,11 @@ pub(super) fn confirm_package_operation<F: Fn() + Clone + 'static>(
     dialog.connect_response({
         let package_name = package_name.clone();
         let feedback = feedback.clone();
+        let action_button = action_button.clone();
         move |dialog, response| {
             dialog.close();
             if response != gtk::ResponseType::Accept {
+                action_button.set_sensitive(true);
                 return;
             }
 
@@ -1389,6 +1395,7 @@ pub(super) fn confirm_package_operation<F: Fn() + Clone + 'static>(
             ));
             let package_name = package_name.clone();
             let feedback = feedback.clone();
+            let action_button = action_button.clone();
             let on_success = on_success.clone();
             gtk::glib::MainContext::default().spawn_local(async move {
                 let operation_name = package_name.clone();
@@ -1398,6 +1405,7 @@ pub(super) fn confirm_package_operation<F: Fn() + Clone + 'static>(
                 .await;
                 match result {
                     Ok(Ok(())) => {
+                        action_button.set_sensitive(true);
                         let action_past = if install { "installed" } else { "removed" };
                         match activity::record(
                             "Package operation",
@@ -1411,9 +1419,13 @@ pub(super) fn confirm_package_operation<F: Fn() + Clone + 'static>(
                         }
                         on_success();
                     }
-                    Ok(Err(error)) => feedback.set_text(&error),
+                    Ok(Err(error)) => {
+                        action_button.set_sensitive(true);
+                        feedback.set_text(&error);
+                    }
                     Err(_) => {
-                        feedback.set_text("The background package operation failed unexpectedly.")
+                        action_button.set_sensitive(true);
+                        feedback.set_text("The background package operation failed unexpectedly.");
                     }
                 }
             });
