@@ -24,10 +24,10 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 
 - Repository: `SakibShahariar/copr-hub`
 - Default branch: `master`
-- Checkpoint SHA: `420c45ce7059905ee780ef7845234e69a35dbf9b`
+- Checkpoint SHA: `3f43212386c5e1d14b80d653fcef149090982221`
 - Initialized: 2026-11-02
 - Baseline: latest branch tip queried through combined commit-status endpoint; empty status list recorded as **unavailable**, not green/red. Older history was not retroactively audited during setup.
-- Next session: review commits after `420c45ce7059905ee780ef7845234e69a35dbf9b`, including the next substantive commit that updates this ledger.
+- Next session: review commits after `3f43212386c5e1d14b80d653fcef149090982221`, including the next substantive commit that updates this ledger.
 
 ## Initial baseline
 
@@ -73,6 +73,13 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 | `e3a65b60e15c24f57a3f21da63391c3fc85e534b` | feat(installed): surface update status and audit CI history | **green** | 2026-11-12 | [43233834076](https://github.com/SakibShahariar/copr-hub/actions/runs/43233834076) |
 | `b9020080e0764ed5856bc154ba07744dc5b442dc` | fix(search): use COPR full-text project search | **green** | 2026-11-12 | [43235018143](https://github.com/SakibShahariar/copr-hub/actions/runs/43235018143) |
 | `420c45ce7059905ee780ef7845234e69a35dbf9b` | fix(search): deserialize paginated COPR results | **green** | 2026-11-12 | [43235761345](https://github.com/SakibShahariar/copr-hub/actions/runs/43235761345) |
+| `33f9d69f0dfb3f7df341dee59f8814276e5cc05b` | feat(search): rank COPR results by relevance | **red** | 2026-11-12 | [43238490566](https://github.com/SakibShahariar/copr-hub/actions/runs/43238490566) |
+| `7025808bc620933d7af3b77647f6e024524284dd` | fix(search): keep fuzzy ranking portable and formatted | **red** | 2026-11-12 | [43238694601](https://github.com/SakibShahariar/copr-hub/actions/runs/43238694601) |
+| `4d9bde02883b2722ccb1d9b5695722abae4bfc42` | style(search): apply rustfmt to relevance selector | **red** | 2026-11-12 | [43238811094](https://github.com/SakibShahariar/copr-hub/actions/runs/43238811094) |
+| `c8158cbce2cc3d5b2aee546470e1847fad595da6` | fix(search): preserve unknown COPR match ordering | **red** | 2026-11-12 | [43238987455](https://github.com/SakibShahariar/copr-hub/actions/runs/43238987455) |
+| `dea90eab197986c187ab1f97b3f03b2576bd4c71` | style(search): format edit distance calculation | **red** | 2026-11-12 | [43239093538](https://github.com/SakibShahariar/copr-hub/actions/runs/43239093538) |
+| `eac293aacc18a9af60a298245dcf619e7bfc3674` | test(search): cover short-query fuzzy threshold | **red** | 2026-11-12 | [43239215341](https://github.com/SakibShahariar/copr-hub/actions/runs/43239215341) |
+| `3f43212386c5e1d14b80d653fcef149090982221` | test(search): compare equally ranked project names | **green** | 2026-11-12 | [43239361770](https://github.com/SakibShahariar/copr-hub/actions/runs/43239361770) |
 
 ## Red-cross investigation log
 
@@ -84,6 +91,9 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 - `4eaa0ed930ebbba24d1160fee28ec34a3aedb697` — **Check formatting** failed on the saved-project empty-state description. Formatting was corrected in `e01b77ab5ac4c598bf9635fb94fcf8f3d6dc7675`, whose CI passed.
 - `47bcc14867b3ecbc2ee231c7c79912544c0252dd` — **Check formatting** failed on the repository-file label in the new actions popover. Formatting was corrected in `fb2d289687234ed015eaef37166ce8d24828f9c3`, whose CI passed.
 - `6786e2b9a50979ca4961ed3b05bfda39bb58656c`, `d5a4cd06376cb10b3a96d352c6bd4401f3033d71`, and `3162168d2c8d02fa33fb57a98162b0ebfeca5326` — **Run unit tests** failed because a helper insertion accidentally removed the `bool` return type from `is_web_url`. Restored the signature in `2a96076780ddc8b4802832c03387daee95482e94`; its CI run passed.
+- `33f9d69f0dfb3f7df341dee59f8814276e5cc05b` and `7025808bc620933d7af3b77647f6e024524284dd` — **Check formatting** rejected the multiline relevance dropdown expression. Applied the exact rustfmt layout in `4d9bde02883b2722ccb1d9b5695722abae4bfc42`.
+- `4d9bde02883b2722ccb1d9b5695722abae4bfc42` and `c8158cbce2cc3d5b2aee546470e1847fad595da6` — **Check formatting** rejected the edit-distance substitution expression. Applied rustfmt's multiline layout in `dea90eab197986c187ab1f97b3f03b2576bd4c71`.
+- `dea90eab197986c187ab1f97b3f03b2576bd4c71` and `eac293aacc18a9af60a298245dcf619e7bfc3674` — **Run unit tests** exposed two flawed test assumptions: different suffix lengths were not equal relevance scores, and the short-query fixture was actually a valid prefix. Corrected the short-query fixture in `eac293aacc18a9af60a298245dcf619e7bfc3674` and used equal-length suffixes in `3f43212386c5e1d14b80d653fcef149090982221`; the final run passed all 104 tests.
 
 All failures in this reviewed range have a subsequent fix and green CI validation. No pending or unavailable checks remain in the range.
 
@@ -94,3 +104,4 @@ All failures in this reviewed range have a subsequent fix and green CI validatio
 | 2026-11-02 | Initial checkpoint: `cf6d142db537f0bf13a2e098015cbbabad90285d` | Latest commit queried; empty status response recorded as unavailable. Earlier history not retroactively audited. |
 | 2026-11-12 | `cf6d142db537f0bf13a2e098015cbbabad90285d` → `2a96076780ddc8b4802832c03387daee95482e94` | Reviewed 31 commits: 18 green, 13 red; every red result was diagnosed and followed by a green fix/validation commit. |
 | 2026-11-12 | `2a96076780ddc8b4802832c03387daee95482e94` → `420c45ce7059905ee780ef7845234e69a35dbf9b` | Reviewed 3 commits; all 3 had completed green CI runs. |
+| 2026-11-12 | `420c45ce7059905ee780ef7845234e69a35dbf9b` → `3f43212386c5e1d14b80d653fcef149090982221` | Reviewed 7 commits: 1 green, 6 red; all six red results were diagnosed and followed by a green fix/validation commit. |
