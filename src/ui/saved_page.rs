@@ -108,7 +108,9 @@ pub(super) fn build_saved_page(
 
     let backup_toggle = adw::SwitchRow::builder()
         .title("Scheduled local backups")
-        .subtitle("Create a daily JSON backup while Copr Hub is open. Keep the latest seven backups.")
+        .subtitle(
+            "Create a daily JSON backup while Copr Hub is open. Keep the latest seven backups.",
+        )
         .active(backups::load_config().enabled)
         .build();
     backup_toggle.set_tooltip_text(Some(
