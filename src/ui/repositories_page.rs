@@ -213,9 +213,16 @@ fn render_repositories(
                 origin_summary.set_xalign(0.0);
                 origin_summary.add_css_class("dim-label");
                 actions.append(&origin_summary);
+
+                let repair_state = gtk::Button::with_label("Fix DNF permissions");
+                repair_state.set_halign(gtk::Align::Fill);
+                repair_state.add_css_class("flat");
+                repair_state.set_visible(false);
+                actions.append(&repair_state);
                 {
                     let repository_id = repository.id.clone();
                     let query_summary = origin_summary.clone();
+                    let repair_state = repair_state.clone();
                     gtk::glib::MainContext::default().spawn_local(async move {
                         let result = gtk::gio::spawn_blocking(move || {
                             system::installed_packages_from_repository(&repository_id)
@@ -230,22 +237,16 @@ fn render_repositories(
                                 ));
                             }
                             Ok(Ok(packages)) => {
-                                let names = packages.join(", ");
-                                let preview = packages.iter().take(5).cloned().collect::<Vec<_>>();
-                                let remaining = packages.len().saturating_sub(preview.len());
-                                let summary = if remaining == 0 {
-                                    format!("Installed: {}", preview.join(", "))
-                                } else {
-                                    format!("Installed: {}, +{remaining} more", preview.join(", "))
-                                };
-                                query_summary.set_text(&summary);
-                                query_summary.set_tooltip_text(Some(&names));
+                                set_installed_origin_summary(&query_summary, &packages);
                             }
                             Ok(Err(error)) => {
                                 query_summary.set_text(&format!(
                                     "Could not read installed package origins: {error}"
                                 ));
                                 query_summary.set_tooltip_text(Some(&error));
+                                repair_state.set_visible(
+                                    system::dnf5_system_state_permission_repair_available(&error),
+                                );
                             }
                             Err(_) => {
                                 query_summary.set_text("Installed package origins unavailable");
@@ -255,6 +256,75 @@ fn render_repositories(
                         }
                     });
                 }
+
+                repair_state.connect_clicked({
+                    let repository_id = repository.id.clone();
+                    let query_summary = origin_summary.clone();
+                    let repair_state = repair_state.clone();
+                    move |button| {
+                        button.set_sensitive(false);
+                        button.set_label("Repairing…");
+                        query_summary.set_text(
+                            "Requesting administrator authorization to repair DNF5 permissions…",
+                        );
+                        let repository_id = repository_id.clone();
+                        let query_summary = query_summary.clone();
+                        let repair_state = repair_state.clone();
+                        gtk::glib::MainContext::default().spawn_local(async move {
+                            match gtk::gio::spawn_blocking(
+                                system::repair_dnf5_system_state_permissions,
+                            )
+                            .await
+                            {
+                                Ok(Ok(())) => {
+                                    system::invalidate_installed_package_origins();
+                                    let query_id = repository_id.clone();
+                                    match gtk::gio::spawn_blocking(move || {
+                                        system::installed_packages_from_repository(&query_id)
+                                    })
+                                    .await
+                                    {
+                                        Ok(Ok(packages)) => {
+                                            set_installed_origin_summary(&query_summary, &packages);
+                                            repair_state.set_visible(false);
+                                            repair_state.set_label("Fix DNF permissions");
+                                            repair_state.set_sensitive(true);
+                                        }
+                                        Ok(Err(error)) => {
+                                            query_summary.set_text(&format!(
+                                                "Could not read installed package origins: {error}"
+                                            ));
+                                            repair_state.set_visible(
+                                                system::dnf5_system_state_permission_repair_available(&error),
+                                            );
+                                            repair_state.set_label("Try again");
+                                            repair_state.set_sensitive(true);
+                                        }
+                                        Err(_) => {
+                                            query_summary.set_text(
+                                                "The background DNF query failed unexpectedly.",
+                                            );
+                                            repair_state.set_label("Try again");
+                                            repair_state.set_sensitive(true);
+                                        }
+                                    }
+                                }
+                                Ok(Err(error)) => {
+                                    query_summary.set_text(&error);
+                                    repair_state.set_label("Try again");
+                                    repair_state.set_sensitive(true);
+                                }
+                                Err(_) => {
+                                    query_summary.set_text(
+                                        "The DNF5 permission repair failed unexpectedly.",
+                                    );
+                                    repair_state.set_label("Try again");
+                                    repair_state.set_sensitive(true);
+                                }
+                            }
+                        });
+                    }
+                });
 
                 let action = if repository.enabled {
                     "Disable"
@@ -350,6 +420,27 @@ fn render_repositories(
         }
         Err(error) => feedback.set_text(&error),
     }
+}
+
+fn set_installed_origin_summary(summary: &gtk::Label, packages: &[String]) {
+    if packages.is_empty() {
+        summary.set_text("No installed packages attributed to this repo");
+        summary.set_tooltip_text(Some(
+            "DNF reports no installed RPMs with this source repository ID.",
+        ));
+        return;
+    }
+
+    let names = packages.join(", ");
+    let preview = packages.iter().take(5).cloned().collect::<Vec<_>>();
+    let remaining = packages.len().saturating_sub(preview.len());
+    let text = if remaining == 0 {
+        format!("Installed: {}", preview.join(", "))
+    } else {
+        format!("Installed: {}, +{remaining} more", preview.join(", "))
+    };
+    summary.set_text(&text);
+    summary.set_tooltip_text(Some(&names));
 }
 
 fn confirm_repository_toggle(

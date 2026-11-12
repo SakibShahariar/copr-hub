@@ -248,7 +248,10 @@ fn dnf5_state_metadata() -> Result<(fs::Metadata, fs::Metadata), String> {
     Ok((file, parent))
 }
 
-fn dnf5_state_metadata_is_repair_candidate(file: &fs::Metadata, parent: &fs::Metadata) -> bool {
+fn dnf5_state_metadata_is_repair_candidate(
+    file: &fs::Metadata,
+    parent: &fs::Metadata,
+) -> bool {
     dnf5_state_file_is_repair_candidate(
         file.uid(),
         file.mode(),
@@ -266,6 +269,16 @@ pub fn dnf5_system_state_permissions_need_repair() -> bool {
         return false;
     };
     dnf5_state_metadata_is_repair_candidate(&file, &parent)
+}
+
+fn dnf5_state_error_is_permission_related(error: &str) -> bool {
+    error.contains(DNF5_SYSTEM_STATE_FILE) && error.contains("error opening file")
+}
+
+/// Whether a DNF failure is specifically caused by the known system-state
+/// permissions issue and the file is safe for the in-app repair action.
+pub fn dnf5_system_state_permission_repair_available(error: &str) -> bool {
+    dnf5_state_error_is_permission_related(error) && dnf5_system_state_permissions_need_repair()
 }
 
 /// Restore the mode declared by the DNF5 RPM package. The privileged command
@@ -290,12 +303,7 @@ pub fn repair_dnf5_system_state_permissions() -> Result<(), String> {
     }
 
     let output = Command::new("pkexec")
-        .args([
-            "/usr/bin/chmod",
-            "0644",
-            "--",
-            DNF5_SYSTEM_STATE_FILE,
-        ])
+        .args(["/usr/bin/chmod", "0644", "--", DNF5_SYSTEM_STATE_FILE])
         .output()
         .map_err(|error| format!("Could not start the privileged permission repair: {error}"))?;
 
@@ -737,14 +745,43 @@ mod tests {
     use super::*;
 
     #[test]
+    fn dnf5_state_permission_error_requires_the_expected_path_and_open_failure() {
+        let error = format!(
+            "Loading system state TOML file failed: toml::parse: error opening file \"{}\"",
+            DNF5_SYSTEM_STATE_FILE
+        );
+        assert!(dnf5_state_error_is_permission_related(&error));
+        assert!(!dnf5_state_error_is_permission_related(
+            "toml::parse: error opening file \"/etc/dnf/other.toml\""
+        ));
+        assert!(!dnf5_state_error_is_permission_related(
+            "packages.toml: invalid TOML syntax"
+        ));
+    }
+
+    #[test]
     fn dnf5_state_permission_repair_requires_a_root_owned_file_and_safe_directory() {
-        assert!(dnf5_state_file_is_repair_candidate(0, 0o660, true, 0, 0o755, true));
-        assert!(!dnf5_state_file_is_repair_candidate(0, 0o644, true, 0, 0o755, true));
-        assert!(!dnf5_state_file_is_repair_candidate(1000, 0o660, true, 0, 0o755, true));
-        assert!(!dnf5_state_file_is_repair_candidate(0, 0o660, false, 0, 0o755, true));
-        assert!(!dnf5_state_file_is_repair_candidate(0, 0o660, true, 1000, 0o755, true));
-        assert!(!dnf5_state_file_is_repair_candidate(0, 0o660, true, 0, 0o775, true));
-        assert!(!dnf5_state_file_is_repair_candidate(0, 0o660, true, 0, 0o755, false));
+        assert!(dnf5_state_file_is_repair_candidate(
+            0, 0o660, true, 0, 0o755, true
+        ));
+        assert!(!dnf5_state_file_is_repair_candidate(
+            0, 0o644, true, 0, 0o755, true
+        ));
+        assert!(!dnf5_state_file_is_repair_candidate(
+            1000, 0o660, true, 0, 0o755, true
+        ));
+        assert!(!dnf5_state_file_is_repair_candidate(
+            0, 0o660, false, 0, 0o755, true
+        ));
+        assert!(!dnf5_state_file_is_repair_candidate(
+            0, 0o660, true, 1000, 0o755, true
+        ));
+        assert!(!dnf5_state_file_is_repair_candidate(
+            0, 0o660, true, 0, 0o775, true
+        ));
+        assert!(!dnf5_state_file_is_repair_candidate(
+            0, 0o660, true, 0, 0o755, false
+        ));
     }
 
     #[test]

@@ -219,7 +219,7 @@ fn refresh_installed_packages(
             }
             Ok(Err(error)) => {
                 clear_list_box(&list);
-                if system::dnf5_system_state_permissions_need_repair() {
+                if system::dnf5_system_state_permission_repair_available(&error) {
                     feedback.set_text(&format!(
                         "{error}\n\nCopr Hub can restore the expected DNF5 file permissions. Select Fix DNF permissions to authorize that repair."
                     ));
@@ -311,7 +311,7 @@ fn refresh_installed_package_updates(
             }
             Ok((Err(error), _)) => {
                 clear_list_box(&list);
-                if system::dnf5_system_state_permissions_need_repair() {
+                if system::dnf5_system_state_permission_repair_available(&error) {
                     feedback.set_text(&format!(
                         "Could not read installed COPR packages: {error}\n\nCopr Hub can restore the expected DNF5 file permissions. Select Fix DNF permissions to authorize that repair."
                     ));

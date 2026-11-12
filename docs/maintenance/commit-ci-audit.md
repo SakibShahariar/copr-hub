@@ -91,8 +91,11 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 | `1aede0427807d1a5af2843400d8d7ae728c7d433` | fix(ui): restore repository action menu interaction | **unavailable** | 2026-11-12 | Combined status lookup returned no entries. |
 | `9e494ccfb22cedb3b29902967ce99a8b3c4fc35` | fix(ui): use menu button popover lifecycle | **unavailable** | 2026-11-12 | Combined status lookup returned no entries. |
 | `5ba6ee70407fd7311590fc5750dcd52237fa18ca` | fix(ui): make repository menu keyboard-focusable | **unavailable** | 2026-11-12 | Combined status lookup returned no entries. |
+| `6943da45c62e766d2de3e19eac4d93fea5f5276f` | fix(installed): offer safe DNF5 permission repair | **red** | 2026-11-12 | [43271812234](https://github.com/SakibShahariar/copr-hub/actions/runs/43271812234) |
 
 ## Red-cross investigation log
+
+- `6943da45c62e766d2de3e19eac4d93fea5f5276f` — **Check formatting** rejected two rustfmt layouts in `src/system.rs`: the fixed `chmod` argument list and long permission-candidate assertions. Both are corrected in the follow-up implementation commit; the original run skipped tests, compilation, and Clippy.
 
 - `f019e083e03cd36f1d9ecbbb346d8de0942dba60` — **Run unit tests** failed because `window.display()` was ambiguous between GTK traits. The accessor was explicitly disambiguated in `8162394345e315668400b9ed91d969dab9c76cc1`; the later saved-page batch passed in `a696c91b8aa8bf2a4f177b2ff9c1f79429e1df3a`.
 - `b55d350d7179d89f7a28fd46f39c33f8949b368e`, `8162394345e315668400b9ed91d969dab9c76cc1`, `08ec865137c1d34e552f35a37f06a43899c3cc90`, and `b438e3940e9fc5c7ed3b6ef725c11db67d06582f` — **Check formatting** failed on successive formatting changes in `src/ui/saved_page.rs`. The resulting saved-page batch passed at `a696c91b8aa8bf2a4f177b2ff9c1f79429e1df3a`.
