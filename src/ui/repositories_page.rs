@@ -157,8 +157,10 @@ fn render_repositories(
                 actions.set_margin_end(12);
                 actions.set_size_request(240, -1);
 
-                let file_label =
-                    gtk::Label::new(Some(&format!("Repository file: {}", repository.file.display())));
+                let file_label = gtk::Label::new(Some(&format!(
+                    "Repository file: {}",
+                    repository.file.display()
+                )));
                 file_label.set_wrap(true);
                 file_label.set_xalign(0.0);
                 file_label.add_css_class("dim-label");
