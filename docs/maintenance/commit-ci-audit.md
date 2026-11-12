@@ -24,10 +24,10 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 
 - Repository: `SakibShahariar/copr-hub`
 - Default branch: `master`
-- Checkpoint SHA: `cf6d142db537f0bf13a2e098015cbbabad90285d`
+- Checkpoint SHA: `2a96076780ddc8b4802832c03387daee95482e94`
 - Initialized: 2026-11-02
 - Baseline: latest branch tip queried through combined commit-status endpoint; empty status list recorded as **unavailable**, not green/red. Older history was not retroactively audited during setup.
-- Next session: review commits after this checkpoint, including the ledger and `AGENTS.md` setup commits; investigate any older red/pending commit specifically identified by the owner.
+- Next session: review commits after `2a96076780ddc8b4802832c03387daee95482e94`, including the next substantive commit that updates this ledger.
 
 ## Initial baseline
 
@@ -35,26 +35,58 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 |---|---|---|---|---|
 | `cf6d142db537f0bf13a2e098015cbbabad90285d` | Default-branch tip at ledger initialization | unavailable | 2026-11-02 | Combined status lookup returned no entries. Revisit if new run or visible failure evidence appears. |
 
+## Reviewed commits since the previous checkpoint
+
+| Commit SHA | Subject | CI | Date | Workflow run(s) |
+|---|---|---|---|---|
+| `40d4289dd22ed43c1ee932bc7a03a2104782b4a7` | docs: add persistent commit CI audit ledger | **green** | 2026-11-02 | [41456599107](https://github.com/SakibShahariar/copr-hub/actions/runs/41456599107) |
+| `f0a1e3dde5315adb32a0dd1d90d42b460e85605c` | docs: document incremental commit CI auditing | **green** | 2026-11-02 | [41456605056](https://github.com/SakibShahariar/copr-hub/actions/runs/41456605056) |
+| `da33d1c9f282ae2bd253176cdf7123a77ff8f1a9` | docs: define issue triage categories | **green** | 2026-11-03 | [41573404861](https://github.com/SakibShahariar/copr-hub/actions/runs/41573404861) |
+| `e14ae4be0182c07eebba447497810b4e043f7825` | docs(agents): define administrative commit hygiene | **green** | 2026-11-03 | [41598051449](https://github.com/SakibShahariar/copr-hub/actions/runs/41598051449) |
+| `356a1e0e6d11063bfb1a46fbd6fa94715741de2e` | docs(agents): clarify acceptance criteria evidence | **green** | 2026-11-04 | [41864350051](https://github.com/SakibShahariar/copr-hub/actions/runs/41864350051), [42455174461](https://github.com/SakibShahariar/copr-hub/actions/runs/42455174461), [42455174462](https://github.com/SakibShahariar/copr-hub/actions/runs/42455174462) |
+| `d66b0bd58abbe1de6a2b7a777f0d694094cc7e2c` | docs: improve Copr Hub README | **green** | 2026-11-08 | [42510920191](https://github.com/SakibShahariar/copr-hub/actions/runs/42510920191) |
+| `8639df2e511a35ae6d039cf8a6fa8d2c9c5d51c3` | docs: refine Copr Hub README length | **green** | 2026-11-08 | [42510954764](https://github.com/SakibShahariar/copr-hub/actions/runs/42510954764) |
+| `f0834cdc48fcc7be28bff6145855f07190ae0fc1` | docs: streamline Copr Hub feature overview | **green** | 2026-11-08 | [42511490180](https://github.com/SakibShahariar/copr-hub/actions/runs/42511490180) |
+| `53568e1df2f21cc88b8cf46b2f09a6d77b94faad` | ui: constrain page content for a cleaner GNOME layout | **green** | 2026-11-12 | [43228309963](https://github.com/SakibShahariar/copr-hub/actions/runs/43228309963) |
+| `f019e083e03cd36f1d9ecbbb346d8de0942dba60` | ui: use readable sans-serif typography in the app | **red** | 2026-11-12 | [43228400051](https://github.com/SakibShahariar/copr-hub/actions/runs/43228400051) |
+| `b55d350d7179d89f7a28fd46f39c33f8949b368e` | ui(saved): group monitoring and backup preferences | **red** | 2026-11-12 | [43228560507](https://github.com/SakibShahariar/copr-hub/actions/runs/43228560507) |
+| `8162394345e315668400b9ed91d969dab9c76cc1` | fix(ui): disambiguate GTK display accessor | **red** | 2026-11-12 | [43228650122](https://github.com/SakibShahariar/copr-hub/actions/runs/43228650122) |
+| `e31cf6182ded5bfbbb2b9f7ba98bd5435361828a` | style(saved): format preferences row | **red** | 2026-11-12 | [43228730416](https://github.com/SakibShahariar/copr-hub/actions/runs/43228730416) |
+| `1eb12fe1eab4a251391f7fb52f629303f61b3f20` | ui: use adaptive Libadwaita view switcher and toolbar | **red** | 2026-11-12 | [43228826142](https://github.com/SakibShahariar/copr-hub/actions/runs/43228826142) |
+| `7c59c47ab4d020e8af898097eae3373f283741d2` | fix(saved): use supported Adw action rows for switches | **red** | 2026-11-12 | [43229052048](https://github.com/SakibShahariar/copr-hub/actions/runs/43229052048) |
+| `08ec865137c1d34e552f35a37f06a43899c3cc90` | fix(ui): retain compatible GTK4 application shell | **red** | 2026-11-12 | [43229061450](https://github.com/SakibShahariar/copr-hub/actions/runs/43229061450) |
+| `b438e3940e9fc5c7ed3b6ef725c11db67d06582f` | fix(saved): place monitoring status below its preference group | **red** | 2026-11-12 | [43229156662](https://github.com/SakibShahariar/copr-hub/actions/runs/43229156662) |
+| `a696c91b8aa8bf2a4f177b2ff9c1f79429e1df3a` | style(saved): format preference row | **green** | 2026-11-12 | [43229315027](https://github.com/SakibShahariar/copr-hub/actions/runs/43229315027) |
+| `4eaa0ed930ebbba24d1160fee28ec34a3aedb697` | ui(saved): add a focused empty state and trim redundant copy | **red** | 2026-11-12 | [43229525173](https://github.com/SakibShahariar/copr-hub/actions/runs/43229525173) |
+| `e01b77ab5ac4c598bf9635fb94fcf8f3d6dc7675` | fix(saved): format and wrap the empty-state page | **green** | 2026-11-12 | [43229747307](https://github.com/SakibShahariar/copr-hub/actions/runs/43229747307) |
+| `9780d267753c2b6a0fe78904aab2485f50a6030c` | feat(installed): add update filter chips | **green** | 2026-11-12 | [43231290653](https://github.com/SakibShahariar/copr-hub/actions/runs/43231290653) |
+| `47bcc14867b3ecbc2ee231c7c79912544c0252dd` | style(repositories): group row actions in a popover | **red** | 2026-11-12 | [43231503966](https://github.com/SakibShahariar/copr-hub/actions/runs/43231503966) |
+| `fb2d289687234ed015eaef37166ce8d24828f9c3` | fix(repositories): format action popover layout | **green** | 2026-11-12 | [43231693602](https://github.com/SakibShahariar/copr-hub/actions/runs/43231693602) |
+| `0ed984a7d17b6c1a3f337cf4a445adf95f4ffc9e` | style(details): modernize project header and actions | **green** | 2026-11-12 | [43231799291](https://github.com/SakibShahariar/copr-hub/actions/runs/43231799291) |
+| `ff645c3fab9642bfbe59536d86368697f53b4aa0` | style(repositories): group enabled and disabled entries | **green** | 2026-11-12 | [43231951835](https://github.com/SakibShahariar/copr-hub/actions/runs/43231951835) |
+| `02af15228eceb7e08afae8050b842032fc227455` | style(discover): use a compact project search header | **green** | 2026-11-12 | [43232017116](https://github.com/SakibShahariar/copr-hub/actions/runs/43232017116) |
+| `3518b38503bfb606a7c1872d5b4bcff0a643a6df` | style(saved): group bulk actions in a menu | **green** | 2026-11-12 | [43232145573](https://github.com/SakibShahariar/copr-hub/actions/runs/43232145573) |
+| `6786e2b9a50979ca4961ed3b05bfda39bb58656c` | feat(details): add refresh action and last-checked status | **red** | 2026-11-12 | [43232500254](https://github.com/SakibShahariar/copr-hub/actions/runs/43232500254) |
+| `d5a4cd06376cb10b3a96d352c6bd4401f3033d71` | style(installed): highlight available package updates | **red** | 2026-11-12 | [43232579432](https://github.com/SakibShahariar/copr-hub/actions/runs/43232579432) |
+| `3162168d2c8d02fa33fb57a98162b0ebfeca5326` | fix(details): format refresh action | **red** | 2026-11-12 | [43232992297](https://github.com/SakibShahariar/copr-hub/actions/runs/43232992297) |
+| `2a96076780ddc8b4802832c03387daee95482e94` | fix(details): preserve URL validation return type | **green** | 2026-11-12 | [43233244021](https://github.com/SakibShahariar/copr-hub/actions/runs/43233244021) |
+
 ## Red-cross investigation log
 
-No red result was confirmed from the status data retrieved during setup.
+- `f019e083e03cd36f1d9ecbbb346d8de0942dba60` — **Run unit tests** failed because `window.display()` was ambiguous between GTK traits. The accessor was explicitly disambiguated in `8162394345e315668400b9ed91d969dab9c76cc1`; the later saved-page batch passed in `a696c91b8aa8bf2a4f177b2ff9c1f79429e1df3a`.
+- `b55d350d7179d89f7a28fd46f39c33f8949b368e`, `8162394345e315668400b9ed91d969dab9c76cc1`, `08ec865137c1d34e552f35a37f06a43899c3cc90`, and `b438e3940e9fc5c7ed3b6ef725c11db67d06582f` — **Check formatting** failed on successive formatting changes in `src/ui/saved_page.rs`. The resulting saved-page batch passed at `a696c91b8aa8bf2a4f177b2ff9c1f79429e1df3a`.
+- `e31cf6182ded5bfbbb2b9f7ba98bd5435361828a` — **Run unit tests** failed because the pinned libadwaita Rust bindings do not expose `adw::SwitchRow`. Replaced with `gtk::Switch` inside `adw::ActionRow`; subsequent compatibility work passed at `a696c91b8aa8bf2a4f177b2ff9c1f79429e1df3a`.
+- `1eb12fe1eab4a251391f7fb52f629303f61b3f20` — **Run unit tests** failed because `adw::SwitchRow` and `adw::ToolbarView` were unavailable in the pinned bindings. The switch rows and application shell were rewritten with supported widgets in `7c59c47ab4d020e8af898097eae3373f283741d2` and `08ec865137c1d34e552f35a37f06a43899c3cc90`; the final compatible UI batch passed at `a696c91b8aa8bf2a4f177b2ff9c1f79429e1df3a`.
+- `7c59c47ab4d020e8af898097eae3373f283741d2` — **Run unit tests** still failed because `adw::ToolbarView` was unavailable. Removed that unsupported shell API in `08ec865137c1d34e552f35a37f06a43899c3cc90`; later green validation at `a696c91b8aa8bf2a4f177b2ff9c1f79429e1df3a`.
+- `4eaa0ed930ebbba24d1160fee28ec34a3aedb697` — **Check formatting** failed on the saved-project empty-state description. Formatting was corrected in `e01b77ab5ac4c598bf9635fb94fcf8f3d6dc7675`, whose CI passed.
+- `47bcc14867b3ecbc2ee231c7c79912544c0252dd` — **Check formatting** failed on the repository-file label in the new actions popover. Formatting was corrected in `fb2d289687234ed015eaef37166ce8d24828f9c3`, whose CI passed.
+- `6786e2b9a50979ca4961ed3b05bfda39bb58656c`, `d5a4cd06376cb10b3a96d352c6bd4401f3033d71`, and `3162168d2c8d02fa33fb57a98162b0ebfeca5326` — **Run unit tests** failed because a helper insertion accidentally removed the `bool` return type from `is_web_url`. Restored the signature in `2a96076780ddc8b4802832c03387daee95482e94`; its CI run passed.
 
-### Failure record template
-
-- Commit SHA:
-- Commit subject:
-- First observed (date):
-- Workflow / run URL:
-- Failed job / step:
-- Failure summary:
-- Classification: regression / pre-existing / inconclusive
-- Fix commit(s):
-- Rerun attempt(s) and result:
-- Final verified outcome:
-- Remaining follow-up:
+All failures in this reviewed range have a subsequent fix and green CI validation. No pending or unavailable checks remain in the range.
 
 ## Session history
 
 | Date | Reviewed range / checkpoint | Result summary |
 |---|---|---|
 | 2026-11-02 | Initial checkpoint: `cf6d142db537f0bf13a2e098015cbbabad90285d` | Latest commit queried; empty status response recorded as unavailable. Earlier history not retroactively audited. |
+| 2026-11-12 | `cf6d142db537f0bf13a2e098015cbbabad90285d` → `2a96076780ddc8b4802832c03387daee95482e94` | Reviewed 31 commits: 18 green, 13 red; every red result was diagnosed and followed by a green fix/validation commit. |

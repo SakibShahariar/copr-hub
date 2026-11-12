@@ -50,7 +50,19 @@ pub(super) fn build_installed_page(parent: &adw::ApplicationWindow) -> gtk::Widg
         .wrap(true)
         .build();
     feedback.add_css_class("dim-label");
-    content.append(&feedback);
+    feedback.set_hexpand(true);
+    let feedback_card = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+    feedback_card.set_hexpand(true);
+    feedback_card.set_margin_top(4);
+    feedback_card.set_margin_bottom(4);
+    feedback_card.set_margin_start(4);
+    feedback_card.set_margin_end(4);
+    feedback_card.add_css_class("card");
+    let feedback_icon = gtk::Image::from_icon_name("dialog-information-symbolic");
+    feedback_icon.set_valign(gtk::Align::Center);
+    feedback_card.append(&feedback_icon);
+    feedback_card.append(&feedback);
+    content.append(&feedback_card);
 
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::SelectionMode::None);
@@ -216,9 +228,15 @@ fn refresh_installed_package_updates(
                     packages,
                     updates,
                 );
-                feedback.set_text(&format!(
-                    "Checked enabled repositories: {updated_packages} of {package_count} installed COPR package(s) have an available upgrade candidate. This is not a security audit."
-                ));
+                if updated_packages > 0 {
+                    feedback.set_text(&format!(
+                        "Updates available · {updated_packages} of {package_count} installed COPR package(s) have an upgrade candidate in enabled repositories. This is not a security audit."
+                    ));
+                } else {
+                    feedback.set_text(&format!(
+                        "You're up to date · no upgrade candidates were found for {package_count} installed COPR package(s) in enabled repositories."
+                    ));
+                }
             }
             Ok((Ok(packages), Err(error))) => {
                 render_installed_package_rows(
