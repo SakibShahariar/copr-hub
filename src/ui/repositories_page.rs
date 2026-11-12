@@ -331,25 +331,16 @@ fn render_repositories(
                 let popover = gtk::Popover::new();
                 popover.set_child(Some(&actions));
                 popover.set_position(gtk::PositionType::Bottom);
+                popover.set_autohide(true);
 
-                // Anchor the popover to a plain button and open it explicitly.
-                // This avoids relying on MenuButton's implicit popup handling
-                // inside an AdwActionRow suffix.
-                let menu = gtk::Button::new();
+                // GtkMenuButton owns the popover lifecycle and anchors it to
+                // its allocation, including when used as an ActionRow suffix.
+                let menu = gtk::MenuButton::new();
                 menu.set_icon_name("view-more-symbolic");
                 menu.set_tooltip_text(Some("Repository actions and details"));
                 menu.add_css_class("flat");
-                popover.set_parent(&menu);
-                menu.connect_clicked({
-                    let popover = popover.clone();
-                    move |_| {
-                        if popover.is_visible() {
-                            popover.popdown();
-                        } else {
-                            popover.popup();
-                        }
-                    }
-                });
+                menu.set_can_focus(true);
+                menu.set_popover(Some(&popover));
                 row.add_suffix(&menu);
                 list.append(&row);
             }
