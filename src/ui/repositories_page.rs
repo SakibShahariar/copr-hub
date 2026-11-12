@@ -192,12 +192,18 @@ fn render_repositories(
                 actions.set_margin_end(12);
                 actions.set_size_request(240, -1);
 
-                let file_label = gtk::Label::new(Some(&format!(
-                    "Repository file: {}",
-                    repository.file.display()
-                )));
+                let file_name = repository
+                    .file
+                    .file_name()
+                    .unwrap_or_else(|| std::ffi::OsStr::new("repository file"))
+                    .to_string_lossy();
+                let file_label =
+                    gtk::Label::new(Some(&format!("Repository file: {file_name}")));
+                file_label.set_width_chars(32);
+                file_label.set_max_width_chars(32);
                 file_label.set_wrap(true);
                 file_label.set_xalign(0.0);
+                file_label.set_tooltip_text(Some(&repository.file.display().to_string()));
                 file_label.add_css_class("dim-label");
                 actions.append(&file_label);
 
@@ -237,7 +243,9 @@ fn render_repositories(
                                 query_summary.set_tooltip_text(Some(&names));
                             }
                             Ok(Err(error)) => {
-                                query_summary.set_text("Installed package origins unavailable");
+                                query_summary.set_text(&format!(
+                                    "Could not read installed package origins: {error}"
+                                ));
                                 query_summary.set_tooltip_text(Some(&error));
                             }
                             Err(_) => {
