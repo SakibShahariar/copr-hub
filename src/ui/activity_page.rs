@@ -348,11 +348,7 @@ fn format_activity_timestamp(timestamp: u64) -> String {
         .unwrap_or_else(|_| "Unknown time".to_string())
 }
 
-fn refresh_activity(
-    list: &gtk::ListBox,
-    feedback: &gtk::Label,
-    generation: &Rc<RefCell<u64>>,
-) {
+fn refresh_activity(list: &gtk::ListBox, feedback: &gtk::Label, generation: &Rc<RefCell<u64>>) {
     let request_id = {
         let mut generation = generation.borrow_mut();
         *generation = generation.wrapping_add(1);
