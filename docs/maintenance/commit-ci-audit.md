@@ -228,3 +228,24 @@ This section records every direct-to-master commit after the previous ledger tab
 
 - Reviewed through: `f61e49ce618eae22fd1dc1d228481df8b024020b` (green).
 - Next review: commits after `f61e49ce618eae22fd1dc1d228481df8b024020b`.
+
+
+## Follow-up review after `f61e49c`
+
+| Commit SHA | Subject | CI result / workflow run |
+|---|---|---|
+| `e4de71bcb622ec17cc7515fef3708f625b6d66f6` | fix(repositories): guard actions with explicit origin state | red (#43316460232) |
+| `1a69bb4c2d730b80357e068426bec3db69612512` | style(repositories): format origin state test | red (#43316671836) |
+| `9b409f6fb18dbef1158ea0b04c1dff4e6f002718` | style(repositories): match origin state test formatting | green (#43317002401) |
+
+### Repository-origin state follow-up
+
+- `e4de71b` introduced the explicit repository-origin state and focused state test; the first run failed only because the assertion formatting did not match rustfmt.
+- `1a69bb4` corrected the first formatting diff but rustfmt required the alternate chained-assert layout; `9b409f6` matches rustfmt and passed formatting, tests, compilation, and Clippy.
+- Category A is complete again. #60 is closed after green CI. Activity/favorites operations (#61/#62) and chooser re-entry prevention (#59) remain Category B pending live GNOME validation.
+- This commit's CI result will be recorded in the next ledger update.
+
+### Checkpoint
+
+- Reviewed through: `9b409f6fb18dbef1158ea0b04c1dff4e6f002718` (green).
+- Next review: commits after `9b409f6fb18dbef1158ea0b04c1dff4e6f002718`.

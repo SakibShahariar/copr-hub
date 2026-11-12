@@ -20,7 +20,6 @@ Scope: the 99 audit issues in #50–#148. This file records the A–E category f
 | #55 | B | Guard compatibility lookups and verify control restoration on every path. |
 | #58 | B | Disable Import during chooser/confirmation/import and verify cancellation paths. |
 | #59 | B | Disable Import/Export during chooser and file operations; verify native chooser behavior. |
-| #60 | A | Explicit origin state prevents Enable/Disable/Remove until package-origin data is successfully loaded; deterministic state test included. |
 | #61 | B | Project Details save/remove and its activity write now run in a background worker; live GNOME validation remains.
 | #62 | B | Import/export/clear and history refresh now run in background workers with stale-refresh protection; live GNOME validation remains.
 | #63 | B | Duplicate scope of #62; track clear-history behavior with #62 and verify its response path. |
@@ -85,7 +84,7 @@ Scope: the 99 audit issues in #50–#148. This file records the A–E category f
 
 ## Previously closed audit findings
 
-These closed findings were checked against their acceptance lists: #56, #57, #65, #69, #74, #78, #79, #80, #81, #86, #88, #90, #93, #96, #97, #98, #102, #106, #109, #111, #118, #131, #136, #137, #139, #144, #145, #147, and #148. Their recorded criteria are checked and the relevant CI runs are green, except #124 which remains open pending CI.
+These closed findings were checked against their acceptance lists: #56, #57, #60, #65, #69, #74, #78, #79, #80, #81, #86, #88, #90, #93, #96, #97, #98, #102, #106, #109, #111, #118, #131, #136, #137, #139, #144, #145, #147, and #148. Their recorded criteria are checked and the relevant CI runs are green, except #124 which remains open pending CI.
 
 ## Work status
 

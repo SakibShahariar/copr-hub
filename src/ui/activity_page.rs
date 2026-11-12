@@ -158,6 +158,7 @@ pub(super) fn build_activity_page(
                 Some("Cancel"),
             );
             dialog.set_current_name("copr-hub-activity.json");
+            export_button.set_sensitive(false);
             dialog.connect_response({
                 let feedback = feedback.clone();
                 let export_button = export_button.clone();
@@ -167,7 +168,6 @@ pub(super) fn build_activity_page(
                             Some(path) => {
                                 let path_display = path.display().to_string();
                                 feedback.set_text("Exporting activity history…");
-                                export_button.set_sensitive(false);
                                 let feedback = feedback.clone();
                                 let export_button = export_button.clone();
                                 let query = query.clone();
@@ -195,8 +195,13 @@ pub(super) fn build_activity_page(
                                     }
                                 });
                             }
-                            None => feedback.set_text("Could not access the selected export path."),
+                            None => {
+                                feedback.set_text("Could not access the selected export path.");
+                                export_button.set_sensitive(true);
+                            }
                         }
+                    } else {
+                        export_button.set_sensitive(true);
                     }
                     dialog.destroy();
                 }
@@ -212,6 +217,7 @@ pub(super) fn build_activity_page(
         let import_button = import.clone();
         let refresh_generation = refresh_generation.clone();
         move |_| {
+            import_button.set_sensitive(false);
             let dialog = gtk::FileChooserNative::new(
                 Some("Import activity history"),
                 Some(&parent),
@@ -229,7 +235,6 @@ pub(super) fn build_activity_page(
                         match dialog.file().and_then(|file| file.path()) {
                             Some(path) => {
                                 feedback.set_text("Importing activity history…");
-                                import_button.set_sensitive(false);
                                 let list = list.clone();
                                 let feedback = feedback.clone();
                                 let import_button = import_button.clone();
@@ -261,8 +266,13 @@ pub(super) fn build_activity_page(
                                     }
                                 });
                             }
-                            None => feedback.set_text("Could not access the selected activity backup."),
+                            None => {
+                                feedback.set_text("Could not access the selected activity backup.");
+                                import_button.set_sensitive(true);
+                            }
                         }
+                    } else {
+                        import_button.set_sensitive(true);
                     }
                     dialog.destroy();
                 }
