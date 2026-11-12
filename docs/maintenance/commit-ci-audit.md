@@ -24,7 +24,7 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 
 - Repository: `SakibShahariar/copr-hub`
 - Default branch: `master`
-- Checkpoint SHA: `92b84bf6ff0489cc0579cca1cdba1a02d8cafb42`
+- Checkpoint SHA: `001900350150fcc37746701597566511f30cb074`
 - Initialized: 2026-11-02
 - Baseline: latest branch tip queried through combined commit-status endpoint; empty status list recorded as **unavailable**, not green/red. Older history was not retroactively audited during setup.
 - Next session: review commits after `6c62ba5682cbd557b89e1e7af8bd42b3f708d09d`, including the next substantive commit that updates this ledger.
@@ -109,7 +109,8 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 - `33f9d69f0dfb3f7df341dee59f8814276e5cc05b` and `7025808bc620933d7af3b77647f6e024524284dd` — **Check formatting** rejected the multiline relevance dropdown expression. Applied the exact rustfmt layout in `4d9bde02883b2722ccb1d9b5695722abae4bfc42`.
 - `4d9bde02883b2722ccb1d9b5695722abae4bfc42` and `c8158cbce2cc3d5b2aee546470e1847fad595da6` — **Check formatting** rejected the edit-distance substitution expression. Applied rustfmt's multiline layout in `dea90eab197986c187ab1f97b3f03b2576bd4c71`.
 - `dea90eab197986c187ab1f97b3f03b2576bd4c71` and `eac293aacc18a9af60a298245dcf619e7bfc3674` — **Run unit tests** exposed two flawed test assumptions: different suffix lengths were not equal relevance scores, and the short-query fixture was actually a valid prefix. Corrected the short-query fixture in `eac293aacc18a9af60a298245dcf619e7bfc3674` and used equal-length suffixes in `3f43212386c5e1d14b80d653fcef149090982221`; the final run passed all 104 tests.
-- `92b84bf6ff0489cc0579cca1cdba1a02d8cafb42` — **Check formatting** expected the DNF metadata helper signature on one line. Corrected in the current follow-up; the failed run skipped tests, compilation, and Clippy.
+- `92b84bf6ff0489cc0579cca1cdba1a02d8cafb42` — **Check formatting** expected the DNF metadata helper signature on one line. Corrected in `001900350150fcc37746701597566511f30cb074`; that commit's CI result is pending/unavailable.
+- `001900350150fcc37746701597566511f30cb074` — **Check compilation** failed: the package-removal callback in `src/ui/installed_page.rs` omitted the newly required fourth `repair_permissions` argument. Fixed in the current follow-up by threading the button through the installed-row renderer and refresh callback.
 - `0fab3a5e1e070e8b9de0dd5397d741754402e956` — **Check formatting** failed because rustfmt expected the repository-file label construction on one line. The formatting was corrected in `1aede0427807d1a5af2843400d8d7ae728c7d433`; CI completed green at run `43265148583`. The later menu-lifecycle and keyboard-focus commits also completed green CI at runs `43265577679` and `43267194014`, although live GNOME activation remains unverified.
 - `a53ecf247cf99405623383ca3e77486b4e6e41a1` and `0e3df7c2bf431b01d8ca2d5e5159ca12d6bd7b1e` — **Run unit tests** failed because a new parser test incorrectly expected non-COPR repository origins to be discarded. The parser intentionally records safe origins for all repositories; the repository UI looks up only the COPR ID it is displaying. Corrected the test to assert that the Fedora-origin row is parsed in `674d5dbe8b13842e653c618b2d2db978e5cc0997`; its CI passed all 106 tests and all remaining checks.
 - `e7500338ca2107aa9ea027b9ace4628d9c3d639a` — **Run unit tests** found one stale test expectation after moving fuzzy matches below explicit description matches. Updated the test to assert the fuzzy tier directly in `6c62ba5682cbd557b89e1e7af8bd42b3f708d09d`; its CI run passed all 104 tests.

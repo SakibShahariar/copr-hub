@@ -204,6 +204,7 @@ fn refresh_installed_packages(
                     &parent,
                     &list,
                     &feedback,
+                    &repair_permissions,
                     packages,
                     std::collections::HashMap::new(),
                 );
@@ -284,6 +285,7 @@ fn refresh_installed_package_updates(
                     &parent,
                     &list,
                     &feedback,
+                    &repair_permissions,
                     packages,
                     updates,
                 );
@@ -302,6 +304,7 @@ fn refresh_installed_package_updates(
                     &parent,
                     &list,
                     &feedback,
+                    &repair_permissions,
                     packages,
                     std::collections::HashMap::new(),
                 );
@@ -333,6 +336,7 @@ fn render_installed_package_rows(
     parent: &adw::ApplicationWindow,
     list: &gtk::ListBox,
     feedback: &gtk::Label,
+    repair_permissions: &gtk::Button,
     packages: Vec<system::InstalledCoprPackage>,
     updates: std::collections::HashMap<String, Vec<system::AvailablePackageUpdate>>,
 ) {
@@ -405,10 +409,12 @@ fn render_installed_package_rows(
             let package_name = package.name.clone();
             let list = list.clone();
             let feedback = feedback.clone();
+            let repair_permissions = repair_permissions.clone();
             move |_| {
                 let refresh_list = list.clone();
                 let refresh_feedback = feedback.clone();
                 let refresh_parent = parent.clone();
+                let refresh_repair_permissions = repair_permissions.clone();
                 confirm_package_operation(
                     &parent,
                     package_name.clone(),
@@ -419,6 +425,7 @@ fn render_installed_package_rows(
                             &refresh_parent,
                             &refresh_list,
                             &refresh_feedback,
+                            &refresh_repair_permissions,
                         )
                     },
                 );
