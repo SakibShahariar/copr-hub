@@ -6,6 +6,9 @@ use std::sync::{Mutex, OnceLock};
 
 const REPOSITORY_DIRECTORY: &str = "/etc/yum.repos.d";
 const MAX_COMMAND_DETAILS_CHARS: usize = 1200;
+const INSTALLED_COPR_QUERY_FORMAT: &str = "%{name}\t%{evr}\t%{from_repo}\\n";
+const PACKAGE_UPDATES_QUERY_FORMAT: &str = "%{name}\t%{evr}\t%{repoid}\\n";
+const INSTALLED_ORIGINS_QUERY_FORMAT: &str = "%{name}|%{from_repo}\\n";
 
 /// Read the major Fedora release from a parsed /etc/os-release file.
 pub fn parse_fedora_release(os_release: &str) -> Option<u32> {
@@ -218,7 +221,7 @@ pub fn list_installed_copr_packages() -> Result<Vec<InstalledCoprPackage>, Strin
             "repoquery",
             "--installed",
             "--queryformat",
-            "%{name}\t%{evr}\t%{from_repo}\\n",
+            INSTALLED_COPR_QUERY_FORMAT,
         ])
         .output()
         .map_err(|error| format!("Could not start DNF to inspect installed packages: {error}"))?;
@@ -246,7 +249,7 @@ pub fn list_package_updates() -> Result<Vec<AvailablePackageUpdate>, String> {
             "repoquery",
             "--upgrades",
             "--queryformat",
-            "%{name}\t%{evr}\t%{repoid}\\n",
+            PACKAGE_UPDATES_QUERY_FORMAT,
         ])
         .output()
         .map_err(|error| format!("Could not start DNF to check package updates: {error}"))?;
@@ -443,7 +446,7 @@ fn query_installed_package_origins() -> InstalledOrigins {
             "repoquery",
             "--installed",
             "--queryformat",
-            "%{name}|%{from_repo}\\n",
+            INSTALLED_ORIGINS_QUERY_FORMAT,
         ])
         .output()
         .map_err(|error| {
@@ -790,6 +793,13 @@ enabled=1
         let packages = parse_installed_copr_packages(output);
         assert_eq!(packages.len(), 1);
         assert_eq!(packages[0].name, "valid");
+    }
+
+    #[test]
+    fn dnf_query_formats_explicitly_terminate_each_result_row() {
+        assert!(INSTALLED_COPR_QUERY_FORMAT.ends_with("\\n"));
+        assert!(PACKAGE_UPDATES_QUERY_FORMAT.ends_with("\\n"));
+        assert!(INSTALLED_ORIGINS_QUERY_FORMAT.ends_with("\\n"));
     }
 
     #[test]
