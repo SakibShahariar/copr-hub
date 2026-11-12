@@ -197,7 +197,9 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
 
     let refresh = gtk::Button::with_label("Refresh");
     refresh.set_icon_name("view-refresh-symbolic");
-    refresh.set_tooltip_text(Some("Refresh build targets, history, and upstream release data"));
+    refresh.set_tooltip_text(Some(
+        "Refresh build targets, history, and upstream release data",
+    ));
     refresh.add_css_class("flat");
     refresh.set_valign(gtk::Align::Center);
     refresh.connect_clicked({
