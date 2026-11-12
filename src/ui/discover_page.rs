@@ -295,11 +295,13 @@ fn project_relevance(project: &copr::CoprProject, query: &str) -> (u8, usize) {
         return (5, owner.find(&query).unwrap_or_default());
     }
 
+    // Unknown fields may include an exact package-name hit from COPR.
+    // Keep those results in server order rather than guessing from metadata.
     if let Some(distance) = fuzzy_name_distance(&name, &query) {
-        return (6, distance);
+        return (7, distance);
     }
     if let Some(distance) = fuzzy_name_distance(&owner, &query) {
-        return (7, distance);
+        return (8, distance);
     }
 
     let description = project
@@ -308,10 +310,10 @@ fn project_relevance(project: &copr::CoprProject, query: &str) -> (u8, usize) {
         .map(normalize_search_text)
         .unwrap_or_default();
     if description.contains(&query) {
-        return (8, description.find(&query).unwrap_or_default());
+        return (9, description.find(&query).unwrap_or_default());
     }
 
-    (9, 0)
+    (6, 0)
 }
 
 fn rank_projects(projects: &mut [copr::CoprProject], query: &str) {
@@ -468,6 +470,19 @@ mod tests {
         rank_projects(&mut projects, "zen-browser");
 
         assert_eq!(projects[0].name, "zen-brower-nightly");
+    }
+
+    #[test]
+    fn unknown_matches_keep_server_order_ahead_of_fuzzy_guesses() {
+        let mut projects = vec![
+            project("unrelated-project", "alice", "Package name is not exposed"),
+            project("zen-brower", "bob", "A typo in the project name"),
+        ];
+
+        rank_projects(&mut projects, "zen-browser");
+
+        assert_eq!(projects[0].name, "unrelated-project");
+        assert_eq!(projects[1].name, "zen-brower");
     }
 
     #[test]
