@@ -32,6 +32,18 @@ pub(super) fn build_installed_page(parent: &adw::ApplicationWindow) -> gtk::Widg
         .build();
     content.append(&filter);
 
+    let filter_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    let all_filter = gtk::ToggleButton::with_label("All");
+    all_filter.add_css_class("pill");
+    all_filter.set_active(true);
+    let updates_filter = gtk::ToggleButton::with_label("Updates available");
+    updates_filter.add_css_class("pill");
+    updates_filter.set_group(Some(&all_filter));
+    filter_row.append(&all_filter);
+    filter_row.append(&updates_filter);
+    content.append(&filter_row);
+
+    let filter_mode = Rc::new(std::cell::Cell::new(false));
     let feedback = gtk::Label::builder()
         .label("Checking installed packages…")
         .xalign(0.0)
@@ -46,13 +58,15 @@ pub(super) fn build_installed_page(parent: &adw::ApplicationWindow) -> gtk::Widg
     let filter_query = Rc::new(RefCell::new(String::new()));
     list.set_filter_func({
         let filter_query = filter_query.clone();
+        let filter_mode = filter_mode.clone();
         move |row| {
-            let query = filter_query.borrow().trim().to_ascii_lowercase();
-            if query.is_empty() {
-                return true;
+            let metadata = row.widget_name().to_ascii_lowercase();
+            let updates_only = filter_mode.get();
+            if updates_only && !metadata.contains("[update-available]") {
+                return false;
             }
-            row.child()
-                .is_some_and(|child| child.widget_name().to_ascii_lowercase().contains(&query))
+            let query = filter_query.borrow().trim().to_ascii_lowercase();
+            query.is_empty() || metadata.contains(&query)
         }
     });
     filter.connect_search_changed({
@@ -71,6 +85,27 @@ pub(super) fn build_installed_page(parent: &adw::ApplicationWindow) -> gtk::Widg
         }
     });
     content.append(&list);
+
+    all_filter.connect_toggled({
+        let filter_mode = filter_mode.clone();
+        let list = list.clone();
+        move |button| {
+            if button.is_active() {
+                filter_mode.set(false);
+                list.invalidate_filter();
+            }
+        }
+    });
+    updates_filter.connect_toggled({
+        let filter_mode = filter_mode.clone();
+        let list = list.clone();
+        move |button| {
+            if button.is_active() {
+                filter_mode.set(true);
+                list.invalidate_filter();
+            }
+        }
+    });
 
     refresh.connect_clicked({
         let list = list.clone();
@@ -243,11 +278,16 @@ fn render_installed_package_rows(
             .subtitle(subtitle)
             .build();
         row.set_widget_name(&format!(
-            "{} {} {} {}",
+            "{} {} {} {}{}",
             package.name,
             package.version,
             package.repository,
-            update_text.as_deref().unwrap_or("")
+            update_text.as_deref().unwrap_or(""),
+            if updates.contains_key(&package.name) {
+                " [update-available]"
+            } else {
+                ""
+            }
         ));
         row.add_prefix(&gtk::Image::from_icon_name("package-x-generic-symbolic"));
 
