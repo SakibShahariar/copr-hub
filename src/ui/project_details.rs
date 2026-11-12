@@ -1,6 +1,23 @@
 use super::*;
 
-pub(super) fn is_web_url(value: &str) -> bool {
+fn update_last_checked(label: &gtk::Label, project: &copr::CoprProject) {
+    let latest = snapshots::load(project).and_then(|snapshot| {
+        [
+            snapshot.monitor_fetched_at_unix,
+            snapshot.history_fetched_at_unix,
+            snapshot.upstream_fetched_at_unix,
+        ]
+        .into_iter()
+        .flatten()
+        .max()
+    });
+    label.set_text(&format!(
+        "Last checked: {}",
+        snapshots::cache_age_label(latest)
+    ));
+}
+
+pub(super) fn is_web_url(value: &str) {
     reqwest::Url::parse(value)
         .map(|url| matches!(url.scheme(), "http" | "https"))
         .unwrap_or(false)
@@ -178,9 +195,30 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
         project_actions.append(&link);
     }
 
+    let refresh = gtk::Button::with_label("Refresh");
+    refresh.set_icon_name("view-refresh-symbolic");
+    refresh.set_tooltip_text(Some("Refresh build targets, history, and upstream release data"));
+    refresh.add_css_class("flat");
+    refresh.set_valign(gtk::Align::Center);
+    refresh.connect_clicked({
+        let parent = parent.clone();
+        let project = project.clone();
+        let window = window.clone();
+        move |_| {
+            window.close();
+            show_project_details(&parent, &project);
+        }
+    });
+    project_actions.append(&refresh);
+
+    let last_checked = gtk::Label::new(Some("Last checked: waiting for the first refresh…"));
+    last_checked.set_xalign(0.0);
+    last_checked.add_css_class("dim-label");
+
     content.append(&project_actions);
     content.append(&save_feedback);
     content.append(&command_feedback);
+    content.append(&last_checked);
 
     let section_title = gtk::Label::builder()
         .label("Packages and build targets")
@@ -347,6 +385,7 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
     {
         let timeline = timeline.clone();
         let timeline_status = timeline_status.clone();
+        let last_checked = last_checked.clone();
         let project_data = history_project_data.clone();
         gtk::glib::MainContext::default().spawn_local(async move {
             let fetch_owner = history_owner.clone();
@@ -358,6 +397,7 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
             match response {
                 Ok(Ok(builds)) => {
                     let _ = snapshots::save_history(&project_data, builds.clone());
+                    update_last_checked(&last_checked, &project_data);
                     render_build_history(
                         &timeline,
                         &timeline_status,
@@ -438,6 +478,7 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
     let project_for_snapshot = project.clone();
 
     if let Some(snapshot) = snapshots::load(&project_for_snapshot) {
+        update_last_checked(&last_checked, &project_for_snapshot);
         if let Some(release) = snapshot.upstream_release.clone() {
             *release_state.borrow_mut() = Some(release);
         }
@@ -499,6 +540,7 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
         let intelligence = intelligence.clone();
         let homepage = homepage_for_comparison.clone();
         let matrix = matrix.clone();
+        let last_checked = last_checked.clone();
         let project_data = project_for_snapshot.clone();
         gtk::glib::MainContext::default().spawn_local(async move {
             let fetch_owner = owner.clone();
@@ -510,6 +552,7 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
             let (response, cache_note) = match result {
                 Ok(Ok(monitor)) => {
                     let _ = snapshots::save_monitor(&project_data, monitor.clone());
+                    update_last_checked(&last_checked, &project_data);
                     (Ok(monitor), None)
                 }
                 Ok(Err(error)) => {
@@ -586,6 +629,7 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
         let intelligence = intelligence.clone();
         let homepage_for_comparison = Some(homepage.clone());
         let matrix = matrix.clone();
+        let last_checked = last_checked.clone();
         let project_data = project_for_snapshot.clone();
         gtk::glib::MainContext::default().spawn_local(async move {
             let response =
@@ -683,6 +727,7 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
                     }
                 }
             };
+            update_last_checked(&last_checked, &project_data);
             *release_state.borrow_mut() = release;
             let response = monitor_state.borrow().clone();
             let release = release_state.borrow().clone();
