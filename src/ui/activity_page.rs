@@ -237,14 +237,18 @@ pub(super) fn build_activity_page(
                                             .await;
                                     import_button.set_sensitive(true);
                                     match result {
-                                        Ok(Ok(added)) => {
+                                        Ok(Ok(summary)) => {
                                             refresh_activity(
                                                 &list,
                                                 &feedback,
                                                 &refresh_generation,
                                             );
                                             feedback.set_text(&format!(
-                                                "Imported {added} new activity event(s); existing history was preserved."
+                                                "Imported {} new event(s) from {} backup entries; skipped {} duplicate(s) and {} older event(s) beyond the history limit.",
+                                                summary.added,
+                                                summary.incoming,
+                                                summary.duplicates,
+                                                summary.dropped
                                             ));
                                         }
                                         Ok(Err(error)) => feedback.set_text(&error),
