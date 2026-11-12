@@ -218,7 +218,7 @@ pub fn list_installed_copr_packages() -> Result<Vec<InstalledCoprPackage>, Strin
             "repoquery",
             "--installed",
             "--queryformat",
-            "%{name}\t%{evr}\t%{from_repo}",
+            "%{name}\t%{evr}\t%{from_repo}\\n",
         ])
         .output()
         .map_err(|error| format!("Could not start DNF to inspect installed packages: {error}"))?;
@@ -246,7 +246,7 @@ pub fn list_package_updates() -> Result<Vec<AvailablePackageUpdate>, String> {
             "repoquery",
             "--upgrades",
             "--queryformat",
-            "%{name}\t%{evr}\t%{repoid}",
+            "%{name}\t%{evr}\t%{repoid}\\n",
         ])
         .output()
         .map_err(|error| format!("Could not start DNF to check package updates: {error}"))?;
