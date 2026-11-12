@@ -339,7 +339,10 @@ fn render_repositories(
                 menu.set_icon_name("view-more-symbolic");
                 menu.set_tooltip_text(Some("Repository actions and details"));
                 menu.add_css_class("flat");
+                // `can_focus` allows focus to enter the widget subtree; the
+                // button itself also needs `focusable` to join the Tab chain.
                 menu.set_can_focus(true);
+                menu.set_focusable(true);
                 menu.set_popover(Some(&popover));
                 row.add_suffix(&menu);
                 list.append(&row);
