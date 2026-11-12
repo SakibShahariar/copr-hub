@@ -117,7 +117,9 @@ pub(super) fn build_saved_page(
     ));
     let backup_row = adw::ActionRow::builder()
         .title("Scheduled local backups")
-        .subtitle("Create a daily JSON backup while Copr Hub is open. Keep the latest seven backups.")
+        .subtitle(
+            "Create a daily JSON backup while Copr Hub is open. Keep the latest seven backups.",
+        )
         .activatable_widget(&backup_toggle)
         .build();
     backup_row.add_suffix(&backup_toggle);
