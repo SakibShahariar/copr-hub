@@ -170,6 +170,9 @@ pub(super) fn build_activity_page(
                                 export_button.set_sensitive(false);
                                 let feedback = feedback.clone();
                                 let export_button = export_button.clone();
+                                let query = query.clone();
+                                let category_name = category_name.clone();
+                                let range = range.clone();
                                 gtk::glib::MainContext::default().spawn_local(async move {
                                     let result = gtk::gio::spawn_blocking(move || {
                                         activity::export_filtered_to(
