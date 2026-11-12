@@ -141,21 +141,22 @@ pub(crate) fn build_ui(app: &adw::Application) {
         "document-properties-symbolic",
     );
 
-    // Keep section navigation in the header, like GNOME Software and Bazaar.
-    // Wide policy keeps the page labels visible instead of collapsing into a sidebar.
-    let switcher = adw::ViewSwitcher::builder()
+    // The title widget switches between section navigation and the app title
+    // as the header gets narrower, keeping every destination reachable.
+    let switcher_title = adw::ViewSwitcherTitle::builder()
+        .title("Copr Hub")
         .stack(&stack)
-        .policy(adw::ViewSwitcherPolicy::Wide)
         .build();
 
     let header = adw::HeaderBar::new();
-    header.set_title_widget(Some(&switcher));
+    header.set_title_widget(Some(&switcher_title));
 
-    let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    root.append(&header);
-    root.append(&stack);
+    // ToolbarView gives the header the native Libadwaita toolbar treatment.
+    let toolbar_view = adw::ToolbarView::new();
+    toolbar_view.add_top_bar(&header);
+    toolbar_view.set_content(Some(&stack));
 
-    window.set_content(Some(&root));
+    window.set_content(Some(&toolbar_view));
     window.present();
     start_monitoring(app);
     start_scheduled_backups(app);
