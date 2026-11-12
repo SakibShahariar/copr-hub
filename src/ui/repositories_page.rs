@@ -398,22 +398,28 @@ fn render_repositories(
                     actions.append(&remove);
                 }
 
-                let popover = gtk::Popover::new();
-                popover.set_child(Some(&actions));
-                popover.set_position(gtk::PositionType::Bottom);
-                popover.set_autohide(true);
+                // Use a small transient window instead of a popover. The
+                // repository row lives inside GtkListBox, where the popover
+                // button's pointer/keyboard activation was unreliable.
+                let action_window = adw::Window::builder()
+                    .transient_for(parent)
+                    .modal(true)
+                    .title(format!("{} actions", repository.name))
+                    .default_width(320)
+                    .default_height(360)
+                    .build();
+                action_window.set_content(Some(&actions));
 
-                // GtkMenuButton owns the popover lifecycle and anchors it to
-                // its allocation, including when used as an ActionRow suffix.
-                let menu = gtk::MenuButton::new();
+                let menu = gtk::Button::new();
                 menu.set_icon_name("view-more-symbolic");
                 menu.set_tooltip_text(Some("Repository actions and details"));
                 menu.add_css_class("flat");
-                // `can_focus` allows focus to enter the widget subtree; the
-                // button itself also needs `focusable` to join the Tab chain.
                 menu.set_can_focus(true);
                 menu.set_focusable(true);
-                menu.set_popover(Some(&popover));
+                menu.connect_clicked({
+                    let action_window = action_window.clone();
+                    move |_| action_window.present()
+                });
                 row.add_suffix(&menu);
                 list.append(&row);
             }
