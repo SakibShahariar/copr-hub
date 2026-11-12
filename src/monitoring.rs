@@ -459,7 +459,10 @@ mod tests {
             projects: HashMap::from([(legacy_key.clone(), expected_state.clone())]),
         };
 
-        migrate_project_key(&mut state, &project);
+        assert!(prune_inactive_projects(
+            &mut state,
+            std::slice::from_ref(&project)
+        ));
 
         let stable_key = project_key(&project);
         assert_ne!(stable_key, legacy_key);

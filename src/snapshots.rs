@@ -49,22 +49,39 @@ fn stable_project_hash(project: &copr::CoprProject) -> String {
     format!("{hash:016x}")
 }
 
-fn snapshot_path(project: &copr::CoprProject) -> PathBuf {
-    gtk::glib::user_cache_dir()
+fn snapshot_path_in(cache_dir: &Path, project: &copr::CoprProject) -> PathBuf {
+    cache_dir
         .join("copr-hub")
         .join("projects")
         .join(format!("{}.json", stable_project_hash(project)))
 }
 
-fn legacy_snapshot_path(project: &copr::CoprProject) -> PathBuf {
+fn legacy_snapshot_path_in(cache_dir: &Path, project: &copr::CoprProject) -> PathBuf {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     project.owner.hash(&mut hasher);
     "/".hash(&mut hasher);
     project.name.hash(&mut hasher);
-    gtk::glib::user_cache_dir()
+    cache_dir
         .join("copr-hub")
         .join("projects")
         .join(format!("{:016x}.json", hasher.finish()))
+}
+
+fn snapshot_path(project: &copr::CoprProject) -> PathBuf {
+    snapshot_path_in(&gtk::glib::user_cache_dir(), project)
+}
+
+fn legacy_snapshot_path(project: &copr::CoprProject) -> PathBuf {
+    legacy_snapshot_path_in(&gtk::glib::user_cache_dir(), project)
+}
+
+fn snapshot_read_path_in(cache_dir: &Path, project: &copr::CoprProject) -> PathBuf {
+    let stable_path = snapshot_path_in(cache_dir, project);
+    if stable_path.exists() {
+        stable_path
+    } else {
+        legacy_snapshot_path_in(cache_dir, project)
+    }
 }
 
 fn valid_project(project: &copr::CoprProject) -> bool {
@@ -102,12 +119,7 @@ pub fn load(project: &copr::CoprProject) -> Option<ProjectSnapshot> {
     if !valid_project(project) {
         return None;
     }
-    let stable_path = snapshot_path(project);
-    let path = if stable_path.exists() {
-        stable_path
-    } else {
-        legacy_snapshot_path(project)
-    };
+    let path = snapshot_read_path_in(&gtk::glib::user_cache_dir(), project);
     let metadata = fs::metadata(&path).ok()?;
     if metadata.len() > MAX_SNAPSHOT_BYTES {
         return None;
@@ -245,6 +257,27 @@ mod tests {
         assert_eq!(stable_project_hash(&project), stable_project_hash(&project));
         assert_eq!(stable_project_hash(&project).len(), 16);
         assert_ne!(snapshot_path(&project), legacy_snapshot_path(&project));
+    }
+
+    #[test]
+    fn snapshot_reader_falls_back_to_legacy_cache_until_stable_copy_exists() {
+        let project = project();
+        let cache_dir = std::env::temp_dir().join(format!(
+            "copr-hub-snapshot-migration-{}-{}",
+            std::process::id(),
+            now_unix()
+        ));
+        let legacy_path = legacy_snapshot_path_in(&cache_dir, &project);
+        let stable_path = snapshot_path_in(&cache_dir, &project);
+        fs::create_dir_all(legacy_path.parent().unwrap()).unwrap();
+        fs::write(&legacy_path, b"legacy").unwrap();
+
+        assert_eq!(snapshot_read_path_in(&cache_dir, &project), legacy_path);
+
+        fs::write(&stable_path, b"stable").unwrap();
+        assert_eq!(snapshot_read_path_in(&cache_dir, &project), stable_path);
+
+        fs::remove_dir_all(cache_dir).unwrap();
     }
 
     #[test]
