@@ -3,7 +3,7 @@ use crate::upstream::UpstreamRelease;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::hash::{Hash, Hasher};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAX_SNAPSHOT_BYTES: u64 = 4 * 1024 * 1024;
