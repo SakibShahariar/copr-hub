@@ -84,15 +84,15 @@ pub(crate) fn build_ui(app: &adw::Application) {
         "document-properties-symbolic",
     );
 
-    // The title widget switches between section navigation and the app title
-    // as the header gets narrower, keeping every destination reachable.
-    let switcher_title = adw::ViewSwitcherTitle::builder()
-        .title("Copr Hub")
+    // ViewSwitcherTitle was deprecated in libadwaita 1.4. Use the
+    // adaptive ViewSwitcher directly for the application's primary navigation.
+    let switcher = adw::ViewSwitcher::builder()
         .stack(&stack)
+        .policy(adw::ViewSwitcherPolicy::Wide)
         .build();
 
     let header = adw::HeaderBar::new();
-    header.set_title_widget(Some(&switcher_title));
+    header.set_title_widget(Some(&switcher));
 
     let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
     root.append(&header);
