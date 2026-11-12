@@ -24,7 +24,7 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 
 - Repository: `SakibShahariar/copr-hub`
 - Default branch: `master`
-- Checkpoint SHA: `5ba6ee70407fd7311590fc5750dcd52237fa18ca`
+- Checkpoint SHA: `92b84bf6ff0489cc0579cca1cdba1a02d8cafb42`
 - Initialized: 2026-11-02
 - Baseline: latest branch tip queried through combined commit-status endpoint; empty status list recorded as **unavailable**, not green/red. Older history was not retroactively audited during setup.
 - Next session: review commits after `6c62ba5682cbd557b89e1e7af8bd42b3f708d09d`, including the next substantive commit that updates this ledger.
@@ -88,14 +88,15 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 | `0e3df7c2bf431b01d8ca2d5e5159ca12d6bd7b1e` | fix(system): delimit DNF5 package query output | **red** | 2026-11-12 | [43258923528](https://github.com/SakibShahariar/copr-hub/actions/runs/43258923528) |
 | `674d5dbe8b13842e653c618b2d2db978e5cc0997` | test(system): assert non-COPR origins are parsed | **green** | 2026-11-12 | [43258995937](https://github.com/SakibShahariar/copr-hub/actions/runs/43258995937) |
 | `0fab3a5e1e070e8b9de0dd5397d741754402e956` | fix(ui): constrain repository details popover | **red** | 2026-11-12 | [43260961537](https://github.com/SakibShahariar/copr-hub/actions/runs/43260961537) |
-| `1aede0427807d1a5af2843400d8d7ae728c7d433` | fix(ui): restore repository action menu interaction | **unavailable** | 2026-11-12 | Combined status lookup returned no entries. |
-| `9e494ccfb22cedb3b29902967ce99a8b3c4fc35` | fix(ui): use menu button popover lifecycle | **unavailable** | 2026-11-12 | Combined status lookup returned no entries. |
-| `5ba6ee70407fd7311590fc5750dcd52237fa18ca` | fix(ui): make repository menu keyboard-focusable | **unavailable** | 2026-11-12 | Combined status lookup returned no entries. |
+| `1aede0427807d1a5af2843400d8d7ae728c7d433` | fix(ui): restore repository action menu interaction | **green** | 2026-11-12 | [43265148583](https://github.com/SakibShahariar/copr-hub/actions/runs/43265148583) |
+| `9e494ccfb22cedb3b29902967ce99a8b3c4fc35` | fix(ui): use menu button popover lifecycle | **green** | 2026-11-12 | [43265577679](https://github.com/SakibShahariar/copr-hub/actions/runs/43265577679) |
+| `5ba6ee70407fd7311590fc5750dcd52237fa18ca` | fix(ui): make repository menu keyboard-focusable | **green** | 2026-11-12 | [43267194014](https://github.com/SakibShahariar/copr-hub/actions/runs/43267194014) |
 | `6943da45c62e766d2de3e19eac4d93fea5f5276f` | fix(installed): offer safe DNF5 permission repair | **red** | 2026-11-12 | [43271812234](https://github.com/SakibShahariar/copr-hub/actions/runs/43271812234) |
+| `92b84bf6ff0489cc0579cca1cdba1a02d8cafb42` | fix(repositories): expose DNF permission repair where needed | **red** | 2026-11-12 | [43272140474](https://github.com/SakibShahariar/copr-hub/actions/runs/43272140474) |
 
 ## Red-cross investigation log
 
-- `6943da45c62e766d2de3e19eac4d93fea5f5276f` — **Check formatting** rejected two rustfmt layouts in `src/system.rs`: the fixed `chmod` argument list and long permission-candidate assertions. Both are corrected in the follow-up implementation commit; the original run skipped tests, compilation, and Clippy.
+- `6943da45c62e766d2de3e19eac4d93fea5f5276f` — **Check formatting** rejected the fixed `chmod` argument list and long permission-candidate assertions in `src/system.rs`. These were corrected in `92b84bf6ff0489cc0579cca1cdba1a02d8cafb42`, but that commit still failed formatting on the metadata-helper signature; the final correction is in the current follow-up. Both runs skipped tests, compilation, and Clippy.
 
 - `f019e083e03cd36f1d9ecbbb346d8de0942dba60` — **Run unit tests** failed because `window.display()` was ambiguous between GTK traits. The accessor was explicitly disambiguated in `8162394345e315668400b9ed91d969dab9c76cc1`; the later saved-page batch passed in `a696c91b8aa8bf2a4f177b2ff9c1f79429e1df3a`.
 - `b55d350d7179d89f7a28fd46f39c33f8949b368e`, `8162394345e315668400b9ed91d969dab9c76cc1`, `08ec865137c1d34e552f35a37f06a43899c3cc90`, and `b438e3940e9fc5c7ed3b6ef725c11db67d06582f` — **Check formatting** failed on successive formatting changes in `src/ui/saved_page.rs`. The resulting saved-page batch passed at `a696c91b8aa8bf2a4f177b2ff9c1f79429e1df3a`.
@@ -108,7 +109,8 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 - `33f9d69f0dfb3f7df341dee59f8814276e5cc05b` and `7025808bc620933d7af3b77647f6e024524284dd` — **Check formatting** rejected the multiline relevance dropdown expression. Applied the exact rustfmt layout in `4d9bde02883b2722ccb1d9b5695722abae4bfc42`.
 - `4d9bde02883b2722ccb1d9b5695722abae4bfc42` and `c8158cbce2cc3d5b2aee546470e1847fad595da6` — **Check formatting** rejected the edit-distance substitution expression. Applied rustfmt's multiline layout in `dea90eab197986c187ab1f97b3f03b2576bd4c71`.
 - `dea90eab197986c187ab1f97b3f03b2576bd4c71` and `eac293aacc18a9af60a298245dcf619e7bfc3674` — **Run unit tests** exposed two flawed test assumptions: different suffix lengths were not equal relevance scores, and the short-query fixture was actually a valid prefix. Corrected the short-query fixture in `eac293aacc18a9af60a298245dcf619e7bfc3674` and used equal-length suffixes in `3f43212386c5e1d14b80d653fcef149090982221`; the final run passed all 104 tests.
-- `0fab3a5e1e070e8b9de0dd5397d741754402e956` — **Check formatting** failed because rustfmt expected the repository-file label construction on one line. The formatting was corrected in `1aede0427807d1a5af2843400d8d7ae728c7d433`, but no completed CI result is exposed for that commit or the subsequent repository-menu commits.
+- `92b84bf6ff0489cc0579cca1cdba1a02d8cafb42` — **Check formatting** expected the DNF metadata helper signature on one line. Corrected in the current follow-up; the failed run skipped tests, compilation, and Clippy.
+- `0fab3a5e1e070e8b9de0dd5397d741754402e956` — **Check formatting** failed because rustfmt expected the repository-file label construction on one line. The formatting was corrected in `1aede0427807d1a5af2843400d8d7ae728c7d433`; CI completed green at run `43265148583`. The later menu-lifecycle and keyboard-focus commits also completed green CI at runs `43265577679` and `43267194014`, although live GNOME activation remains unverified.
 - `a53ecf247cf99405623383ca3e77486b4e6e41a1` and `0e3df7c2bf431b01d8ca2d5e5159ca12d6bd7b1e` — **Run unit tests** failed because a new parser test incorrectly expected non-COPR repository origins to be discarded. The parser intentionally records safe origins for all repositories; the repository UI looks up only the COPR ID it is displaying. Corrected the test to assert that the Fedora-origin row is parsed in `674d5dbe8b13842e653c618b2d2db978e5cc0997`; its CI passed all 106 tests and all remaining checks.
 - `e7500338ca2107aa9ea027b9ace4628d9c3d639a` — **Run unit tests** found one stale test expectation after moving fuzzy matches below explicit description matches. Updated the test to assert the fuzzy tier directly in `6c62ba5682cbd557b89e1e7af8bd42b3f708d09d`; its CI run passed all 104 tests.
 
@@ -123,6 +125,7 @@ All failures in this reviewed range have a subsequent fix and green CI validatio
 | 2026-11-12 | `2a96076780ddc8b4802832c03387daee95482e94` → `420c45ce7059905ee780ef7845234e69a35dbf9b` | Reviewed 3 commits; all 3 had completed green CI runs. |
 | 2026-11-12 | `420c45ce7059905ee780ef7845234e69a35dbf9b` → `3f43212386c5e1d14b80d653fcef149090982221` | Reviewed 7 commits: 1 green, 6 red; all six red results were diagnosed and followed by a green fix/validation commit. |
 | 2026-11-12 | `3f43212386c5e1d14b80d653fcef149090982221` → `0f2aff926d2b7e455b97097b2d1b1f99303dc4a2` | Reviewed 1 documentation commit; CI completed green. |
-| 2026-11-12 | `674d5dbe8b13842e653c618b2d2db978e5cc0997` → `5ba6ee70407fd7311590fc5750dcd52237fa18ca` | Reviewed 4 commits: 1 red and 3 unavailable. The red formatting failure was corrected in the next commit, but CI confirmation is unavailable; repository-menu activation remains unverified in a live GNOME session. |
+| 2026-11-12 | `674d5dbe8b13842e653c618b2d2db978e5cc0997` → `5ba6ee70407fd7311590fc5750dcd52237fa18ca` | Reviewed 4 commits: 1 red and 3 green. The formatting failure was corrected by the next commit and all subsequent menu commits passed CI; live repository-menu activation remains unverified in a GNOME session. |
+| 2026-11-12 | `5ba6ee70407fd7311590fc5750dcd52237fa18ca` → `92b84bf6ff0489cc0579cca1cdba1a02d8cafb42` | Reviewed 2 commits; both had formatting failures. The first failure was partially corrected in the second, which still had one rustfmt mismatch; a follow-up correction is pending CI. |
 | 2026-11-12 | `6c62ba5682cbd557b89e1e7af8bd42b3f708d09d` → `674d5dbe8b13842e653c618b2d2db978e5cc0997` | Reviewed 4 commits: 2 green, 2 red; both red runs were diagnosed as a flawed new test assertion and followed by a green correction. |
 | 2026-11-12 | `0f2aff926d2b7e455b97097b2d1b1f99303dc4a2` → `6c62ba5682cbd557b89e1e7af8bd42b3f708d09d` | Reviewed 2 commits: 1 red, 1 green; the red test expectation was corrected and final CI passed. |

@@ -248,10 +248,7 @@ fn dnf5_state_metadata() -> Result<(fs::Metadata, fs::Metadata), String> {
     Ok((file, parent))
 }
 
-fn dnf5_state_metadata_is_repair_candidate(
-    file: &fs::Metadata,
-    parent: &fs::Metadata,
-) -> bool {
+fn dnf5_state_metadata_is_repair_candidate(file: &fs::Metadata, parent: &fs::Metadata) -> bool {
     dnf5_state_file_is_repair_candidate(
         file.uid(),
         file.mode(),
