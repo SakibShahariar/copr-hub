@@ -123,10 +123,6 @@ pub(super) fn build_saved_page(
         .activatable_widget(&backup_toggle)
         .build();
     backup_row.add_suffix(&backup_toggle);
-    let backup_note = gtk::Label::new(Some("Optional · daily while the app is open · saved under the Copr Hub data directory · retains 7 backups."));
-    backup_note.set_xalign(0.0);
-    backup_note.set_wrap(true);
-    backup_note.add_css_class("dim-label");
     backup_toggle.connect_active_notify({
         let feedback = feedback.clone();
         let app = app.clone();
@@ -172,7 +168,8 @@ pub(super) fn build_saved_page(
         let filter = filter.clone();
         move |row| {
             let query = filter.text().trim().to_ascii_lowercase();
-            query.is_empty() || row.widget_name().to_ascii_lowercase().contains(&query)
+            let name = row.widget_name().to_ascii_lowercase();
+            query.is_empty() || name == "saved-empty-state" || name.contains(&query)
         }
     });
     filter.connect_search_changed({
@@ -196,7 +193,6 @@ pub(super) fn build_saved_page(
         .build();
     backup_group.add(&backup_row);
     content.append(&backup_group);
-    content.append(&backup_note);
 
     export.connect_clicked({
         let parent = parent.clone();
@@ -633,7 +629,14 @@ fn refresh_saved_projects(
     clear_list_box(list);
     match favorites::load() {
         Ok(projects) if projects.is_empty() => {
-            feedback.set_text("No saved projects yet. Save a project from its details window.");
+            feedback.set_text("Saved projects are stored locally on this user account.");
+            let empty = adw::StatusPage::builder()
+                .icon_name("starred-symbolic")
+                .title("No saved projects yet")
+                .description("Explore projects in Discover and save the ones you want to monitor here.")
+                .build();
+            empty.set_widget_name("saved-empty-state");
+            list.append(&empty);
         }
         Ok(projects) => {
             feedback.set_text(&format!(
