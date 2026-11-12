@@ -271,10 +271,7 @@ fn dnf5_state_metadata() -> Result<(Vec<(PathBuf, fs::Metadata)>, fs::Metadata),
     Ok((files, directory_metadata))
 }
 
-fn dnf5_state_files_are_safe(
-    files: &[(PathBuf, fs::Metadata)],
-    directory: &fs::Metadata,
-) -> bool {
+fn dnf5_state_files_are_safe(files: &[(PathBuf, fs::Metadata)], directory: &fs::Metadata) -> bool {
     directory.uid() == 0
         && directory.file_type().is_dir()
         && directory.mode() & 0o022 == 0
@@ -306,9 +303,9 @@ pub fn dnf5_system_state_permissions_need_repair() -> bool {
 fn dnf5_state_error_is_permission_related(error: &str) -> bool {
     error.contains(DNF5_SYSTEM_STATE_DIRECTORY)
         && error.contains("error opening file")
-        && DNF5_SYSTEM_STATE_FILES.iter().any(|name| {
-            error.contains(&format!("{DNF5_SYSTEM_STATE_DIRECTORY}/{name}"))
-        })
+        && DNF5_SYSTEM_STATE_FILES
+            .iter()
+            .any(|name| error.contains(&format!("{DNF5_SYSTEM_STATE_DIRECTORY}/{name}")))
 }
 
 /// Whether a DNF failure is specifically caused by restrictive permissions on
@@ -337,10 +334,7 @@ pub fn repair_dnf5_system_state_permissions() -> Result<(), String> {
     }
 
     let mut command = Command::new("pkexec");
-    command
-        .arg("/usr/bin/chmod")
-        .arg("0644")
-        .arg("--");
+    command.arg("/usr/bin/chmod").arg("0644").arg("--");
     for (path, _) in &files {
         command.arg(path);
     }
