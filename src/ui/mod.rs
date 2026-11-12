@@ -346,10 +346,17 @@ fn add_loading_bar(parent: &gtk::Box) -> gtk::ProgressBar {
 }
 
 fn scroll_page(child: &impl IsA<gtk::Widget>) -> gtk::Widget {
+    // Keep page content comfortably readable on wide displays while allowing
+    // the clamp to tighten naturally on smaller windows and larger text scales.
+    let clamp = adw::Clamp::builder()
+        .maximum_size(960)
+        .tightening_threshold(720)
+        .child(child)
+        .build();
     let scroll = gtk::ScrolledWindow::builder()
         .hscrollbar_policy(gtk::PolicyType::Never)
         .vscrollbar_policy(gtk::PolicyType::Automatic)
-        .child(child)
+        .child(&clamp)
         .build();
     scroll.upcast()
 }
