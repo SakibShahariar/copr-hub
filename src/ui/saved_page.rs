@@ -32,12 +32,27 @@ pub(super) fn build_saved_page(
     refresh.set_icon_name("view-refresh-symbolic");
     let check_all = gtk::Button::with_label("Check all now");
     check_all.set_icon_name("system-search-symbolic");
+    let actions = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    actions.set_margin_top(12);
+    actions.set_margin_bottom(12);
+    actions.set_margin_start(12);
+    actions.set_margin_end(12);
+    actions.set_size_request(220, -1);
+    for action in [&compare, &export, &import, &refresh, &check_all] {
+        action.set_halign(gtk::Align::Fill);
+        action.add_css_class("flat");
+        actions.append(action);
+    }
+    let popover = gtk::Popover::new();
+    popover.set_child(Some(&actions));
+    let menu = gtk::MenuButton::new();
+    menu.set_icon_name("view-more-symbolic");
+    menu.set_tooltip_text(Some("Saved-project actions"));
+    menu.add_css_class("flat");
+    menu.set_popover(Some(&popover));
+
     heading.append(&title);
-    heading.append(&compare);
-    heading.append(&export);
-    heading.append(&import);
-    heading.append(&refresh);
-    heading.append(&check_all);
+    heading.append(&menu);
     content.append(&heading);
 
     let filter = gtk::SearchEntry::builder()
