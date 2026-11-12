@@ -21,6 +21,40 @@ pub struct CoprProject {
     pub homepage: Option<String>,
 }
 
+/// Validate the owner/project pair before using it in COPR API requests or URLs.
+pub fn valid_project_identity(owner: &str, project: &str) -> bool {
+    fn valid_identifier(value: &str) -> bool {
+        !value.trim().is_empty()
+            && value.len() <= 512
+            && value != "."
+            && value != ".."
+            && !value.chars().any(|character| {
+                character.is_control()
+                    || character.is_whitespace()
+                    || matches!(character, '/' | '\\' | '?' | '#' | '%')
+            })
+    }
+
+    valid_identifier(owner) && valid_identifier(project)
+}
+
+fn validate_project_identity(owner: &str, project: &str) -> Result<(), String> {
+    if valid_project_identity(owner, project) {
+        Ok(())
+    } else {
+        Err("The COPR project has a missing or invalid owner/project identifier.".to_string())
+    }
+}
+
+pub fn copr_project_url(owner: &str, project: &str) -> Option<String> {
+    if !valid_project_identity(owner, project) {
+        return None;
+    }
+    let mut url = reqwest::Url::parse("https://copr.fedorainfracloud.org/coprs/").ok()?;
+    url.path_segments_mut().ok()?.push(owner).push(project);
+    Some(url.to_string())
+}
+
 #[derive(Debug, Deserialize)]
 struct ProjectListResponse {
     // API v3 wraps paginated project results in "items" + "meta".
@@ -240,7 +274,11 @@ pub fn search_projects(pattern: &str) -> Result<Vec<CoprProject>, String> {
         .json()
         .map_err(|error| format!("Could not read the COPR response: {error}"))?;
 
-    Ok(result.items)
+    Ok(result
+        .items
+        .into_iter()
+        .filter(|project| valid_project_identity(&project.owner, &project.name))
+        .collect())
 }
 
 /// Fetch recent real project build records for a chronological build timeline.
@@ -248,6 +286,8 @@ pub fn fetch_project_build_history(
     owner: &str,
     project: &str,
 ) -> Result<Vec<ProjectBuildEvent>, String> {
+    validate_project_identity(owner, project)?;
+
     #[derive(Deserialize)]
     struct BuildHistoryResponse {
         #[serde(default)]
@@ -288,6 +328,7 @@ pub fn fetch_project_build_history(
 }
 
 fn fetch_project_monitor_data(owner: &str, project: &str) -> Result<ProjectMonitor, String> {
+    validate_project_identity(owner, project)?;
     let response = send_with_retry(
         client()?
             .get(format!("{COPR_API_BASE}/monitor"))
@@ -302,6 +343,7 @@ fn fetch_project_monitor_data(owner: &str, project: &str) -> Result<ProjectMonit
 }
 
 fn fetch_latest_build(owner: &str, project: &str) -> Result<Option<ProjectBuildSummary>, String> {
+    validate_project_identity(owner, project)?;
     let response = send_with_retry(
         client()?
             .get(format!("{}/build/list/", COPR_API_BASE))
@@ -577,6 +619,27 @@ mod tests {
         assert_eq!(response.items.len(), 1);
         assert_eq!(response.items[0].name, "applications");
         assert_eq!(response.items[0].owner, "aahsnr-work");
+    }
+
+    #[test]
+    fn project_identity_validation_rejects_missing_and_path_unsafe_values() {
+        assert!(valid_project_identity("alice", "demo"));
+        assert!(!valid_project_identity("", "demo"));
+        assert!(!valid_project_identity("alice", "  "));
+        assert!(!valid_project_identity("alice/demo", "project"));
+        assert!(!valid_project_identity("alice", "../project"));
+        assert!(!valid_project_identity("alice", "project?query"));
+        assert!(!valid_project_identity("alice", "project\nname"));
+        assert!(!valid_project_identity("alice", &"x".repeat(513)));
+    }
+
+    #[test]
+    fn copr_project_url_encodes_validated_path_segments() {
+        assert_eq!(
+            copr_project_url("alice", "demo"),
+            Some("https://copr.fedorainfracloud.org/coprs/alice/demo/".to_string())
+        );
+        assert!(copr_project_url("alice/demo", "project").is_none());
     }
 
     #[test]
