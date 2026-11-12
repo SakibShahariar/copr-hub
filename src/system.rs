@@ -443,7 +443,7 @@ fn query_installed_package_origins() -> InstalledOrigins {
             "repoquery",
             "--installed",
             "--queryformat",
-            "%{name}|%{from_repo}",
+            "%{name}|%{from_repo}\\n",
         ])
         .output()
         .map_err(|error| {
@@ -459,8 +459,14 @@ fn query_installed_package_origins() -> InstalledOrigins {
             )
         ));
     }
+    Ok(parse_installed_package_origins(&String::from_utf8_lossy(
+        &output.stdout,
+    )))
+}
+
+fn parse_installed_package_origins(output: &str) -> HashMap<String, Vec<String>> {
     let mut origins: HashMap<String, Vec<String>> = HashMap::new();
-    for line in String::from_utf8_lossy(&output.stdout).lines() {
+    for line in output.lines() {
         let Some((name, origin)) = line.split_once('|') else {
             continue;
         };
@@ -477,7 +483,7 @@ fn query_installed_package_origins() -> InstalledOrigins {
         packages.sort();
         packages.dedup();
     }
-    Ok(origins)
+    origins
 }
 
 fn is_safe_repository_id(value: &str) -> bool {
@@ -784,6 +790,30 @@ enabled=1
         let packages = parse_installed_copr_packages(output);
         assert_eq!(packages.len(), 1);
         assert_eq!(packages[0].name, "valid");
+    }
+
+    #[test]
+    fn parses_dnf5_installed_origins_as_separate_rows() {
+        let output = concat!(
+            "gowall|copr:copr.fedorainfracloud.org:achno:gowall\n",
+            "gowall-cli|copr:copr.fedorainfracloud.org:achno:gowall\n",
+            "fedora-package|fedora\n",
+            "gowall|copr:copr.fedorainfracloud.org:achno:gowall\n",
+            "malformed-row\n",
+            "--invalid|copr:copr.fedorainfracloud.org:achno:gowall\n",
+        );
+
+        let origins = parse_installed_package_origins(output);
+        assert_eq!(
+            origins.get("copr:copr.fedorainfracloud.org:achno:gowall"),
+            Some(&vec!["gowall".to_string(), "gowall-cli".to_string()])
+        );
+        assert!(!origins.contains_key("fedora"));
+    }
+
+    #[test]
+    fn installed_origin_parser_returns_empty_map_for_empty_output() {
+        assert!(parse_installed_package_origins("").is_empty());
     }
 
     #[test]

@@ -226,10 +226,14 @@ fn render_repositories(
                             }
                             Ok(Ok(packages)) => {
                                 let names = packages.join(", ");
-                                query_summary.set_text(&format!(
-                                    "{} installed package(s) from this repo",
-                                    packages.len()
-                                ));
+                                let preview = packages.iter().take(5).cloned().collect::<Vec<_>>();
+                                let remaining = packages.len().saturating_sub(preview.len());
+                                let summary = if remaining == 0 {
+                                    format!("Installed: {}", preview.join(", "))
+                                } else {
+                                    format!("Installed: {}, +{remaining} more", preview.join(", "))
+                                };
+                                query_summary.set_text(&summary);
                                 query_summary.set_tooltip_text(Some(&names));
                             }
                             Ok(Err(error)) => {
