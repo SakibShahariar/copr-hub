@@ -1,5 +1,7 @@
 use super::*;
 
+use std::time::{SystemTime, UNIX_EPOCH};
+
 fn update_last_checked(label: &gtk::Label, project: &copr::CoprProject) {
     let latest = snapshots::load(project).and_then(|snapshot| {
         [

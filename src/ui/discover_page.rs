@@ -357,13 +357,13 @@ fn render_projects(
             ));
             for project in projects {
                 let row = adw::ActionRow::builder()
-                    .title(project.name.as_str())
-                    .subtitle(
+                    .title(gtk::glib::markup_escape_text(&project.name))
+                    .subtitle(gtk::glib::markup_escape_text(
                         project
                             .description
                             .as_deref()
                             .unwrap_or("No project description provided"),
-                    )
+                    ))
                     .activatable(true)
                     .build();
                 row.set_widget_name(&format!(
