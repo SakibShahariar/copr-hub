@@ -10,14 +10,27 @@ pub(super) fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widge
     content.set_valign(gtk::Align::Start);
     content.set_hexpand(true);
 
-    let hero = adw::StatusPage::builder()
-        .icon_name("system-software-install-symbolic")
-        .title("Find your next COPR project")
-        .description(
-            "Explore community-built software for Fedora. Search projects, inspect their details, and decide what to add to your system.",
-        )
-        .build();
+    let hero = gtk::Box::new(gtk::Orientation::Horizontal, 16);
     hero.set_hexpand(true);
+    let hero_icon = gtk::Image::from_icon_name("system-software-install-symbolic");
+    hero_icon.set_pixel_size(40);
+    hero_icon.set_valign(gtk::Align::Start);
+    hero.append(&hero_icon);
+
+    let hero_text = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    hero_text.set_hexpand(true);
+    let hero_title = gtk::Label::new(Some("Find your next COPR project"));
+    hero_title.set_xalign(0.0);
+    hero_title.add_css_class("title-1");
+    hero_text.append(&hero_title);
+    let hero_description = gtk::Label::new(Some(
+        "Explore community-built software for Fedora. Search projects, inspect their details, and decide what to add to your system.",
+    ));
+    hero_description.set_xalign(0.0);
+    hero_description.set_wrap(true);
+    hero_description.add_css_class("dim-label");
+    hero_text.append(&hero_description);
+    hero.append(&hero_text);
     content.append(&hero);
 
     let search_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
