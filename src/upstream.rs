@@ -377,11 +377,7 @@ fn latest_release_internal(
     let stale_candidate = if let Ok(mut cache) = cache.lock() {
         if let Some(entry) = cache.get_mut(&key) {
             entry.last_accessed = SystemTime::now();
-            if entry
-                .cached_at
-                .elapsed()
-                .is_ok_and(|age| age < CACHE_TTL)
-            {
+            if entry.cached_at.elapsed().is_ok_and(|age| age < CACHE_TTL) {
                 return Ok(entry.release.clone());
             }
             stale_cache_fallback(entry.cached_at, entry.release.clone())

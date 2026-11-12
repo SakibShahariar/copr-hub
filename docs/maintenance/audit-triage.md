@@ -18,8 +18,6 @@ Scope: the 99 audit issues in #50–#148. This file records the A–E category f
 | #53 | B | Move favorites mutation off the GTK thread and verify Project Details feedback. |
 | #54 | B | Prevent duplicate dependency windows and verify modal/focus behavior. |
 | #55 | B | Guard compatibility lookups and verify control restoration on every path. |
-| #56 | A | Shared monitoring guard and deterministic concurrency tests; implementation in progress. |
-| #57 | A | Serialize scheduled backup checks and test concurrent invocations; implementation in progress. |
 | #58 | B | Disable Import during chooser/confirmation/import and verify cancellation paths. |
 | #59 | B | Disable Import/Export during chooser and file operations; verify native chooser behavior. |
 | #60 | B | Replace label-text parsing with explicit loading state; verify repository action gating. |
@@ -27,11 +25,9 @@ Scope: the 99 audit issues in #50–#148. This file records the A–E category f
 | #62 | B | Move activity import/export/clear I/O off the GTK thread and verify refresh behavior. |
 | #63 | B | Duplicate scope of #62; track clear-history behavior with #62 and verify its response path. |
 | #64 | B | Separate user-facing errors from diagnostics; verify visible copy on each page. |
-| #65 | A | Report alert count rather than project count; deterministic summary test. |
 | #66 | B | Add scan progress and verify it remains responsive during a live scan. |
 | #67 | B | Replace debug-formatted manual-monitor errors with user-facing guidance. |
 | #68 | B | Include a concise scheduled-backup failure reason; verify desktop notification content. |
-| #69 | A | Log legacy-cache cleanup failures while treating a missing cache as normal. |
 | #70 | B | Separate search success from activity-recording failure feedback; verify Discover presentation. |
 | #71 | E | Decide which metadata fields local Discover filtering should include. |
 | #72 | B | Refresh Project Details without losing scroll position; requires live UI verification. |
@@ -49,7 +45,6 @@ Scope: the 99 audit issues in #50–#148. This file records the A–E category f
 | #90 | A | Fake DNF/RPM executables or an injected runner can cover command paths in CI. |
 | #91 | B | COPR pagination exists, but a useful Load more flow needs UI state and interaction testing. |
 | #92 | E | Decide whether one bounded retry is worth an additional request during outages. |
-| #93 | A | Respect bounded Retry-After values and skip retry when the server asks for a longer delay. |
 | #94 | E | thread::sleep is consistent with the current blocking HTTP client; decide whether async migration is desired. |
 | #95 | E | Decide the trade-off between monitoring detail/freshness and COPR request volume. |
 | #96 | A | Replace message-substring classification with typed error kinds and unit tests. |
@@ -59,10 +54,9 @@ Scope: the 99 audit issues in #50–#148. This file records the A–E category f
 | #103 | E | sort_by is stable; the claimed instability is unsupported by the current implementation. |
 | #104 | B | Expose omitted build-target counts or provide a scrollable/paged summary. |
 | #105 | E | Optional GitHub token support needs approval for credential storage, scopes, and auth UX. |
-| #106 | A | Apply the same bounded Retry-After policy to upstream release requests. |
 | #107 | E | Blocking sleep is consistent with reqwest::blocking; decide whether async migration is desired. |
 | #108 | E | Current upstream cache keys already include the normalized host; confirm any additional distinction needed. |
-| #109 | E | LRU versus insertion-time eviction is a cache-policy choice; obtain usage evidence first. |
+| #109 | A | LRU eviction is implemented using recent access time and can be verified with deterministic cache-capacity tests; CI is pending. |
 | #110 | E | Choose negative-result cache TTL and whether explicit refresh bypasses it. |
 | #111 | A | Make persistent-cache load failures diagnosable with malformed/oversized fixtures. |
 | #112 | D | GitLab's release API has no dedicated prerelease boolean; revisit if upstream adds one. |
@@ -105,5 +99,6 @@ These closed findings were checked against their acceptance lists: #74, #78, #79
 - #136 and #139: validation and tests are on `master`; the formatting/test CI run is green and their acceptance lists are checked.
 - #124: leading v/V normalization is implemented and CI is green; suffix equivalence remains an owner decision.
 - #56, #57, #65, and #69: implementation and deterministic tests are on `master`; CI verification is pending.
-- #111 and #137: implementation and focused tests are included in the current change; CI verification is pending.
+- #109: LRU eviction is implemented; CI is pending and the issue was reopened until the run is green.
+- #111 and #137: implementation and focused tests are on `master`; CI verification is pending and both issues remain open.
 - Remaining Category A issues stay open until their focused implementation, tests, and CI verification are complete.
