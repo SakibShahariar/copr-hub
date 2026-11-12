@@ -492,9 +492,9 @@ mod tests {
     #[test]
     fn short_queries_do_not_trigger_fuzzy_name_matches() {
         let exact = project("zena", "alice", "Example");
-        let typo = project("zenb", "bob", "Example");
+        let typo = project("zeb", "bob", "Example");
 
-        assert_eq!(project_relevance(&typo, "zen"), (9, 0));
+        assert_eq!(project_relevance(&typo, "zen"), (6, 0));
         assert_eq!(project_relevance(&exact, "zena"), (0, 0));
     }
 }
