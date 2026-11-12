@@ -761,10 +761,10 @@ mod tests {
 
     #[test]
     fn project_descriptions_strip_invisible_controls_and_preserve_unicode_text() {
-        let description = "A\\u{200b}B\\u{202e}C\\u{0007}\\nemoji 👩‍💻 and فارسی";
+        let description = "A\u{200b}B\u{202e}C\u{0007}\nemoji 👩‍💻 and فارسی";
         assert_eq!(
             sanitize_project_description(description),
-            "ABC\\nemoji 👩‍💻 and فارسی"
+            "ABC\nemoji 👩‍💻 and فارسی"
         );
     }
 

@@ -395,15 +395,15 @@ mod tests {
 
     #[test]
     fn backup_parser_sanitizes_untrusted_project_descriptions() {
-        let contents = r#"[{"owner":"alice","name":"demo","description":"A\\u200bB\\u202eC\\u0007\\nline"}]"#;
+        let contents = r#"[{"owner":"alice","name":"demo","description":"A\u200bB\u202eC\u0007\nline"}]"#;
         let imported = parse_backup(contents).unwrap();
-        assert_eq!(imported[0].description.as_deref(), Some("ABC\\nline"));
+        assert_eq!(imported[0].description.as_deref(), Some("ABC\nline"));
     }
 
     #[test]
     fn saved_project_validation_rejects_unsanitized_descriptions() {
         let mut candidate = project("alice", "demo");
-        candidate.description = Some("unsafe\\u{200b}text".to_string());
+        candidate.description = Some("unsafe\u{200b}text".to_string());
         assert!(!project_has_valid_fields(&candidate));
     }
 
