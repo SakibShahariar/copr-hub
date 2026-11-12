@@ -16,6 +16,7 @@ const DNF5_SYSTEM_STATE_FILES: &[&str] = &[
     "system.toml",
 ];
 const DNF5_SYSTEM_STATE_MODE: u32 = 0o644;
+const DNF_EXECUTABLE: &str = "/usr/bin/dnf";
 const MAX_COMMAND_DETAILS_CHARS: usize = 1200;
 const INSTALLED_COPR_QUERY_FORMAT: &str = "%{name}\t%{evr}\t%{from_repo}\\n";
 const PACKAGE_UPDATES_QUERY_FORMAT: &str = "%{name}\t%{evr}\t%{repoid}\\n";
@@ -255,13 +256,17 @@ fn dnf5_state_metadata() -> Result<(Vec<(PathBuf, fs::Metadata)>, fs::Metadata),
     Ok((files, directory_metadata))
 }
 
+fn dnf5_state_files_have_single_links(files: &[(PathBuf, fs::Metadata)]) -> bool {
+    files.iter().all(|(_, file)| file.nlink() == 1)
+}
+
 fn dnf5_state_files_are_safe(files: &[(PathBuf, fs::Metadata)], directory: &fs::Metadata) -> bool {
     directory.uid() == 0
         && directory.file_type().is_dir()
         && directory.mode() & 0o022 == 0
-        && files
-            .iter()
-            .all(|(_, file)| file.uid() == 0 && file.file_type().is_file())
+        && files.iter().all(|(_, file)| {
+            file.uid() == 0 && file.file_type().is_file() && file.nlink() == 1
+        })
 }
 
 fn dnf5_state_error_is_permission_related(error: &str) -> bool {
@@ -645,7 +650,7 @@ pub fn remove_copr_repository(repository_id: &str) -> Result<(), String> {
     })?;
 
     let output = Command::new("pkexec")
-        .args(["dnf", "--assumeyes", "copr", "remove", &project_spec])
+        .args([DNF_EXECUTABLE, "--assumeyes", "copr", "remove", &project_spec])
         .output()
         .map_err(|error| format!("Could not start the privileged DNF helper: {error}"))?;
 
@@ -671,7 +676,7 @@ pub fn set_copr_repository_enabled(repository_id: &str, enabled: bool) -> Result
         if enabled { "1" } else { "0" }
     );
     let output = Command::new("pkexec")
-        .args(["dnf", "config-manager", "setopt", &setting])
+        .args([DNF_EXECUTABLE, "config-manager", "setopt", &setting])
         .output()
         .map_err(|error| format!("Could not start the privileged DNF helper: {error}"))?;
 
@@ -694,7 +699,7 @@ pub fn set_package_installed(package_name: &str, install: bool) -> Result<(), St
 
     let action = if install { "install" } else { "remove" };
     let mut command = Command::new("pkexec");
-    command.args(["dnf", action, "--assumeyes"]);
+    command.args([DNF_EXECUTABLE, action, "--assumeyes"]);
     if !install {
         // Removing a package should use local metadata when offline instead of
         // attempting a repository refresh. DNF may still fail if its cache is
@@ -769,6 +774,33 @@ mod tests {
                 "system.toml",
             ]
         );
+    }
+
+    #[test]
+    fn dnf5_state_repair_rejects_hard_linked_files() {
+        let directory = std::env::temp_dir().join(format!(
+            "copr-hub-dnf5-hardlink-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&directory).unwrap();
+        let original = directory.join("packages.toml");
+        let alias = directory.join("packages-alias.toml");
+        fs::write(&original, b"state").unwrap();
+
+        let single_link = fs::metadata(&original).unwrap();
+        assert!(dnf5_state_files_have_single_links(&[(original.clone(), single_link)]));
+
+        fs::hard_link(&original, &alias).unwrap();
+        let linked = fs::metadata(&original).unwrap();
+        assert!(!dnf5_state_files_have_single_links(&[(original, linked)]));
+
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn privileged_dnf_operations_use_the_system_binary_path() {
+        assert_eq!(DNF_EXECUTABLE, "/usr/bin/dnf");
+        assert!(Path::new(DNF_EXECUTABLE).is_absolute());
     }
 
     #[test]
