@@ -228,22 +228,6 @@ pub struct PackageDependencyImpact {
 
 /// Whether the DNF5 package-state file has the ownership and permissions
 /// expected by the Fedora DNF5 package, and is a safe repair candidate.
-fn dnf5_state_file_is_repair_candidate(
-    file_uid: u32,
-    file_mode: u32,
-    file_is_regular: bool,
-    parent_uid: u32,
-    parent_mode: u32,
-    parent_is_directory: bool,
-) -> bool {
-    file_uid == 0
-        && file_is_regular
-        && parent_uid == 0
-        && parent_is_directory
-        && parent_mode & 0o022 == 0
-        && file_mode & 0o7777 != DNF5_SYSTEM_STATE_MODE
-}
-
 fn dnf5_state_metadata() -> Result<(Vec<(PathBuf, fs::Metadata)>, fs::Metadata), String> {
     let directory = Path::new(DNF5_SYSTEM_STATE_DIRECTORY);
     let directory_metadata = fs::symlink_metadata(directory)
