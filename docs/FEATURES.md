@@ -6,6 +6,7 @@ This document describes Copr Hub's detailed functionality. The [README](../READM
 
 - Search COPR's full-text project catalogue by project and package names, owners, and descriptions.
 - Sort by **Most relevant** by default. Exact, prefix, and substring project-name matches rank first, followed by owner matches. Results whose matching field COPR does not expose retain server order, protecting possible package-name matches from speculative ranking. Description matches follow those results; typo-tolerant project/owner matches are a last-resort ranking tier.
+- Fuzzy ranking only reorders candidates already returned by COPR; it does not expand the server's result set to discover every possible typo variant.
 - Switch to COPR order, project name, or owner sorting when preferred. Filter the current results locally by project, owner, or description without repeating the request.
 - Keep existing results visible while a refresh runs or fails, with feedback for empty results, missing projects, and API/network errors.
 - Show project names, owners, descriptions, and optional homepage links. Open homepage links only when COPR metadata provides an HTTP or HTTPS URL.
