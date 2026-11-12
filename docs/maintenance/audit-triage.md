@@ -21,7 +21,7 @@ Scope: the 99 audit issues in #50–#148. This file records the A–E category f
 | #58 | B | Disable Import during chooser/confirmation/import and verify cancellation paths. |
 | #59 | B | Disable Import/Export during chooser and file operations; verify native chooser behavior. |
 | #60 | B | Replace label-text parsing with explicit loading state; verify repository action gating. |
-| #61 | B | Move favorites file I/O to a worker and verify UI responsiveness and save feedback. |
+| #61 | B | Project Details save/remove and its activity write now run in a background worker; live GNOME validation remains.
 | #62 | B | Import/export/clear and history refresh now run in background workers with stale-refresh protection; live GNOME validation remains.
 | #63 | B | Duplicate scope of #62; track clear-history behavior with #62 and verify its response path. |
 | #64 | B | Separate user-facing errors from diagnostics; verify visible copy on each page. |
@@ -39,15 +39,12 @@ Scope: the 99 audit issues in #50–#148. This file records the A–E category f
 | #83 | B | Surface candidate version and repository in Installed rows; verify layout. |
 | #84 | B | Distinguish exact 100-item results from truncated output and show the limit in dependency details. |
 | #85 | A | Timeout handling can be tested with controlled child processes. |
-| #86 | A | Explicit command environments can be tested with fake executables. |
 | #87 | C | Safe cancellation needs process lifecycle handling and interactive validation. |
 | #89 | B | Preserve skipped-file details and surface a nonfatal repository-scan warning. |
-| #90 | A | Fake DNF/RPM executables or an injected runner can cover command paths in CI. |
 | #91 | B | COPR pagination exists, but a useful Load more flow needs UI state and interaction testing. |
 | #92 | E | Decide whether one bounded retry is worth an additional request during outages. |
 | #94 | E | thread::sleep is consistent with the current blocking HTTP client; decide whether async migration is desired. |
 | #95 | E | Decide the trade-off between monitoring detail/freshness and COPR request volume. |
-| #96 | A | Replace message-substring classification with typed error kinds and unit tests. |
 | #99 | B | Clarify compatibility wording so one Fedora target is not read as blanket package support. |
 | #100 | B | Include architecture in compatibility interpretation and verify unknown/partial states. |
 | #101 | D | Complete build-state aliases depend on COPR's documented/observed status vocabulary. |
@@ -56,9 +53,7 @@ Scope: the 99 audit issues in #50–#148. This file records the A–E category f
 | #105 | E | Optional GitHub token support needs approval for credential storage, scopes, and auth UX. |
 | #107 | E | Blocking sleep is consistent with reqwest::blocking; decide whether async migration is desired. |
 | #108 | E | Current upstream cache keys already include the normalized host; confirm any additional distinction needed. |
-| #109 | A | LRU eviction is implemented using recent access time and can be verified with deterministic cache-capacity tests; CI is pending. |
 | #110 | E | Choose negative-result cache TTL and whether explicit refresh bypasses it. |
-| #111 | A | Make persistent-cache load failures diagnosable with malformed/oversized fixtures. |
 | #112 | D | GitLab's release API has no dedicated prerelease boolean; revisit if upstream adds one. |
 | #113 | B | Tighten the GitHub release label to describe stable-release semantics. |
 | #114 | B | Explain why version comparison is unavailable; verify Project Details presentation. |
@@ -81,7 +76,6 @@ Scope: the 99 audit issues in #50–#148. This file records the A–E category f
 | #133 | E | Decide whether import should update metadata for existing saved projects. |
 | #134 | E | Duplicate removal is intentional cleanup; decide whether UI wording or preservation is preferred. |
 | #135 | E | Decide whether an extra in-app overwrite confirmation is needed beyond native save-dialog behavior. |
-| #137 | A | Sanitize control/invisible-format characters in descriptions at import/API boundaries and test fixtures. |
 | #138 | E | Decide whether the smaller import limit is a deliberate safety bound. |
 | #140 | E | Profile favorites lookup before adding cache/invalidation complexity. |
 | #141 | B | Preserve corrupt favorites data and require explicit recovery consent; verify Saved-page flow. |
@@ -91,15 +85,15 @@ Scope: the 99 audit issues in #50–#148. This file records the A–E category f
 
 ## Previously closed audit findings
 
-These closed findings were checked against their acceptance lists: #56, #57, #65, #69, #74, #78, #79, #80, #81, #88, #93, #97, #98, #102, #106, #118, #131, #136, #139, #144, #145, #147, and #148. Their recorded criteria are checked and the relevant CI runs are green, except #124 which remains open pending CI.
+These closed findings were checked against their acceptance lists: #56, #57, #65, #69, #74, #78, #79, #80, #81, #86, #88, #90, #93, #96, #97, #98, #102, #106, #109, #111, #118, #131, #136, #137, #139, #144, #145, #147, and #148. Their recorded criteria are checked and the relevant CI runs are green, except #124 which remains open pending CI.
 
 ## Work status
 
 - #79–#81 and #88: implementation and tests are on `master`; the combined CI run is green and their acceptance lists are checked.
 - #136 and #139: validation and tests are on `master`; the formatting/test CI run is green and their acceptance lists are checked.
 - #124: leading v/V normalization is implemented and CI is green; suffix equivalence remains an owner decision.
-- #56, #57, #65, and #69: implementation and deterministic tests are on `master`; CI verification is pending.
-- #86 and #90: system commands now force a C locale, drop GTK-only environment variables while preserving proxy settings, and have fake DNF/RPM/pkexec executable tests; CI is pending.
-- #109: LRU eviction is implemented; CI is pending and the issue was reopened until the run is green.
-- #111 and #137: implementation and focused tests are on `master`; CI verification is pending and both issues remain open.
+- #56, #57, #65, and #69: implementation and deterministic tests are on `master`; CI is green and the issues are closed.
+- #86 and #90: system commands now force a C locale, drop GTK-only environment variables while preserving proxy settings, and have fake DNF/RPM/pkexec executable tests; CI is green.
+- #109: LRU eviction and persistent-cache diagnostics are implemented, tested, and green in CI.
+- #111 and #137: cache-load diagnostics and project-description sanitization are implemented, tested, and green in CI.
 - Remaining Category A issues stay open until their focused implementation, tests, and CI verification are complete.

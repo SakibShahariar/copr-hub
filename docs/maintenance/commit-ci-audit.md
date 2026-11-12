@@ -130,3 +130,78 @@ All failures in this reviewed range have a subsequent fix and green CI validatio
 | 2026-11-12 | `5ba6ee70407fd7311590fc5750dcd52237fa18ca` → `92b84bf6ff0489cc0579cca1cdba1a02d8cafb42` | Reviewed 2 commits; both had formatting failures. The first failure was partially corrected in the second, which still had one rustfmt mismatch; a follow-up correction is pending CI. |
 | 2026-11-12 | `6c62ba5682cbd557b89e1e7af8bd42b3f708d09d` → `674d5dbe8b13842e653c618b2d2db978e5cc0997` | Reviewed 4 commits: 2 green, 2 red; both red runs were diagnosed as a flawed new test assertion and followed by a green correction. |
 | 2026-11-12 | `0f2aff926d2b7e455b97097b2d1b1f99303dc4a2` → `6c62ba5682cbd557b89e1e7af8bd42b3f708d09d` | Reviewed 2 commits: 1 red, 1 green; the red test expectation was corrected and final CI passed. |
+
+
+## Follow-up CI review after `92b84bf`
+
+This section records every direct-to-master commit after the previous ledger table checkpoint. Failed runs remain visible; subsequent green runs are recorded separately rather than erasing the failures.
+
+| Commit SHA | Subject | CI result / workflow run |
+|---|---|---|
+| `001900350150fcc37746701597566511f30cb074` | style(system): apply rustfmt to DNF repair checks | red (#43272320693) |
+| `5edc0d528dd0195462a2a0f25d733cbc171ce31d` | fix(installed): refresh after package removal | green (#43281811968) |
+| `f8a44a86d1ce4ce5d77c27869bfba2d57091cf8c` | fix(system): repair all DNF5 state file permissions | red (#43284052569) |
+| `c31c9f6b631b87e286036043945bf0c246ebba34` | fix(system): reuse safe state-file repair predicate | red (#43284181983) |
+| `7b8d781fc71e8d6e982283f524ea0818801c83dc` | style(system): format DNF5 permission repair | green (#43284328026) |
+| `5c1b8d2120d8dcb91cd22f7ba201a3f632e66d25` | fix(ui): show DNF permission repair for state-file errors | red (#43286341476) |
+| `cffeecfb7b0686f6d1474a6f7bd4423809af3d62` | fix(system): remove obsolete DNF repair detector | red (#43286597530) |
+| `694d3ceb3c399a58a7de9e2e4952bebf0081d2b4` | fix(repositories): open actions in a transient window | red (#43286692375) |
+| `11d2009fd4b3d341326ebeaf1df06012c7b4079f` | fix(system): remove unused DNF repair helper | red (#43287307194) |
+| `23397aa8251445a0da44b9dfa373f524c0a59944` | test(system): remove obsolete DNF repair test | green (#43290410800) |
+| `bfdbf4162eb52466dc6a6a5523204ceb9eb5909b` | build: enable libadwaita 1.5 APIs | red (#43293426900) |
+| `bbde160410b8dd847e4eaa22f49e7c74be8a18c0` | fix(ui): use AdwDialog for repository actions | red (#43293434496) |
+| `3c37342692819c59468a3f596850022d6da8bb63` | fix(ui): replace deprecated view switcher title | green (#43294420743) |
+| `3f915ba1710ca011e062e1c37f846b39c06edff0` | fix(storage): stabilize persisted project identities | red (#43305091795) |
+| `96980e912d476d207d3882c68bf2f1c1789abc07` | fix(monitoring): persist legacy key migrations | red (#43305207520) |
+| `0bd8d8e07b79eda3c00fa6fb9532ffb393128220` | style(storage): format stable identity helpers | red (#43305351573) |
+| `98fa296215df8feccaf6ce69a8f4bb3e3445234e` | fix(storage): satisfy lint for identity migration | green (#43305656097) |
+| `889a8cbd0a3e9de068d6d4f6c65965d3f2542786` | test(storage): verify legacy project data migration | red (#43305999862) |
+| `2fd9207c59615e502ef0d1777719a161e7e64f59` | fix(snapshots): import cache path type | green (#43306263103) |
+| `c76cb08bd1e9e7c696670e3b94fc635a732598b8` | fix(storage): serialize local state updates | red (#43306863585) |
+| `c65fbe29ddf73f954ab0b2cfa6aa345b48dec3a3` | style(storage): format serialized state access | red (#43307495721) |
+| `2505919e14117b75ec542e1adaa97924ccbb5931` | style(storage): clean serialized access formatting | green (#43307784906) |
+| `32ddbe8751c6339259b8fc58957b03b255aea237` | fix(copr): validate project identity before API use | red (#43308349486) |
+| `e762dfc9e9cfd503c848ef63f6aca413e7d7d8a7` | style(copr): format validated project actions | red (#43308623871) |
+| `ef0b22334b449b058cdb450a0e2519ea8092e8f4` | fix(system): harden DNF command and repair paths | red (#43308762100) |
+| `6ab705c407bb7ff7e729ea04b24fba3df45fe881` | fix(copr): preserve canonical project URL path | red (#43308942614) |
+| `1a5805201dadeb0316deb6376a4f95f9c8572b0a` | style(system): format DNF safety checks | red (#43309059831) |
+| `d7b8126472af4f77e4a766bba32cc7b70d28f1da` | fix(system): apply hard-link guard to repair checks | green (#43309372136) |
+| `40d786a9d992ce6f649bef2db710e8ad91ff2bcd` | fix(activity): report imported history truncation | red (#43309715050) |
+| `3fb030b5f3f1c17b776badeba996fc1e4a3d0830` | fix(activity): expose history import limit | green (#43309778896) |
+| `273754f1b195fca4a88367ababcd6827720b7547` | fix(copr): distinguish active build freshness | green (#43310364215) |
+| `62b5253ddf53f9a425845bf4276b009780e2f713` | fix(favorites): validate imported project metadata | red (#43310577379) |
+| `0498cafae15417c8fd019a4e353dcb4bc83e29f3` | style(favorites): format homepage validation | green (#43311216725) |
+| `17509b440a8a4632cd5646ed4c0454a47dbc8f34` | fix(system): validate and parse repository metadata | red (#43311340332) |
+| `21fd0d7b410d9ea1a8e0fe0124a331328f990357` | fix(system): recover poisoned installed-origin cache | red (#43311547523) |
+| `74639a3b740456b6b475035f3d2f370b4b3b7665` | style(system): format repository parser and cache recovery | green (#43311697355) |
+| `e25878c33490c9e7d81f3a339db51a4a8192f2a8` | fix(monitoring): normalize upstream tag prefixes | green (#43311914968) |
+| `2dbf7a493ba90437466f431e38907c224168dc55` | fix(concurrency): prevent overlapping background checks | green (#43312173623) |
+| `7b986a96394e7177bdbf3eb9c264c9d4b3102757` | fix(http): respect bounded Retry-After values | green (#43312264923) |
+| `d8eaeb73a8808d0523ce5dd7fda09a0a34beb855` | fix(data): sanitize project descriptions and report cache errors | red (#43312483121) |
+| `38456f52205b71b1c99d40a68dfeae465bdaf91c` | test(data): exercise real invisible Unicode characters | red (#43312565211) |
+| `a49f4bd7fe338f45cced6cf8615f7d73db2c50e6` | fix(upstream): evict release cache entries by recent use | red (#43312774389) |
+| `3483814cfacb3e9d5aad89bbfa873f4decb4385c` | style(data): format cache and sanitizer changes | red (#43312911903) |
+| `6cd7f67e143dee17579e42645c09123d8518b1ae` | style(upstream): format LRU cache and finalize audit triage | red (#43313080637) |
+| `87b6b58d56bbc2d3fd18cb822d1d515f97ab6325` | fix(upstream): align LRU cache entry types | red (#43313147939) |
+| `838ab901794a4e2e2abf111dc831f6592426db22` | fix(copr): classify monitoring failures with typed errors | red (#43313223557) |
+| `eda369dee2edb53fa1e24e3149bbdb9356b0fc6f` | fix(tests): repair typed errors and cache fixtures | red (#43313494166) |
+| `c3b97f00f4c727689d668c89b8ca6e23186d86b0` | test(system): isolate command environment and exercise fake DNF | red (#43313616285) |
+| `7b8d876f1a5e4678c2828761d912e54c22179f16` | fix(favorites): borrow sanitized project during validation | red (#43313715966) |
+| `5be8ddb69a40ee29a48d45f125f1e00ae34c3a94` | test(system): cover fake DNF RPM and pkexec commands | red (#43313933095) |
+| `babdcfa434e91b658f3696db1042f608e7e970cb` | style(system): format fake command test | red (#43314139710) |
+| `046fdd59f115f9a0732132a358ccb9e79a386b48` | fix(data): validate favorites and touch cached releases | red (#43314382227) |
+| `dae4088e3d250e325c3565908c3edbea769b1653` | fix(favorites): remove needless project borrows | green (#43314601853) |
+| `b10324701778c063f5ea1bce984278dd03ce95d3` | fix(activity): move history file operations off GTK thread | pending (#43315198540) |
+
+### Failure diagnosis and recovery
+
+- The DNF permission-repair and repository-action sequence had several red runs while obsolete helpers, tests, and libadwaita APIs were being replaced. The focused follow-up commits restored the DNF repair tests and migrated the repository dialog to supported libadwaita APIs; `3c37342` is green.
+- The COPR search, package-origin, and monitoring changes had intermediate formatting, compile, and test failures. Follow-up fixes are recorded above; the combined validation run `74639` is green for the repaired package-origin/monitoring changes.
+- The Perplexity Category A batch initially exposed formatting, type, test-fixture, and Clippy failures across the sanitizer, persistent cache, typed error, and command-environment work. The follow-ups corrected the Unicode fixtures, LRU cache entry types, test imports/borrows, and rustfmt output. The final Category A head `dae4088` passed formatting, all 133 unit tests, compilation, and Clippy.
+- Activity-history I/O offloading is the next Category B change. Its current commit is not included in this historical section yet; record its CI outcome in the next ledger update.
+
+### Checkpoint
+
+- Reviewed through: `dae4088e3d250e325c3565908c3edbea769b1653` (green).
+- Current branch at this ledger update: `b10324701778c063f5ea1bce984278dd03ce95d3`.
+- Next review: commits after `b10324701778c063f5ea1bce984278dd03ce95d3`, including the pending activity-history I/O change.

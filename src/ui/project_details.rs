@@ -120,37 +120,68 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
     save_button.set_sensitive(initial_error.is_none());
     let save_feedback = gtk::Label::new(initial_error.as_deref());
     save_feedback.add_css_class("dim-label");
+    let saved_value = Rc::new(RefCell::new(saved));
     save_button.connect_clicked({
         let project = project.clone();
+        let saved_value = saved_value.clone();
         let save_button = save_button.clone();
         let save_feedback = save_feedback.clone();
-        move |_| match favorites::toggle(&project) {
-            Ok(saved) => {
-                save_button.set_label(if saved {
-                    "Remove from saved"
-                } else {
-                    "Save project"
-                });
-                save_feedback.set_text(if saved {
-                    "Project saved locally."
-                } else {
-                    "Project removed from saved projects."
-                });
-                if let Err(error) = activity::record(
-                    "Saved projects",
-                    &format!("{}/{}", project.owner, project.name),
-                    if saved {
-                        "Project saved"
-                    } else {
-                        "Project removed"
-                    },
-                ) {
-                    save_feedback.set_text(&format!(
-                        "Project state changed, but activity history could not be updated: {error}"
-                    ));
+        move |_| {
+            let target_saved = !*saved_value.borrow();
+            save_button.set_sensitive(false);
+            save_feedback.set_text(if target_saved {
+                "Saving project…"
+            } else {
+                "Removing project…"
+            });
+
+            let project = project.clone();
+            let project_target = format!("{}/{}", project.owner, project.name);
+            let saved_value = saved_value.clone();
+            let save_button = save_button.clone();
+            let save_feedback = save_feedback.clone();
+            gtk::glib::MainContext::default().spawn_local(async move {
+                let result = gtk::gio::spawn_blocking(move || {
+                    let saved = favorites::toggle(&project)?;
+                    let activity_result = activity::record(
+                        "Saved projects",
+                        &project_target,
+                        if saved {
+                            "Project saved"
+                        } else {
+                            "Project removed"
+                        },
+                    );
+                    Ok::<_, String>((saved, activity_result))
+                })
+                .await;
+
+                save_button.set_sensitive(true);
+                match result {
+                    Ok(Ok((saved, activity_result))) => {
+                        *saved_value.borrow_mut() = saved;
+                        save_button.set_label(if saved {
+                            "Remove from saved"
+                        } else {
+                            "Save project"
+                        });
+                        save_feedback.set_text(if saved {
+                            "Project saved locally."
+                        } else {
+                            "Project removed from saved projects."
+                        });
+                        if let Err(error) = activity_result {
+                            save_feedback.set_text(&format!(
+                                "Project state changed, but activity history could not be updated: {error}"
+                            ));
+                        }
+                    }
+                    Ok(Err(error)) => save_feedback.set_text(&error),
+                    Err(_) => save_feedback.set_text(
+                        "The background save operation failed unexpectedly.",
+                    ),
                 }
-            }
-            Err(error) => save_feedback.set_text(&error),
+            });
         }
     });
     project_actions.append(&save_button);
