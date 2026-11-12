@@ -236,7 +236,7 @@ fn edit_distance(left: &str, right: &str) -> usize {
     for (left_index, left_character) in left.chars().enumerate() {
         let mut current = vec![left_index + 1; right.len() + 1];
         for (right_index, right_character) in right.iter().enumerate() {
-            let substitution_cost = usize::from(left_character != *right_character);
+            let substitution_cost = if left_character == *right_character { 0 } else { 1 };
             current[right_index + 1] = (previous[right_index + 1] + 1)
                 .min(current[right_index] + 1)
                 .min(previous[right_index] + substitution_cost);
