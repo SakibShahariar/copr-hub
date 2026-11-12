@@ -21,9 +21,8 @@ fn with_favorites_lock<T>(operation: impl FnOnce() -> T) -> T {
 
 fn homepage_is_valid(value: &str) -> bool {
     value.len() <= 4096
-        && reqwest::Url::parse(value).is_ok_and(|url| {
-            matches!(url.scheme(), "http" | "https") && url.host_str().is_some()
-        })
+        && reqwest::Url::parse(value)
+            .is_ok_and(|url| matches!(url.scheme(), "http" | "https") && url.host_str().is_some())
 }
 
 fn project_has_valid_fields(project: &CoprProject) -> bool {
@@ -32,10 +31,7 @@ fn project_has_valid_fields(project: &CoprProject) -> bool {
             .description
             .as_ref()
             .is_none_or(|value| value.len() <= 16_384)
-        && project
-            .homepage
-            .as_deref()
-            .is_none_or(homepage_is_valid)
+        && project.homepage.as_deref().is_none_or(homepage_is_valid)
 }
 
 fn validate_project_entries(projects: &[CoprProject]) -> Result<(), String> {
