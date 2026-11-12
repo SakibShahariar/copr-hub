@@ -23,8 +23,10 @@ pub struct CoprProject {
 
 #[derive(Debug, Deserialize)]
 struct ProjectListResponse {
-    #[serde(default)]
-    projects: Vec<CoprProject>,
+    // API v3 wraps paginated project results in "items" + "meta".
+    // Keep "projects" as an alias for older response variants.
+    #[serde(default, alias = "projects")]
+    items: Vec<CoprProject>,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -238,7 +240,7 @@ pub fn search_projects(pattern: &str) -> Result<Vec<CoprProject>, String> {
         .json()
         .map_err(|error| format!("Could not read the COPR response: {error}"))?;
 
-    Ok(result.projects)
+    Ok(result.items)
 }
 
 /// Fetch recent real project build records for a chronological build timeline.
@@ -565,16 +567,16 @@ mod tests {
     #[test]
     fn project_search_response_deserializes_full_text_results() {
         let response: ProjectListResponse = serde_json::from_str(
-            r#"{"projects":[
+            r#"{"items":[
                 {"projectname":"applications","ownername":"aahsnr-work",
                  "description":"Desktop applications including Zen Browser"}
-            ]}"#,
+            ],"meta":{"limit":25,"offset":0}}"#,
         )
         .unwrap();
 
-        assert_eq!(response.projects.len(), 1);
-        assert_eq!(response.projects[0].name, "applications");
-        assert_eq!(response.projects[0].owner, "aahsnr-work");
+        assert_eq!(response.items.len(), 1);
+        assert_eq!(response.items[0].name, "applications");
+        assert_eq!(response.items[0].owner, "aahsnr-work");
     }
 
     #[test]
