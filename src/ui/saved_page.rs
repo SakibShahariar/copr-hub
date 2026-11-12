@@ -60,13 +60,14 @@ pub(super) fn build_saved_page(
         move |_| super::launch_manual_monitor(&check_all, &feedback)
     });
 
-    let monitoring_toggle =
-        gtk::CheckButton::with_label("Monitor saved projects while Copr Hub is open");
+    let monitoring_toggle = adw::SwitchRow::builder()
+        .title("Monitor saved projects")
+        .subtitle("Check for failed builds, upstream releases, and inactive projects while Copr Hub is open.")
+        .active(monitoring::load_config().enabled)
+        .build();
     monitoring_toggle.set_tooltip_text(Some(
-        "Check for newly failed builds, upstream releases, and projects with no build activity for 90 days. Checks run at most every six hours and stop when the app is closed.",
+        "Checks run at most every six hours and stop when Copr Hub is closed.",
     ));
-    monitoring_toggle.set_active(monitoring::load_config().enabled);
-    content.append(&monitoring_toggle);
 
     let monitoring_note = gtk::Label::builder()
         .label("Optional · checks run every six hours while the app is open; notifications are sent only for changes after the first baseline.")
@@ -76,10 +77,10 @@ pub(super) fn build_saved_page(
     monitoring_note.add_css_class("dim-label");
     content.append(&monitoring_note);
 
-    let freshness_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-    let freshness_label = gtk::Label::with_mnemonic("_Mark builds stale after (days)");
-    freshness_label.set_xalign(0.0);
-    freshness_label.set_hexpand(true);
+    let freshness_row = adw::ActionRow::builder()
+        .title("Mark builds stale after")
+        .subtitle("Projects without a reported build for this many days are marked stale.")
+        .build();
     let freshness_days = gtk::SpinButton::with_range(7.0, 3650.0, 7.0);
     freshness_days.set_value(f64::from(
         monitoring::load_config()
@@ -87,13 +88,11 @@ pub(super) fn build_saved_page(
             .clamp(7, 3650),
     ));
     freshness_days.set_numeric(true);
-    freshness_label.set_mnemonic_widget(Some(&freshness_days));
+    freshness_row.add_suffix(&freshness_days);
     freshness_days.set_tooltip_text(Some(
         "Choose how long without a reported build activity marks a project as stale.",
     ));
-    freshness_row.append(&freshness_label);
-    freshness_row.append(&freshness_days);
-    content.append(&freshness_row);
+
     freshness_days.connect_value_changed({
         let feedback = feedback.clone();
         let freshness_days = freshness_days.clone();
@@ -107,17 +106,19 @@ pub(super) fn build_saved_page(
         }
     });
 
-    let backup_toggle =
-        gtk::CheckButton::with_label("Create scheduled local backups of saved projects");
-    backup_toggle.set_tooltip_text(Some("When enabled, create a JSON backup about once per day while Copr Hub is open. Keep the latest seven backups. No background system service is installed."));
-    backup_toggle.set_active(backups::load_config().enabled);
-    content.append(&backup_toggle);
+    let backup_toggle = adw::SwitchRow::builder()
+        .title("Scheduled local backups")
+        .subtitle("Create a daily JSON backup while Copr Hub is open. Keep the latest seven backups.")
+        .active(backups::load_config().enabled)
+        .build();
+    backup_toggle.set_tooltip_text(Some(
+        "Backups are stored in your Copr Hub data directory. No background system service is installed.",
+    ));
     let backup_note = gtk::Label::new(Some("Optional · daily while the app is open · saved under the Copr Hub data directory · retains 7 backups."));
     backup_note.set_xalign(0.0);
     backup_note.set_wrap(true);
     backup_note.add_css_class("dim-label");
-    content.append(&backup_note);
-    backup_toggle.connect_toggled({
+    backup_toggle.connect_active_notify({
         let feedback = feedback.clone();
         let app = app.clone();
         move |toggle| {
@@ -135,7 +136,7 @@ pub(super) fn build_saved_page(
         }
     });
 
-    monitoring_toggle.connect_toggled({
+    monitoring_toggle.connect_active_notify({
         let app = app.clone();
         let monitoring_note = monitoring_note.clone();
         move |toggle| {
@@ -170,6 +171,23 @@ pub(super) fn build_saved_page(
         move |_| list.invalidate_filter()
     });
     content.append(&list);
+
+    let monitoring_group = adw::PreferencesGroup::builder()
+        .title("Monitoring")
+        .description("Choose how Copr Hub tracks the health and freshness of saved projects.")
+        .build();
+    monitoring_group.add(&monitoring_toggle);
+    monitoring_group.add(&freshness_row);
+    content.append(&monitoring_group);
+    content.append(&monitoring_note);
+
+    let backup_group = adw::PreferencesGroup::builder()
+        .title("Backups")
+        .description("Keep a local copy of your saved-project list.")
+        .build();
+    backup_group.add(&backup_toggle);
+    content.append(&backup_group);
+    content.append(&backup_note);
 
     export.connect_clicked({
         let parent = parent.clone();
