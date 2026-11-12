@@ -84,26 +84,29 @@ fn legacy_project_key(project: &copr::CoprProject) -> String {
     format!("{:016x}", hasher.finish())
 }
 
-fn migrate_project_key(state: &mut PersistedMonitoringState, project: &copr::CoprProject) {
+fn migrate_project_key(state: &mut PersistedMonitoringState, project: &copr::CoprProject) -> bool {
     let stable_key = project_key(project);
-    if !state.projects.contains_key(&stable_key) {
-        if let Some(legacy_state) = state.projects.remove(&legacy_project_key(project)) {
-            state.projects.insert(stable_key, legacy_state);
-        }
+    if state.projects.contains_key(&stable_key) {
+        return false;
     }
+    if let Some(legacy_state) = state.projects.remove(&legacy_project_key(project)) {
+        state.projects.insert(stable_key, legacy_state);
+        return true;
+    }
+    false
 }
 
 fn prune_inactive_projects(
     state: &mut PersistedMonitoringState,
     active_projects: &[copr::CoprProject],
 ) -> bool {
-    for project in active_projects {
-        migrate_project_key(state, project);
-    }
+    let migrated = active_projects
+        .iter()
+        .fold(false, |changed, project| migrate_project_key(state, project) || changed);
     let active_keys: HashSet<String> = active_projects.iter().map(project_key).collect();
     let previous_len = state.projects.len();
     state.projects.retain(|key, _| active_keys.contains(key));
-    state.projects.len() != previous_len
+    migrated || state.projects.len() != previous_len
 }
 
 /// Remove monitoring baselines for projects that are no longer saved.
