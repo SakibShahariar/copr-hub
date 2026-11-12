@@ -3,7 +3,7 @@ use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Mutex, MutexGuard, OnceLock};
 
 const REPOSITORY_DIRECTORY: &str = "/etc/yum.repos.d";
 const DNF5_SYSTEM_STATE_DIRECTORY: &str = "/usr/lib/sysimage/libdnf5";
@@ -577,11 +577,24 @@ fn is_valid_copr_repository_id(repository_id: &str) -> bool {
 type InstalledOrigins = Result<HashMap<String, Vec<String>>, String>;
 static INSTALLED_ORIGINS: OnceLock<Mutex<Option<InstalledOrigins>>> = OnceLock::new();
 
+fn lock_installed_origins(
+    cache: &Mutex<Option<InstalledOrigins>>,
+) -> MutexGuard<'_, Option<InstalledOrigins>> {
+    match cache.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            eprintln!("Installed package-origin cache mutex was poisoned; resetting the cache.");
+            let mut guard = poisoned.into_inner();
+            *guard = None;
+            cache.clear_poison();
+            guard
+        }
+    }
+}
+
 pub fn invalidate_installed_package_origins() {
     if let Some(cache) = INSTALLED_ORIGINS.get() {
-        if let Ok(mut cache) = cache.lock() {
-            *cache = None;
-        }
+        *lock_installed_origins(cache) = None;
     }
 }
 
@@ -592,9 +605,7 @@ pub fn installed_packages_from_repository(repository_id: &str) -> Result<Vec<Str
         return Err("Invalid repository ID.".to_string());
     }
     let cache = INSTALLED_ORIGINS.get_or_init(|| Mutex::new(None));
-    let mut cached = cache
-        .lock()
-        .map_err(|_| "Installed package-origin cache is unavailable.".to_string())?;
+    let mut cached = lock_installed_origins(cache);
     if cached.is_none() {
         *cached = Some(query_installed_package_origins());
     }
@@ -820,6 +831,26 @@ mod tests {
                 "system.toml",
             ]
         );
+    }
+
+    #[test]
+    fn poisoned_installed_origin_cache_is_reset_and_reusable() {
+        let cache = std::sync::Arc::new(Mutex::new(Some(Ok(HashMap::from([(
+            "copr:copr.fedorainfracloud.org:alice:demo".to_string(),
+            vec!["demo".to_string()],
+        )])))));
+        let poisoner = cache.clone();
+        let _ = std::thread::spawn(move || {
+            let _guard = poisoner.lock().unwrap();
+            panic!("simulate a panic while the cache lock is held");
+        })
+        .join();
+
+        assert!(cache.is_poisoned());
+        let guard = lock_installed_origins(&cache);
+        assert!(guard.is_none());
+        drop(guard);
+        assert!(!cache.is_poisoned());
     }
 
     #[test]
