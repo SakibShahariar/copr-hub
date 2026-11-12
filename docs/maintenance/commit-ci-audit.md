@@ -249,3 +249,20 @@ This section records every direct-to-master commit after the previous ledger tab
 
 - Reviewed through: `9b409f6fb18dbef1158ea0b04c1dff4e6f002718` (green).
 - Next review: commits after `9b409f6fb18dbef1158ea0b04c1dff4e6f002718`.
+
+
+## Follow-up review after `9b409f6`
+
+| Commit SHA | Subject | CI result / workflow run |
+|---|---|---|
+| `081fbc2de2f4587012aa72bfb8421e482d8caf19` | fix(activity): prevent repeated chooser launches | green (#43317277814) |
+
+### Chooser re-entry follow-up
+
+- `081fbc2` passed formatting, unit tests, compilation, and Clippy. It keeps Activity Import/Export disabled from chooser launch through cancellation or background-worker completion.
+- Saved-project Import is being updated to use the same lifecycle: disable at chooser launch, remain disabled through preview and confirmation, and restore on cancel, preview failure, or import completion. This commit's CI result will be recorded in the next ledger update.
+
+### Checkpoint
+
+- Reviewed through: `081fbc2de2f4587012aa72bfb8421e482d8caf19` (green).
+- Next review: commits after `081fbc2de2f4587012aa72bfb8421e482d8caf19`.

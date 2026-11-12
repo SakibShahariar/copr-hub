@@ -246,7 +246,9 @@ pub(super) fn build_saved_page(
         let parent = parent.clone();
         let list = list.clone();
         let feedback = feedback.clone();
+        let import_button = import.clone();
         move |_| {
+            import_button.set_sensitive(false);
             let dialog = gtk::FileChooserNative::new(
                 Some("Import saved projects"),
                 Some(&parent),
@@ -258,6 +260,7 @@ pub(super) fn build_saved_page(
                 let parent = parent.clone();
                 let list = list.clone();
                 let feedback = feedback.clone();
+                let import_button = import_button.clone();
                 move |dialog, response| {
                     if response == gtk::ResponseType::Accept {
                         match dialog.file().and_then(|file| file.path()) {
@@ -283,34 +286,57 @@ pub(super) fn build_saved_page(
                                         let parent = parent.clone();
                                         let list = list.clone();
                                         let feedback = feedback.clone();
+                                        let import_button = import_button.clone();
                                         let path = path.clone();
                                         move |confirmation, answer| {
                                             confirmation.close();
-                                            if answer != gtk::ResponseType::Accept { return; }
+                                            if answer != gtk::ResponseType::Accept {
+                                                import_button.set_sensitive(true);
+                                                return;
+                                            }
                                             feedback.set_text("Importing saved projects…");
                                             let parent = parent.clone();
                                             let list = list.clone();
                                             let feedback = feedback.clone();
+                                            let import_button = import_button.clone();
                                             let path = path.clone();
                                             gtk::glib::MainContext::default().spawn_local(async move {
-                                                let result = gtk::gio::spawn_blocking(move || favorites::import_from(&path)).await;
+                                                let result = gtk::gio::spawn_blocking(move || {
+                                                    favorites::import_from(&path)
+                                                })
+                                                .await;
+                                                import_button.set_sensitive(true);
                                                 match result {
                                                     Ok(Ok(added)) => {
                                                         refresh_saved_projects(&parent, &list, &feedback);
-                                                        feedback.set_text(&format!("Imported {added} new project(s); existing saved projects were preserved."));
+                                                        feedback.set_text(&format!(
+                                                            "Imported {added} new project(s); existing saved projects were preserved."
+                                                        ));
                                                     }
-                                                    Ok(Err(error)) => feedback.set_text(&format!("Import failed: {error}")),
-                                                    Err(_) => feedback.set_text("The background import task failed unexpectedly."),
+                                                    Ok(Err(error)) => feedback.set_text(&format!(
+                                                        "Import failed: {error}"
+                                                    )),
+                                                    Err(_) => feedback.set_text(
+                                                        "The background import task failed unexpectedly.",
+                                                    ),
                                                 }
                                             });
                                         }
                                     });
                                     confirmation.present();
                                 }
-                                Err(error) => feedback.set_text(&format!("Import preview failed: {error}")),
+                                Err(error) => {
+                                    feedback.set_text(&format!("Import preview failed: {error}"));
+                                    import_button.set_sensitive(true);
+                                }
                             },
-                            None => feedback.set_text("Could not access the selected backup file."),
+                            None => {
+                                feedback.set_text("Could not access the selected backup file.");
+                                import_button.set_sensitive(true);
+                            }
                         }
+                    } else {
+                        import_button.set_sensitive(true);
                     }
                     dialog.destroy();
                 }
