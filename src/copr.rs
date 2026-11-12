@@ -114,6 +114,8 @@ pub struct ProjectBuildSummary {
     #[serde(default)]
     pub state: Option<String>,
     #[serde(default)]
+    pub started_on: Option<i64>,
+    #[serde(default)]
     pub ended_on: Option<i64>,
     #[serde(default)]
     pub submitted_on: Option<i64>,
@@ -368,8 +370,9 @@ fn fetch_latest_build(owner: &str, project: &str) -> Result<Option<ProjectBuildS
 fn build_summary_from_event(build: &ProjectBuildEvent) -> ProjectBuildSummary {
     ProjectBuildSummary {
         state: build.state.clone(),
+        started_on: build.started_on,
         ended_on: build.ended_on,
-        submitted_on: build.submitted_on.or(build.started_on).or(build.ended_on),
+        submitted_on: build.submitted_on,
     }
 }
 
@@ -456,12 +459,28 @@ pub fn build_freshness_message(build: Option<&ProjectBuildSummary>, now: i64) ->
         return "Recent build age is unavailable; COPR did not provide build timestamps."
             .to_string();
     };
-    let timestamp = build.ended_on.or(build.submitted_on);
+    let state = build.state.as_deref().unwrap_or("unknown");
+    let is_active = matches!(
+        state.to_ascii_lowercase().as_str(),
+        "pending" | "waiting" | "starting" | "running" | "building"
+    );
+    let (timestamp, activity) = if is_active {
+        if build.started_on.is_some() {
+            (build.started_on, "started")
+        } else if build.submitted_on.is_some() {
+            (build.submitted_on, "submitted")
+        } else {
+            (build.ended_on, "last reported")
+        }
+    } else if build.ended_on.is_some() {
+        (build.ended_on, "completed")
+    } else if build.submitted_on.is_some() {
+        (build.submitted_on, "submitted")
+    } else {
+        (build.started_on, "started")
+    };
     let Some(timestamp) = timestamp.filter(|timestamp| *timestamp > 0) else {
-        return format!(
-            "Latest project build state: {} · build age unavailable.",
-            build.state.as_deref().unwrap_or("unknown")
-        );
+        return format!("Latest project build state: {state} · build age unavailable.");
     };
     let age_days = now.saturating_sub(timestamp).max(0) / 86_400;
     let age = if age_days == 0 {
@@ -471,11 +490,12 @@ pub fn build_freshness_message(build: Option<&ProjectBuildSummary>, now: i64) ->
     } else {
         format!("{age_days} days ago")
     };
-    let state = build.state.as_deref().unwrap_or("unknown");
-    if age_days >= STALE_BUILD_AFTER_DAYS {
-        format!("No recent project build: latest reported build was {age} (state: {state}).")
+    if is_active {
+        format!("Latest project build is {state}: {activity} {age}.")
+    } else if age_days >= STALE_BUILD_AFTER_DAYS {
+        format!("No recent project build: latest build {activity} {age} (state: {state}).")
     } else {
-        format!("Latest project build: {age} (state: {state}).")
+        format!("Latest project build: {activity} {age} (state: {state}).")
     }
 }
 
@@ -497,8 +517,9 @@ mod tests {
 
         let summary = build_summary_from_event(&event);
         assert_eq!(summary.state.as_deref(), Some("succeeded"));
+        assert_eq!(summary.started_on, Some(200));
         assert_eq!(summary.ended_on, Some(300));
-        assert_eq!(summary.submitted_on, Some(200));
+        assert_eq!(summary.submitted_on, None);
     }
 
     #[test]
@@ -555,10 +576,26 @@ mod tests {
     }
 
     #[test]
+    fn active_build_freshness_uses_start_time_without_reporting_staleness() {
+        let now = 1_800_000_000;
+        let build = ProjectBuildSummary {
+            state: Some("running".into()),
+            started_on: Some(now - 3_600),
+            ended_on: None,
+            submitted_on: Some(now - 100 * 86_400),
+        };
+
+        let message = build_freshness_message(Some(&build), now);
+        assert!(message.contains("started less than a day ago"));
+        assert!(!message.contains("No recent project build"));
+    }
+
+    #[test]
     fn build_freshness_distinguishes_recent_stale_and_missing_timestamps() {
         let now = 2_000_000_000_i64;
         let recent = ProjectBuildSummary {
             state: Some("succeeded".into()),
+            started_on: None,
             ended_on: Some(now - 7 * 86_400),
             submitted_on: None,
         };
@@ -566,6 +603,7 @@ mod tests {
         assert!(!build_freshness_message(Some(&recent), now).contains("No recent"));
         let stale = ProjectBuildSummary {
             state: Some("failed".into()),
+            started_on: None,
             ended_on: Some(now - 100 * 86_400),
             submitted_on: None,
         };
@@ -574,6 +612,7 @@ mod tests {
         assert!(message.contains("failed"));
         let missing = ProjectBuildSummary {
             state: None,
+            started_on: None,
             ended_on: None,
             submitted_on: None,
         };
