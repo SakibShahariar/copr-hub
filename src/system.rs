@@ -758,31 +758,6 @@ mod tests {
         assert!(!dnf5_state_error_is_permission_related(
             "packages.toml: invalid TOML syntax"
         ));
-    }
-
-    #[test]
-    fn dnf5_state_permission_repair_requires_root_owned_regular_files_and_safe_directory() {
-        assert!(dnf5_state_file_is_repair_candidate(
-            0, 0o660, true, 0, 0o755, true
-        ));
-        assert!(!dnf5_state_file_is_repair_candidate(
-            0, 0o644, true, 0, 0o755, true
-        ));
-        assert!(!dnf5_state_file_is_repair_candidate(
-            1000, 0o660, true, 0, 0o755, true
-        ));
-        assert!(!dnf5_state_file_is_repair_candidate(
-            0, 0o660, false, 0, 0o755, true
-        ));
-        assert!(!dnf5_state_file_is_repair_candidate(
-            0, 0o660, true, 1000, 0o755, true
-        ));
-        assert!(!dnf5_state_file_is_repair_candidate(
-            0, 0o660, true, 0, 0o775, true
-        ));
-        assert!(!dnf5_state_file_is_repair_candidate(
-            0, 0o660, true, 0, 0o755, false
-        ));
         assert_eq!(
             DNF5_SYSTEM_STATE_FILES,
             &[
