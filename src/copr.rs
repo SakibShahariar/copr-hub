@@ -31,7 +31,11 @@ pub fn valid_project_identity(owner: &str, project: &str) -> bool {
             && !value.chars().any(|character| {
                 character.is_control()
                     || character.is_whitespace()
-                    || matches!(character, '/' | '\\' | '?' | '#' | '%')
+                    || matches!(
+                        character,
+                        '/' | '\\' | '?' | '#' | '%' | '\u{200b}'..='\u{200f}'
+                            | '\u{202a}'..='\u{202e}' | '\u{2060}'..='\u{206f}' | '\u{feff}'
+                    )
             })
     }
 

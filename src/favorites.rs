@@ -19,19 +19,23 @@ fn with_favorites_lock<T>(operation: impl FnOnce() -> T) -> T {
     operation()
 }
 
+fn homepage_is_valid(value: &str) -> bool {
+    value.len() <= 4096
+        && reqwest::Url::parse(value).is_ok_and(|url| {
+            matches!(url.scheme(), "http" | "https") && url.host_str().is_some()
+        })
+}
+
 fn project_has_valid_fields(project: &CoprProject) -> bool {
-    !project.name.trim().is_empty()
-        && !project.owner.trim().is_empty()
-        && project.name.len() <= 512
-        && project.owner.len() <= 512
+    crate::copr::valid_project_identity(&project.owner, &project.name)
         && project
             .description
             .as_ref()
             .is_none_or(|value| value.len() <= 16_384)
         && project
             .homepage
-            .as_ref()
-            .is_none_or(|value| value.len() <= 4096)
+            .as_deref()
+            .is_none_or(homepage_is_valid)
 }
 
 fn validate_project_entries(projects: &[CoprProject]) -> Result<(), String> {
@@ -429,6 +433,34 @@ mod tests {
         let mut oversized_homepage = project("alice", "demo");
         oversized_homepage.homepage = Some("x".repeat(4097));
         assert!(!project_has_valid_fields(&oversized_homepage));
+    }
+
+    #[test]
+    fn saved_project_validation_rejects_unsafe_homepage_schemes() {
+        for homepage in [
+            "javascript:alert(1)",
+            "file:///etc/passwd",
+            "data:text/plain,hello",
+            "not a URL",
+            "",
+        ] {
+            let mut candidate = project("alice", "demo");
+            candidate.homepage = Some(homepage.to_string());
+            assert!(!project_has_valid_fields(&candidate), "{homepage}");
+        }
+
+        for homepage in ["https://example.com", "http://example.com/path"] {
+            let mut candidate = project("alice", "demo");
+            candidate.homepage = Some(homepage.to_string());
+            assert!(project_has_valid_fields(&candidate), "{homepage}");
+        }
+    }
+
+    #[test]
+    fn saved_project_validation_rejects_unsafe_identifiers() {
+        assert!(!project_has_valid_fields(&project("alice\nadmin", "demo")));
+        assert!(!project_has_valid_fields(&project("alice", "../demo")));
+        assert!(!project_has_valid_fields(&project("alice\u{200b}", "demo")));
     }
 
     #[test]
