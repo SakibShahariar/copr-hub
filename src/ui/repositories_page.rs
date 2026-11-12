@@ -197,8 +197,7 @@ fn render_repositories(
                     .file_name()
                     .unwrap_or_else(|| std::ffi::OsStr::new("repository file"))
                     .to_string_lossy();
-                let file_label =
-                    gtk::Label::new(Some(&format!("Repository file: {file_name}")));
+                let file_label = gtk::Label::new(Some(&format!("Repository file: {file_name}")));
                 file_label.set_width_chars(32);
                 file_label.set_max_width_chars(32);
                 file_label.set_wrap(true);
@@ -331,11 +330,26 @@ fn render_repositories(
 
                 let popover = gtk::Popover::new();
                 popover.set_child(Some(&actions));
-                let menu = gtk::MenuButton::new();
+                popover.set_position(gtk::PositionType::Bottom);
+
+                // Anchor the popover to a plain button and open it explicitly.
+                // This avoids relying on MenuButton's implicit popup handling
+                // inside an AdwActionRow suffix.
+                let menu = gtk::Button::new();
                 menu.set_icon_name("view-more-symbolic");
                 menu.set_tooltip_text(Some("Repository actions and details"));
                 menu.add_css_class("flat");
-                menu.set_popover(Some(&popover));
+                popover.set_parent(&menu);
+                menu.connect_clicked({
+                    let popover = popover.clone();
+                    move |_| {
+                        if popover.is_visible() {
+                            popover.popdown();
+                        } else {
+                            popover.popup();
+                        }
+                    }
+                });
                 row.add_suffix(&menu);
                 list.append(&row);
             }
