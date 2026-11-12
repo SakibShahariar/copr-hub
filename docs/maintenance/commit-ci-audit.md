@@ -266,3 +266,20 @@ This section records every direct-to-master commit after the previous ledger tab
 
 - Reviewed through: `081fbc2de2f4587012aa72bfb8421e482d8caf19` (green).
 - Next review: commits after `081fbc2de2f4587012aa72bfb8421e482d8caf19`.
+
+
+## Follow-up review after `081fbc2`
+
+| Commit SHA | Subject | CI result / workflow run |
+|---|---|---|
+| `434b34f65b6ccfbb6153e33b302cc2a99c30d8fc` | fix(favorites): prevent repeated import dialogs | green (#43317501194) |
+
+### Repository duplicate-action protection
+
+- `434b34f` passed formatting, unit tests, compilation, and Clippy. Saved-project Import stays disabled from chooser launch through preview, confirmation, cancellation, and import completion.
+- This commit adds per-row button state to repository Enable/Disable/Remove flows. It keeps the initiating action disabled during COPR compatibility lookup and confirmation, restores it on cancellation or operation failure, and relies on repository refresh to replace it after success. CI outcome will be recorded in the next ledger update.
+
+### Checkpoint
+
+- Reviewed through: `434b34f65b6ccfbb6153e33b302cc2a99c30d8fc` (green).
+- Next review: commits after `434b34f65b6ccfbb6153e33b302cc2a99c30d8fc`.

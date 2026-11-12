@@ -377,12 +377,19 @@ fn render_repositories(
                     let list = list.clone();
                     let feedback = feedback.clone();
                     let origin_state = origin_state.clone();
+                    let action_button = toggle.clone();
                     move |_| {
                         if let Some(message) = origin_state.get().blocked_message() {
                             feedback.set_text(message);
                             return;
                         }
-                        confirm_repository_toggle(&parent, &repository, &list, &feedback);
+                        confirm_repository_toggle(
+                            &parent,
+                            &repository,
+                            &list,
+                            &feedback,
+                            &action_button,
+                        );
                     }
                 });
                 actions.append(&toggle);
@@ -424,12 +431,19 @@ fn render_repositories(
                         let list = list.clone();
                         let feedback = feedback.clone();
                         let origin_state = origin_state.clone();
+                        let action_button = remove.clone();
                         move |_| {
                             if let Some(message) = origin_state.get().blocked_message() {
                                 feedback.set_text(message);
                                 return;
                             }
-                            confirm_repository_removal(&parent, &repository, &list, &feedback);
+                            confirm_repository_removal(
+                                &parent,
+                                &repository,
+                                &list,
+                                &feedback,
+                                &action_button,
+                            );
                         }
                     });
                     actions.append(&remove);
@@ -487,10 +501,12 @@ fn confirm_repository_toggle(
     repository: &system::CoprRepository,
     list: &gtk::ListBox,
     feedback: &gtk::Label,
+    action_button: &gtk::Button,
 ) {
+    action_button.set_sensitive(false);
     let fedora_release = system::current_fedora_release();
     if repository.enabled {
-        show_repository_toggle_dialog(parent, repository, list, feedback, None);
+        show_repository_toggle_dialog(parent, repository, list, feedback, action_button, None);
         return;
     }
 
@@ -500,6 +516,7 @@ fn confirm_repository_toggle(
             repository,
             list,
             feedback,
+            action_button,
             Some((fedora_release, copr::FedoraCompatibility::Unknown)),
         );
         return;
@@ -510,6 +527,7 @@ fn confirm_repository_toggle(
             repository,
             list,
             feedback,
+            action_button,
             Some((fedora_release, copr::FedoraCompatibility::Unknown)),
         );
         return;
@@ -521,6 +539,7 @@ fn confirm_repository_toggle(
             repository,
             list,
             feedback,
+            action_button,
             Some((None, copr::FedoraCompatibility::Unknown)),
         );
         return;
@@ -533,6 +552,7 @@ fn confirm_repository_toggle(
     let repository = repository.clone();
     let list = list.clone();
     let feedback = feedback.clone();
+    let action_button = action_button.clone();
     gtk::glib::MainContext::default().spawn_local(async move {
         let result =
             gtk::gio::spawn_blocking(move || copr::fetch_project_monitor(&owner, &project)).await;
@@ -545,6 +565,7 @@ fn confirm_repository_toggle(
             &repository,
             &list,
             &feedback,
+            &action_button,
             Some((fedora_release, compatibility)),
         );
     });
@@ -555,6 +576,7 @@ fn show_repository_toggle_dialog(
     repository: &system::CoprRepository,
     list: &gtk::ListBox,
     feedback: &gtk::Label,
+    action_button: &gtk::Button,
     compatibility: Option<(Option<u32>, copr::FedoraCompatibility)>,
 ) {
     let enabling = !repository.enabled;
@@ -603,9 +625,11 @@ fn show_repository_toggle_dialog(
         let repository = repository.clone();
         let list = list.clone();
         let feedback = feedback.clone();
+        let action_button = action_button.clone();
         move |dialog, response| {
             dialog.close();
             if response != gtk::ResponseType::Accept {
+                action_button.set_sensitive(true);
                 return;
             }
 
@@ -615,6 +639,7 @@ fn show_repository_toggle_dialog(
             let list = list.clone();
             let feedback = feedback.clone();
             let parent = parent.clone();
+            let action_button = action_button.clone();
             gtk::glib::MainContext::default().spawn_local(async move {
                 let result = gtk::gio::spawn_blocking(move || {
                     system::set_copr_repository_enabled(&repository_id, enabling)
@@ -631,8 +656,14 @@ fn show_repository_toggle_dialog(
                         .map(|error| format!("Activity history could not be saved: {error}"));
                         refresh_repositories_with_notice(&parent, &list, &feedback, notice);
                     }
-                    Ok(Err(error)) => feedback.set_text(&error),
-                    Err(_) => feedback.set_text("The repository operation failed unexpectedly."),
+                    Ok(Err(error)) => {
+                        action_button.set_sensitive(true);
+                        feedback.set_text(&error);
+                    }
+                    Err(_) => {
+                        action_button.set_sensitive(true);
+                        feedback.set_text("The repository operation failed unexpectedly.");
+                    }
                 }
             });
         }
@@ -645,7 +676,9 @@ fn confirm_repository_removal(
     repository: &system::CoprRepository,
     list: &gtk::ListBox,
     feedback: &gtk::Label,
+    action_button: &gtk::Button,
 ) {
+    action_button.set_sensitive(false);
     let dialog = gtk::MessageDialog::builder()
         .transient_for(parent)
         .modal(true)
@@ -664,9 +697,11 @@ fn confirm_repository_removal(
         let repository = repository.clone();
         let list = list.clone();
         let feedback = feedback.clone();
+        let action_button = action_button.clone();
         move |dialog, response| {
             dialog.close();
             if response != gtk::ResponseType::Accept {
+                action_button.set_sensitive(true);
                 return;
             }
 
@@ -676,6 +711,7 @@ fn confirm_repository_removal(
             let list = list.clone();
             let feedback = feedback.clone();
             let parent = parent.clone();
+            let action_button = action_button.clone();
             gtk::glib::MainContext::default().spawn_local(async move {
                 let result = gtk::gio::spawn_blocking(move || {
                     system::remove_copr_repository(&repository_id)
@@ -692,8 +728,14 @@ fn confirm_repository_removal(
                         .map(|error| format!("Activity history could not be saved: {error}"));
                         refresh_repositories_with_notice(&parent, &list, &feedback, notice);
                     }
-                    Ok(Err(error)) => feedback.set_text(&error),
-                    Err(_) => feedback.set_text("The repository operation failed unexpectedly."),
+                    Ok(Err(error)) => {
+                        action_button.set_sensitive(true);
+                        feedback.set_text(&error);
+                    }
+                    Err(_) => {
+                        action_button.set_sensitive(true);
+                        feedback.set_text("The repository operation failed unexpectedly.");
+                    }
                 }
             });
         }
