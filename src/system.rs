@@ -22,6 +22,15 @@ const INSTALLED_COPR_QUERY_FORMAT: &str = "%{name}\t%{evr}\t%{from_repo}\\n";
 const PACKAGE_UPDATES_QUERY_FORMAT: &str = "%{name}\t%{evr}\t%{repoid}\\n";
 const INSTALLED_ORIGINS_QUERY_FORMAT: &str = "%{name}|%{from_repo}\\n";
 
+fn system_command(program: impl AsRef<std::ffi::OsStr>) -> Command {
+    let mut command = Command::new(program);
+    command.env("LC_ALL", "C");
+    for variable in ["GTK_PATH", "GTK_MODULES", "GTK_THEME", "GDK_BACKEND"] {
+        command.env_remove(variable);
+    }
+    command
+}
+
 /// Read the major Fedora release from a parsed /etc/os-release file.
 pub fn parse_fedora_release(os_release: &str) -> Option<u32> {
     let mut is_fedora = false;
@@ -345,7 +354,7 @@ pub fn repair_dnf5_system_state_permissions() -> Result<(), String> {
         return Ok(());
     }
 
-    let mut command = Command::new("pkexec");
+    let mut command = system_command("pkexec");
     command.arg("/usr/bin/chmod").arg("0644").arg("--");
     for (path, _) in &files {
         command.arg(path);
@@ -381,7 +390,7 @@ pub fn repair_dnf5_system_state_permissions() -> Result<(), String> {
 }
 
 pub fn list_installed_copr_packages() -> Result<Vec<InstalledCoprPackage>, String> {
-    let output = Command::new("dnf")
+    let output = system_command("dnf")
         .args([
             "repoquery",
             "--installed",
@@ -409,7 +418,7 @@ pub fn list_installed_copr_packages() -> Result<Vec<InstalledCoprPackage>, Strin
 /// Query enabled repositories for upgrade candidates. DNF handles RPM EVR
 /// ordering and repository policy; callers should only display returned candidates.
 pub fn list_package_updates() -> Result<Vec<AvailablePackageUpdate>, String> {
-    let output = Command::new("dnf")
+    let output = system_command("dnf")
         .args([
             "repoquery",
             "--upgrades",
@@ -478,9 +487,8 @@ pub fn inspect_package_dependency_impact(
 }
 
 fn run_rpm_query(arguments: &[&str]) -> Result<String, String> {
-    let output = Command::new("rpm")
+    let output = system_command("rpm")
         .args(arguments)
-        .env("LC_ALL", "C")
         .output()
         .map_err(|error| format!("Could not start RPM to inspect dependencies: {error}"))?;
     if !output.status.success() {
@@ -495,9 +503,8 @@ fn run_rpm_query(arguments: &[&str]) -> Result<String, String> {
 }
 
 fn run_rpm_query_allow_empty(arguments: &[&str]) -> Result<String, String> {
-    let output = Command::new("rpm")
+    let output = system_command("rpm")
         .args(arguments)
-        .env("LC_ALL", "C")
         .output()
         .map_err(|error| format!("Could not start RPM to inspect dependencies: {error}"))?;
     if output.status.success() {
@@ -617,7 +624,7 @@ pub fn installed_packages_from_repository(repository_id: &str) -> Result<Vec<Str
 }
 
 fn query_installed_package_origins() -> InstalledOrigins {
-    let output = Command::new("dnf")
+    let output = system_command("dnf")
         .args([
             "repoquery",
             "--installed",
@@ -700,7 +707,7 @@ pub fn remove_copr_repository(repository_id: &str) -> Result<(), String> {
             .to_string()
     })?;
 
-    let output = Command::new("pkexec")
+    let output = system_command("pkexec")
         .args([
             DNF_EXECUTABLE,
             "--assumeyes",
@@ -732,7 +739,7 @@ pub fn set_copr_repository_enabled(repository_id: &str, enabled: bool) -> Result
         "{repository_id}.enabled={}",
         if enabled { "1" } else { "0" }
     );
-    let output = Command::new("pkexec")
+    let output = system_command("pkexec")
         .args([DNF_EXECUTABLE, "config-manager", "setopt", &setting])
         .output()
         .map_err(|error| format!("Could not start the privileged DNF helper: {error}"))?;
@@ -755,7 +762,7 @@ pub fn set_package_installed(package_name: &str, install: bool) -> Result<(), St
     }
 
     let action = if install { "install" } else { "remove" };
-    let mut command = Command::new("pkexec");
+    let mut command = system_command("pkexec");
     command.args([DNF_EXECUTABLE, action, "--assumeyes"]);
     if !install {
         // Removing a package should use local metadata when offline instead of
@@ -1212,5 +1219,41 @@ enabled=0
             parse_fedora_release("ID=fedora\nVERSION_ID=rawhide\n"),
             None
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn system_command_runs_fake_dnf_with_c_locale_and_preserves_proxy() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let directory = std::env::temp_dir().join(format!(
+            "copr-hub-fake-dnf-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&directory).unwrap();
+        let executable = directory.join("dnf");
+        fs::write(
+            &executable,
+            "#!/bin/sh\nprintf '%s|%s|%s' \"$LC_ALL\" \"$HTTP_PROXY\" \"$1\"\nprintf 'simulated DNF failure' >&2\nexit 23\n",
+        )
+        .unwrap();
+        fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
+
+        let mut command = system_command(&executable);
+        command
+            .env("HTTP_PROXY", "http://proxy.example:8080")
+            .arg("repoquery");
+        let output = command.output().unwrap();
+
+        assert_eq!(output.status.code(), Some(23));
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout),
+            "C|http://proxy.example:8080|repoquery"
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&output.stderr),
+            "simulated DNF failure"
+        );
+        fs::remove_dir_all(directory).unwrap();
     }
 }

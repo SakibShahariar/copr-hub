@@ -91,7 +91,7 @@ Scope: the 99 audit issues in #50–#148. This file records the A–E category f
 
 ## Previously closed audit findings
 
-These closed findings were checked against their acceptance lists: #74, #78, #79, #80, #81, #88, #97, #98, #102, #118, #131, #136, #139, #144, #145, #147, and #148. Their recorded criteria are checked and the relevant CI runs are green, except #124 which remains open pending CI.
+These closed findings were checked against their acceptance lists: #56, #57, #65, #69, #74, #78, #79, #80, #81, #88, #93, #97, #98, #102, #106, #118, #131, #136, #139, #144, #145, #147, and #148. Their recorded criteria are checked and the relevant CI runs are green, except #124 which remains open pending CI.
 
 ## Work status
 
@@ -99,6 +99,7 @@ These closed findings were checked against their acceptance lists: #74, #78, #79
 - #136 and #139: validation and tests are on `master`; the formatting/test CI run is green and their acceptance lists are checked.
 - #124: leading v/V normalization is implemented and CI is green; suffix equivalence remains an owner decision.
 - #56, #57, #65, and #69: implementation and deterministic tests are on `master`; CI verification is pending.
+- #86 and #90: system commands now force a C locale, drop GTK-only environment variables while preserving proxy settings, and have a fake-DNF executable test; CI is pending.
 - #109: LRU eviction is implemented; CI is pending and the issue was reopened until the run is green.
 - #111 and #137: implementation and focused tests are on `master`; CI verification is pending and both issues remain open.
 - Remaining Category A issues stay open until their focused implementation, tests, and CI verification are complete.
