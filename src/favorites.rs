@@ -43,7 +43,7 @@ fn project_has_valid_fields(project: &CoprProject) -> bool {
 fn validate_project_entries(projects: &[CoprProject]) -> Result<(), String> {
     if projects
         .iter()
-        .any(|project| !project_has_valid_fields(&project))
+        .any(|project| !project_has_valid_fields(project))
     {
         return Err(
             "The saved-project list contains an invalid or oversized project entry.".to_string(),
@@ -126,7 +126,7 @@ fn parse_backup(contents: &str) -> Result<Vec<CoprProject>, String> {
     }
     if imported
         .iter()
-        .any(|project| !project_has_valid_fields(&project))
+        .any(|project| !project_has_valid_fields(project))
     {
         return Err("The backup contains an invalid or oversized project entry.".to_string());
     }
