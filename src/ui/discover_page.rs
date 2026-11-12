@@ -299,25 +299,35 @@ fn project_relevance(project: &copr::CoprProject, query: &str) -> (u8, usize) {
         return (5, owner.find(&query).unwrap_or_default());
     }
 
-    // Unknown fields may include an exact package-name hit from COPR.
-    // Keep those results in server order rather than guessing from metadata.
-    if let Some(distance) = fuzzy_name_distance(&name, &query) {
-        return (7, distance);
-    }
-    if let Some(distance) = fuzzy_name_distance(&owner, &query) {
-        return (8, distance);
+    // COPR does not expose which field matched. Keep opaque results in
+    // server order so possible exact package-name matches are not demoted.
+    if !description_is_match(project, &query) {
+        if let Some(distance) = fuzzy_name_distance(&name, &query) {
+            return (8, distance);
+        }
+        if let Some(distance) = fuzzy_name_distance(&owner, &query) {
+            return (9, distance);
+        }
     }
 
-    let description = project
-        .description
-        .as_deref()
-        .map(normalize_search_text)
-        .unwrap_or_default();
-    if description.contains(&query) {
-        return (9, description.find(&query).unwrap_or_default());
+    if description_is_match(project, &query) {
+        let description = project
+            .description
+            .as_deref()
+            .map(normalize_search_text)
+            .unwrap_or_default();
+        return (7, description.find(&query).unwrap_or_default());
     }
 
     (6, 0)
+}
+
+fn description_is_match(project: &copr::CoprProject, query: &str) -> bool {
+    project
+        .description
+        .as_deref()
+        .map(normalize_search_text)
+        .is_some_and(|description| description.contains(query))
 }
 
 fn rank_projects(projects: &mut [copr::CoprProject], query: &str) {
@@ -427,16 +437,16 @@ mod tests {
     }
 
     #[test]
-    fn fuzzy_project_name_match_beats_description_only_match() {
+    fn description_match_ranks_above_fuzzy_name_guess() {
         let mut projects = vec![
-            project("applications", "alice", "Includes Zen Browser"),
             project("zen-brower", "bob", "A browser build"),
+            project("applications", "alice", "Includes Zen Browser"),
         ];
 
         rank_projects(&mut projects, "zen-browser");
 
-        assert_eq!(projects[0].name, "zen-brower");
-        assert_eq!(projects[1].name, "applications");
+        assert_eq!(projects[0].name, "applications");
+        assert_eq!(projects[1].name, "zen-brower");
     }
 
     #[test]

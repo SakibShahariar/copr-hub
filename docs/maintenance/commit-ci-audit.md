@@ -24,10 +24,10 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 
 - Repository: `SakibShahariar/copr-hub`
 - Default branch: `master`
-- Checkpoint SHA: `3f43212386c5e1d14b80d653fcef149090982221`
+- Checkpoint SHA: `0f2aff926d2b7e455b97097b2d1b1f99303dc4a2`
 - Initialized: 2026-11-02
 - Baseline: latest branch tip queried through combined commit-status endpoint; empty status list recorded as **unavailable**, not green/red. Older history was not retroactively audited during setup.
-- Next session: review commits after `3f43212386c5e1d14b80d653fcef149090982221`, including the next substantive commit that updates this ledger.
+- Next session: review commits after `0f2aff926d2b7e455b97097b2d1b1f99303dc4a2`, including the next substantive commit that updates this ledger.
 
 ## Initial baseline
 
@@ -80,6 +80,7 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 | `dea90eab197986c187ab1f97b3f03b2576bd4c71` | style(search): format edit distance calculation | **red** | 2026-11-12 | [43239093538](https://github.com/SakibShahariar/copr-hub/actions/runs/43239093538) |
 | `eac293aacc18a9af60a298245dcf619e7bfc3674` | test(search): cover short-query fuzzy threshold | **red** | 2026-11-12 | [43239215341](https://github.com/SakibShahariar/copr-hub/actions/runs/43239215341) |
 | `3f43212386c5e1d14b80d653fcef149090982221` | test(search): compare equally ranked project names | **green** | 2026-11-12 | [43239361770](https://github.com/SakibShahariar/copr-hub/actions/runs/43239361770) |
+| `0f2aff926d2b7e455b97097b2d1b1f99303dc4a2` | docs(search): describe relevance ranking and audit CI | **green** | 2026-11-12 | [43239871757](https://github.com/SakibShahariar/copr-hub/actions/runs/43239871757) |
 
 ## Red-cross investigation log
 
@@ -105,3 +106,4 @@ All failures in this reviewed range have a subsequent fix and green CI validatio
 | 2026-11-12 | `cf6d142db537f0bf13a2e098015cbbabad90285d` → `2a96076780ddc8b4802832c03387daee95482e94` | Reviewed 31 commits: 18 green, 13 red; every red result was diagnosed and followed by a green fix/validation commit. |
 | 2026-11-12 | `2a96076780ddc8b4802832c03387daee95482e94` → `420c45ce7059905ee780ef7845234e69a35dbf9b` | Reviewed 3 commits; all 3 had completed green CI runs. |
 | 2026-11-12 | `420c45ce7059905ee780ef7845234e69a35dbf9b` → `3f43212386c5e1d14b80d653fcef149090982221` | Reviewed 7 commits: 1 green, 6 red; all six red results were diagnosed and followed by a green fix/validation commit. |
+| 2026-11-12 | `3f43212386c5e1d14b80d653fcef149090982221` → `0f2aff926d2b7e455b97097b2d1b1f99303dc4a2` | Reviewed 1 documentation commit; CI completed green. |
