@@ -12,7 +12,14 @@ const MAX_STALE_CACHE_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 const CACHE_CAPACITY: usize = 128;
 const MAX_PERSISTED_CACHE_BYTES: u64 = 2 * 1024 * 1024;
 
-type ReleaseCache = Mutex<HashMap<String, (SystemTime, Option<UpstreamRelease>)>>;
+#[derive(Clone)]
+struct ReleaseCacheEntry {
+    cached_at: SystemTime,
+    last_accessed: SystemTime,
+    release: Option<UpstreamRelease>,
+}
+
+type ReleaseCache = Mutex<HashMap<String, ReleaseCacheEntry>>;
 
 static RELEASE_CACHE: OnceLock<ReleaseCache> = OnceLock::new();
 static CACHE_LOADED: OnceLock<()> = OnceLock::new();
@@ -75,7 +82,14 @@ fn read_persistent_cache(
             if key.len() > 1024 {
                 return None;
             }
-            Some((key, (stored_at, entry.release)))
+            Some((
+                key,
+                ReleaseCacheEntry {
+                    cached_at: stored_at,
+                    last_accessed: stored_at,
+                    release: entry.release,
+                },
+            ))
         })
         .take(CACHE_CAPACITY)
         .collect::<HashMap<_, _>>();
@@ -115,14 +129,14 @@ fn save_persistent_cache() {
     let now = unix_now();
     let entries = cache
         .iter()
-        .filter_map(|(key, (stored_at, release))| {
-            let age = stored_at.elapsed().ok()?.as_secs();
+        .filter_map(|(key, entry)| {
+            let age = entry.cached_at.elapsed().ok()?.as_secs();
             (age <= MAX_STALE_CACHE_AGE.as_secs()).then(|| {
                 (
                     key.clone(),
                     PersistedCacheEntry {
                         cached_at_unix: now.saturating_sub(age),
-                        release: release.clone(),
+                        release: entry.release.clone(),
                     },
                 )
             })
@@ -360,19 +374,23 @@ fn latest_release_internal(
     CACHE_LOADED.get_or_init(load_persistent_cache);
     let cache = RELEASE_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
 
-    if let Ok(cache) = cache.lock() {
-        if let Some((stored_at, release)) = cache.get(&key) {
-            if stored_at.elapsed().is_ok_and(|age| age < CACHE_TTL) {
-                return Ok(release.clone());
+    let stale_candidate = if let Ok(mut cache) = cache.lock() {
+        if let Some(entry) = cache.get_mut(&key) {
+            entry.last_accessed = SystemTime::now();
+            if entry
+                .cached_at
+                .elapsed()
+                .is_ok_and(|age| age < CACHE_TTL)
+            {
+                return Ok(entry.release.clone());
             }
+            stale_cache_fallback(entry.cached_at, entry.release.clone())
+        } else {
+            None
         }
-    }
-
-    let stale_candidate = cache.lock().ok().and_then(|cache| {
-        cache
-            .get(&key)
-            .and_then(|(stored_at, release)| stale_cache_fallback(*stored_at, release.clone()))
-    });
+    } else {
+        None
+    };
 
     let result = fetch_release(&owner, &repo, is_gitlab);
     if let Ok(release) = &result {
@@ -399,15 +417,35 @@ fn insert_release_cache_entry(
     stored_at: SystemTime,
 ) {
     if cache.len() >= CACHE_CAPACITY && !cache.contains_key(&key) {
-        if let Some(oldest_key) = cache
+        if let Some(least_recently_used_key) = cache
             .iter()
-            .min_by_key(|(_, (stored_at, _))| *stored_at)
+            .min_by_key(|(_, entry)| entry.last_accessed)
             .map(|(key, _)| key.clone())
         {
-            cache.remove(&oldest_key);
+            cache.remove(&least_recently_used_key);
         }
     }
-    cache.insert(key, (stored_at, release));
+    cache.insert(
+        key,
+        ReleaseCacheEntry {
+            cached_at: stored_at,
+            last_accessed: stored_at,
+            release,
+        },
+    );
+}
+
+fn touch_cache_entry(
+    cache: &mut HashMap<String, ReleaseCacheEntry>,
+    key: &str,
+    accessed_at: SystemTime,
+) -> bool {
+    if let Some(entry) = cache.get_mut(key) {
+        entry.last_accessed = accessed_at;
+        true
+    } else {
+        false
+    }
 }
 
 fn stale_cache_fallback(
@@ -677,8 +715,8 @@ mod tests {
     }
 
     #[test]
-    fn persistent_release_cache_evicts_the_oldest_entry_at_capacity() {
-        use super::{insert_release_cache_entry, CACHE_CAPACITY};
+    fn persistent_release_cache_evicts_the_least_recently_used_entry_at_capacity() {
+        use super::{insert_release_cache_entry, touch_cache_entry, CACHE_CAPACITY};
         use std::collections::HashMap;
         use std::time::{Duration, UNIX_EPOCH};
 
@@ -692,15 +730,21 @@ mod tests {
             );
         }
 
+        assert!(touch_cache_entry(
+            &mut cache,
+            "project-000",
+            UNIX_EPOCH + Duration::from_secs((CACHE_CAPACITY + 1) as u64),
+        ));
         insert_release_cache_entry(
             &mut cache,
             "new-project".into(),
             None,
-            UNIX_EPOCH + Duration::from_secs(CACHE_CAPACITY as u64),
+            UNIX_EPOCH + Duration::from_secs((CACHE_CAPACITY + 2) as u64),
         );
 
         assert_eq!(cache.len(), CACHE_CAPACITY);
-        assert!(!cache.contains_key("project-000"));
+        assert!(cache.contains_key("project-000"));
+        assert!(!cache.contains_key("project-001"));
         assert!(cache.contains_key("project-127"));
         assert!(cache.contains_key("new-project"));
     }
