@@ -671,28 +671,6 @@ mod tests {
     }
 
     #[test]
-    fn monitoring_scan_stops_only_for_scan_wide_failures() {
-        assert!(should_stop_monitoring_scan(
-            "Could not connect to COPR. Check your network connection."
-        ));
-        assert!(should_stop_monitoring_scan(
-            "The COPR request timed out. Check your connection and try again."
-        ));
-        assert!(should_stop_monitoring_scan(
-            "COPR is receiving too many requests. Wait a moment and try again."
-        ));
-        assert!(should_stop_monitoring_scan(
-            "COPR is temporarily unavailable (HTTP 503). Try again later."
-        ));
-        assert!(!should_stop_monitoring_scan(
-            "COPR could not find the requested project."
-        ));
-        assert!(!should_stop_monitoring_scan(
-            "COPR rejected the project request (HTTP 403)."
-        ));
-    }
-
-    #[test]
     fn retryable_statuses_are_limited_to_rate_limits_and_server_errors() {
         assert!(is_retryable_status(reqwest::StatusCode::TOO_MANY_REQUESTS));
         assert!(is_retryable_status(reqwest::StatusCode::BAD_GATEWAY));

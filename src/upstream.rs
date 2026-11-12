@@ -682,7 +682,9 @@ pub fn release_is_stale(published_at: Option<&str>) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::repository_parts;
+    use super::{read_persistent_cache, repository_parts, unix_now, MAX_PERSISTED_CACHE_BYTES};
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn persistent_cache_reader_reports_corrupt_and_oversized_files() {

@@ -43,7 +43,7 @@ fn project_has_valid_fields(project: &CoprProject) -> bool {
 fn validate_project_entries(projects: &[CoprProject]) -> Result<(), String> {
     if projects
         .iter()
-        .any(|project| !project_has_valid_fields(project))
+        .any(|project| !project_has_valid_fields(&project))
     {
         return Err(
             "The saved-project list contains an invalid or oversized project entry.".to_string(),
@@ -187,7 +187,7 @@ pub fn toggle(project: &CoprProject) -> Result<bool, String> {
                     .to_string(),
             );
         }
-        let saved = toggle_in_list(&mut projects, project);
+        let saved = toggle_in_list(&mut projects, &project);
         ensure_saved_project_limit(projects.len())?;
         let contents = serde_json::to_vec_pretty(&projects)
             .map_err(|error| format!("Could not encode saved projects: {error}"))?;
