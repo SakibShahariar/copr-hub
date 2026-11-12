@@ -6,7 +6,15 @@ use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 
 const REPOSITORY_DIRECTORY: &str = "/etc/yum.repos.d";
-const DNF5_SYSTEM_STATE_FILE: &str = "/usr/lib/sysimage/libdnf5/packages.toml";
+const DNF5_SYSTEM_STATE_DIRECTORY: &str = "/usr/lib/sysimage/libdnf5";
+const DNF5_SYSTEM_STATE_FILES: &[&str] = &[
+    "environments.toml",
+    "groups.toml",
+    "modules.toml",
+    "nevras.toml",
+    "packages.toml",
+    "system.toml",
+];
 const DNF5_SYSTEM_STATE_MODE: u32 = 0o644;
 const MAX_COMMAND_DETAILS_CHARS: usize = 1200;
 const INSTALLED_COPR_QUERY_FORMAT: &str = "%{name}\t%{evr}\t%{from_repo}\\n";
@@ -236,77 +244,106 @@ fn dnf5_state_file_is_repair_candidate(
         && file_mode & 0o7777 != DNF5_SYSTEM_STATE_MODE
 }
 
-fn dnf5_state_metadata() -> Result<(fs::Metadata, fs::Metadata), String> {
-    let path = Path::new(DNF5_SYSTEM_STATE_FILE);
-    let file = fs::symlink_metadata(path)
-        .map_err(|error| format!("Could not inspect DNF5 package state: {error}"))?;
-    let parent_path = path
-        .parent()
-        .ok_or_else(|| "The DNF5 package-state path has no parent directory.".to_string())?;
-    let parent = fs::symlink_metadata(parent_path)
+fn dnf5_state_metadata() -> Result<(Vec<(PathBuf, fs::Metadata)>, fs::Metadata), String> {
+    let directory = Path::new(DNF5_SYSTEM_STATE_DIRECTORY);
+    let directory_metadata = fs::symlink_metadata(directory)
         .map_err(|error| format!("Could not inspect the DNF5 state directory: {error}"))?;
-    Ok((file, parent))
+    let mut files = Vec::new();
+
+    for name in DNF5_SYSTEM_STATE_FILES {
+        let path = directory.join(name);
+        match fs::symlink_metadata(&path) {
+            Ok(metadata) => files.push((path, metadata)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(format!(
+                    "Could not inspect DNF5 state file {}: {error}",
+                    path.display()
+                ));
+            }
+        }
+    }
+
+    if files.is_empty() {
+        return Err("No known DNF5 system-state TOML files were found.".to_string());
+    }
+
+    Ok((files, directory_metadata))
 }
 
-fn dnf5_state_metadata_is_repair_candidate(file: &fs::Metadata, parent: &fs::Metadata) -> bool {
-    dnf5_state_file_is_repair_candidate(
-        file.uid(),
-        file.mode(),
-        file.file_type().is_file(),
-        parent.uid(),
-        parent.mode(),
-        parent.file_type().is_dir(),
-    )
+fn dnf5_state_files_are_safe(
+    files: &[(PathBuf, fs::Metadata)],
+    directory: &fs::Metadata,
+) -> bool {
+    directory.uid() == 0
+        && directory.file_type().is_dir()
+        && directory.mode() & 0o022 == 0
+        && files
+            .iter()
+            .all(|(_, file)| file.uid() == 0 && file.file_type().is_file())
 }
 
 /// Detect restrictive permissions that prevent an ordinary user from reading
-/// DNF5's system package state.
+/// any of DNF5's known system package-state TOML files.
 pub fn dnf5_system_state_permissions_need_repair() -> bool {
-    let Ok((file, parent)) = dnf5_state_metadata() else {
+    let Ok((files, directory)) = dnf5_state_metadata() else {
         return false;
     };
-    dnf5_state_metadata_is_repair_candidate(&file, &parent)
+
+    dnf5_state_files_are_safe(&files, &directory)
+        && files
+            .iter()
+            .any(|(_, file)| file.mode() & 0o7777 != DNF5_SYSTEM_STATE_MODE)
 }
 
 fn dnf5_state_error_is_permission_related(error: &str) -> bool {
-    error.contains(DNF5_SYSTEM_STATE_FILE) && error.contains("error opening file")
+    error.contains(DNF5_SYSTEM_STATE_DIRECTORY)
+        && error.contains("error opening file")
+        && DNF5_SYSTEM_STATE_FILES.iter().any(|name| {
+            error.contains(&format!("{DNF5_SYSTEM_STATE_DIRECTORY}/{name}"))
+        })
 }
 
-/// Whether a DNF failure is specifically caused by the known system-state
-/// permissions issue and the file is safe for the in-app repair action.
+/// Whether a DNF failure is specifically caused by restrictive permissions on
+/// a known state file and the complete state-file set is safe to repair.
 pub fn dnf5_system_state_permission_repair_available(error: &str) -> bool {
     dnf5_state_error_is_permission_related(error) && dnf5_system_state_permissions_need_repair()
 }
 
-/// Restore the mode declared by the DNF5 RPM package. The privileged command
-/// is fixed to one root-owned regular file in a root-owned, non-writable
-/// directory; no path or command arguments come from user input.
+/// Restore readable permissions on all known DNF5 state TOML files. The paths
+/// are fixed, and every existing target must be a root-owned regular file in
+/// the root-owned, non-writable DNF5 state directory before pkexec is invoked.
 pub fn repair_dnf5_system_state_permissions() -> Result<(), String> {
-    let (file, parent) = dnf5_state_metadata()?;
-    if file.uid() != 0
-        || !file.file_type().is_file()
-        || parent.uid() != 0
-        || !parent.file_type().is_dir()
-        || parent.mode() & 0o022 != 0
-    {
+    let (files, directory) = dnf5_state_metadata()?;
+    if !dnf5_state_files_are_safe(&files, &directory) {
         return Err(
-            "For safety, Copr Hub will not change this DNF5 state file because its ownership or directory is unexpected."
+            "For safety, Copr Hub will not change DNF5 state files because their ownership or directory permissions are unexpected."
                 .to_string(),
         );
     }
 
-    if file.mode() & 0o7777 == DNF5_SYSTEM_STATE_MODE {
+    if files
+        .iter()
+        .all(|(_, file)| file.mode() & 0o7777 == DNF5_SYSTEM_STATE_MODE)
+    {
         return Ok(());
     }
 
-    let output = Command::new("pkexec")
-        .args(["/usr/bin/chmod", "0644", "--", DNF5_SYSTEM_STATE_FILE])
+    let mut command = Command::new("pkexec");
+    command
+        .arg("/usr/bin/chmod")
+        .arg("0644")
+        .arg("--");
+    for (path, _) in &files {
+        command.arg(path);
+    }
+    let output = command
         .output()
         .map_err(|error| format!("Could not start the privileged permission repair: {error}"))?;
 
     if !output.status.success() {
         return Err(format!(
-            "Could not repair DNF5 package-state permissions: {}",
+            "Could not repair DNF5 system-state permissions: {}",
             command_failure_details(
                 &String::from_utf8_lossy(&output.stderr),
                 &String::from_utf8_lossy(&output.stdout),
@@ -315,16 +352,14 @@ pub fn repair_dnf5_system_state_permissions() -> Result<(), String> {
         ));
     }
 
-    let (repaired_file, repaired_parent) = dnf5_state_metadata()?;
-    if repaired_file.uid() != 0
-        || !repaired_file.file_type().is_file()
-        || repaired_file.mode() & 0o7777 != DNF5_SYSTEM_STATE_MODE
-        || repaired_parent.uid() != 0
-        || !repaired_parent.file_type().is_dir()
-        || repaired_parent.mode() & 0o022 != 0
+    let (repaired_files, repaired_directory) = dnf5_state_metadata()?;
+    if !dnf5_state_files_are_safe(&repaired_files, &repaired_directory)
+        || repaired_files
+            .iter()
+            .any(|(_, file)| file.mode() & 0o7777 != DNF5_SYSTEM_STATE_MODE)
     {
         return Err(
-            "The DNF5 state file permissions did not match the expected root-owned 0644 mode after repair."
+            "One or more DNF5 state files did not have the expected root-owned 0644 mode after repair."
                 .to_string(),
         );
     }
@@ -742,12 +777,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn dnf5_state_permission_error_requires_the_expected_path_and_open_failure() {
-        let error = format!(
-            "Loading system state TOML file failed: toml::parse: error opening file \"{}\"",
-            DNF5_SYSTEM_STATE_FILE
-        );
-        assert!(dnf5_state_error_is_permission_related(&error));
+    fn dnf5_state_permission_error_matches_any_known_state_file() {
+        for name in DNF5_SYSTEM_STATE_FILES {
+            let error = format!(
+                "Loading system state TOML file failed: toml::parse: error opening file \"{DNF5_SYSTEM_STATE_DIRECTORY}/{name}\""
+            );
+            assert!(dnf5_state_error_is_permission_related(&error), "{name}");
+        }
         assert!(!dnf5_state_error_is_permission_related(
             "toml::parse: error opening file \"/etc/dnf/other.toml\""
         ));
@@ -757,7 +793,7 @@ mod tests {
     }
 
     #[test]
-    fn dnf5_state_permission_repair_requires_a_root_owned_file_and_safe_directory() {
+    fn dnf5_state_permission_repair_requires_root_owned_regular_files_and_safe_directory() {
         assert!(dnf5_state_file_is_repair_candidate(
             0, 0o660, true, 0, 0o755, true
         ));
@@ -779,6 +815,17 @@ mod tests {
         assert!(!dnf5_state_file_is_repair_candidate(
             0, 0o660, true, 0, 0o755, false
         ));
+        assert_eq!(
+            DNF5_SYSTEM_STATE_FILES,
+            &[
+                "environments.toml",
+                "groups.toml",
+                "modules.toml",
+                "nevras.toml",
+                "packages.toml",
+                "system.toml",
+            ]
+        );
     }
 
     #[test]
