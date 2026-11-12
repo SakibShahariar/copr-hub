@@ -204,10 +204,15 @@ pub(super) fn build_activity_page(
                     if response == gtk::ResponseType::Accept {
                         match dialog.file().and_then(|file| file.path()) {
                             Some(path) => match activity::import_from(&path) {
-                                Ok(added) => {
+                                Ok(summary) => {
                                     refresh_activity(&list, &feedback);
                                     feedback.set_text(&format!(
-                                        "Imported {added} new activity event(s); existing history was preserved."
+                                        "Processed {} backup event(s): {} new event(s) added, {} older event(s) omitted by the {}-event history limit, and {} duplicate event(s) skipped. Existing history was preserved.",
+                                        summary.incoming,
+                                        summary.added,
+                                        summary.dropped,
+                                        activity::MAX_ENTRIES,
+                                        summary.duplicates
                                     ));
                                 }
                                 Err(error) => feedback.set_text(&error),

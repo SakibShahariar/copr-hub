@@ -168,24 +168,49 @@ fn same_entry(left: &ActivityEntry, right: &ActivityEntry) -> bool {
 fn merge_entries(
     current: &mut Vec<ActivityEntry>,
     imported: impl IntoIterator<Item = ActivityEntry>,
-) -> usize {
+) -> ActivityImportSummary {
+    let mut incoming = 0;
+    let mut duplicates = 0;
     let mut added_entries = Vec::new();
     for entry in imported {
-        if !current.iter().any(|existing| same_entry(existing, &entry)) {
+        incoming += 1;
+        if current.iter().any(|existing| same_entry(existing, &entry))
+            || added_entries.iter().any(|added| same_entry(added, &entry))
+        {
+            duplicates += 1;
+        } else {
             current.push(entry.clone());
             added_entries.push(entry);
         }
     }
     current.sort_by_key(|entry| Reverse(entry.timestamp));
     current.truncate(MAX_ENTRIES);
-    added_entries
+    let added = added_entries
         .iter()
         .filter(|added| current.iter().any(|entry| same_entry(entry, added)))
-        .count()
+        .count();
+    ActivityImportSummary {
+        incoming,
+        added,
+        dropped: added_entries.len() - added,
+        duplicates,
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ActivityImportSummary {
+    /// Number of entries parsed from the backup.
+    pub incoming: usize,
+    /// New entries retained in the recent-history file.
+    pub added: usize,
+    /// New entries omitted because they fell beyond the history cap.
+    pub dropped: usize,
+    /// Entries already present or duplicated within the backup.
+    pub duplicates: usize,
 }
 
 /// Import an activity backup, preserving current entries and avoiding duplicates.
-pub fn import_from(path: &std::path::Path) -> Result<usize, String> {
+pub fn import_from(path: &std::path::Path) -> Result<ActivityImportSummary, String> {
     let metadata = fs::metadata(path)
         .map_err(|error| format!("Could not inspect the selected activity backup: {error}"))?;
     if metadata.len() > MAX_IMPORT_BYTES as u64 {
@@ -196,7 +221,7 @@ pub fn import_from(path: &std::path::Path) -> Result<usize, String> {
     let imported = parse_import(&contents)?;
     with_activity_lock(|| {
         let mut entries = load_unlocked()?;
-        let added = merge_entries(&mut entries, imported);
+        let summary = merge_entries(&mut entries, imported);
         let path = history_path();
         let parent = path
             .parent()
@@ -207,7 +232,7 @@ pub fn import_from(path: &std::path::Path) -> Result<usize, String> {
             .map_err(|error| format!("Could not encode merged activity history: {error}"))?;
         storage::atomic_write(&path, &contents)
             .map_err(|error| format!("Could not save imported activity history: {error}"))?;
-        Ok(added)
+        Ok(summary)
     })
 }
 
@@ -390,7 +415,7 @@ mod tests {
             summary: "1 result".into(),
         };
         let mut current = vec![entry(10, "existing")];
-        let added = merge_entries(
+        let summary = merge_entries(
             &mut current,
             vec![
                 entry(10, "existing"),
@@ -398,7 +423,10 @@ mod tests {
                 entry(20, "middle"),
             ],
         );
-        assert_eq!(added, 2);
+        assert_eq!(summary.incoming, 3);
+        assert_eq!(summary.added, 2);
+        assert_eq!(summary.dropped, 0);
+        assert_eq!(summary.duplicates, 1);
         assert_eq!(
             current
                 .iter()
@@ -409,7 +437,11 @@ mod tests {
 
         let many = (0..150).map(|timestamp| entry(timestamp, &format!("target-{timestamp}")));
         let mut capped = Vec::new();
-        merge_entries(&mut capped, many);
+        let capped_summary = merge_entries(&mut capped, many);
+        assert_eq!(capped_summary.incoming, 150);
+        assert_eq!(capped_summary.added, MAX_ENTRIES);
+        assert_eq!(capped_summary.dropped, 50);
+        assert_eq!(capped_summary.duplicates, 0);
         assert_eq!(capped.len(), MAX_ENTRIES);
         assert_eq!(capped[0].timestamp, 149);
         assert_eq!(capped[MAX_ENTRIES - 1].timestamp, 50);
