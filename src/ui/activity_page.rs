@@ -323,19 +323,11 @@ pub(super) fn build_activity_page(
         }
     });
     refresh_activity(&list, &feedback, &refresh_generation);
-                        }
-                        Err(error) => feedback.set_text(&error),
-                    }
-                }
-            });
-            dialog.present();
-        }
-    });
-    refresh_activity(&list, &feedback, &refresh_generation);
     stack.connect_visible_child_name_notify({
         let list = list.clone();
         let feedback = feedback.clone();
         let stack = stack.clone();
+        let refresh_generation = refresh_generation.clone();
         move |_| {
             if stack.visible_child_name().as_deref() == Some("activity") {
                 refresh_activity(&list, &feedback, &refresh_generation);
