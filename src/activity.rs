@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const MAX_ENTRIES: usize = 100;
+pub const MAX_ENTRIES: usize = 100;
 const MAX_HISTORY_FILE_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_IMPORT_BYTES: usize = 1024 * 1024;
 const MAX_IMPORTED_ENTRIES: usize = 1_000;
