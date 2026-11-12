@@ -200,13 +200,20 @@ fn request_error(error: reqwest::Error) -> String {
     }
 }
 
-fn retry_delay(retry_after: Option<&str>) -> Duration {
-    retry_after
-        .and_then(|value| value.trim().parse::<u64>().ok())
-        .map(Duration::from_secs)
-        .map(|delay| delay.min(Duration::from_secs(3)))
-        .filter(|delay| !delay.is_zero())
-        .unwrap_or(Duration::from_millis(350))
+const MAX_RETRY_AFTER_SECS: u64 = 30;
+
+fn retry_delay(retry_after: Option<&str>) -> Option<Duration> {
+    let Some(value) = retry_after else {
+        return Some(Duration::from_millis(350));
+    };
+    match value.trim().parse::<u64>() {
+        Ok(0) => Some(Duration::from_millis(350)),
+        Ok(seconds) if seconds <= MAX_RETRY_AFTER_SECS => Some(Duration::from_secs(seconds)),
+        // An explicit delay beyond our bounded wait is respected by not retrying.
+        // An HTTP-date or malformed value is also safer to treat as non-retryable
+        // than to retry earlier than the server requested.
+        Ok(_) | Err(_) => None,
+    }
 }
 
 fn is_retryable_status(status: reqwest::StatusCode) -> bool {
@@ -221,12 +228,14 @@ fn send_with_retry(
     let retry_request = request.try_clone();
     match request.send() {
         Ok(response) if is_retryable_status(response.status()) && retry_request.is_some() => {
-            let delay = retry_delay(
+            let Some(delay) = retry_delay(
                 response
                     .headers()
                     .get(reqwest::header::RETRY_AFTER)
                     .and_then(|value| value.to_str().ok()),
-            );
+            ) else {
+                return Ok(response);
+            };
             drop(response);
             thread::sleep(delay);
             retry_request
@@ -725,11 +734,12 @@ mod tests {
         use super::retry_delay;
         use std::time::Duration;
 
-        assert_eq!(retry_delay(Some("2")), Duration::from_secs(2));
-        assert_eq!(retry_delay(Some("30")), Duration::from_secs(3));
-        assert_eq!(retry_delay(Some("invalid")), Duration::from_millis(350));
-        assert_eq!(retry_delay(Some("0")), Duration::from_millis(350));
-        assert_eq!(retry_delay(None), Duration::from_millis(350));
+        assert_eq!(retry_delay(Some("2")), Some(Duration::from_secs(2)));
+        assert_eq!(retry_delay(Some("30")), Some(Duration::from_secs(30)));
+        assert_eq!(retry_delay(Some("60")), None);
+        assert_eq!(retry_delay(Some("invalid")), None);
+        assert_eq!(retry_delay(Some("0")), Some(Duration::from_millis(350)));
+        assert_eq!(retry_delay(None), Some(Duration::from_millis(350)));
     }
 
     #[test]

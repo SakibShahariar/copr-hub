@@ -104,5 +104,5 @@ These closed findings were checked against their acceptance lists: #74, #78, #79
 - #79–#81 and #88: implementation and tests are on `master`; the combined CI run is green and their acceptance lists are checked.
 - #136 and #139: validation and tests are on `master`; the formatting/test CI run is green and their acceptance lists are checked.
 - #124: leading v/V normalization is implemented; CI is still running. Suffixes remain distinct.
-- #56, #57, #65, and #69: implementation and deterministic tests are being added in the current change.
+- #56, #57, #65, and #69: implementation and deterministic tests are on `master`; CI verification is pending.
 - Remaining Category A issues stay open until their focused implementation, tests, and CI verification are complete.
