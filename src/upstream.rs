@@ -61,7 +61,7 @@ fn persisted_entry_time(cached_at_unix: u64, now_unix: u64) -> Option<SystemTime
 fn read_persistent_cache(
     path: &Path,
     now: u64,
-) -> Result<Option<HashMap<String, (SystemTime, Option<UpstreamRelease>)>>, String> {
+) -> Result<Option<HashMap<String, ReleaseCacheEntry>>, String> {
     let metadata = match fs::metadata(path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -407,7 +407,7 @@ fn latest_release_internal(
 }
 
 fn insert_release_cache_entry(
-    cache: &mut HashMap<String, (SystemTime, Option<UpstreamRelease>)>,
+    cache: &mut HashMap<String, ReleaseCacheEntry>,
     key: String,
     release: Option<UpstreamRelease>,
     stored_at: SystemTime,
