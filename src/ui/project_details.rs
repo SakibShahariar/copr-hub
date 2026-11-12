@@ -171,8 +171,7 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
             let copy_command = gtk::Button::with_label("Copy enable command");
             copy_command.add_css_class("flat");
             copy_command.set_valign(gtk::Align::Center);
-            copy_command
-                .set_tooltip_text(Some("Copy the equivalent DNF command to the clipboard"));
+            copy_command.set_tooltip_text(Some("Copy the equivalent DNF command to the clipboard"));
             copy_command.connect_clicked({
                 let command = command.clone();
                 let command_feedback = command_feedback.clone();
