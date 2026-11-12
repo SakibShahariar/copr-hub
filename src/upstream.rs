@@ -375,8 +375,8 @@ fn latest_release_internal(
     let cache = RELEASE_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
 
     let stale_candidate = if let Ok(mut cache) = cache.lock() {
-        if let Some(entry) = cache.get_mut(&key) {
-            entry.last_accessed = SystemTime::now();
+        touch_cache_entry(&mut cache, &key, SystemTime::now());
+        if let Some(entry) = cache.get(&key) {
             if entry.cached_at.elapsed().is_ok_and(|age| age < CACHE_TTL) {
                 return Ok(entry.release.clone());
             }
