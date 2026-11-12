@@ -708,11 +708,9 @@ mod tests {
     #[test]
     fn repository_changes_require_successful_package_origin_data() {
         assert!(RepositoryOriginState::Loading.blocked_message().is_some());
-        assert!(
-            RepositoryOriginState::Unavailable
-                .blocked_message()
-                .is_some()
-        );
+        assert!(RepositoryOriginState::Unavailable
+            .blocked_message()
+            .is_some());
         assert!(RepositoryOriginState::Available.blocked_message().is_none());
     }
 }
