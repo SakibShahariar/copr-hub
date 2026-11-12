@@ -24,10 +24,10 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 
 - Repository: `SakibShahariar/copr-hub`
 - Default branch: `master`
-- Checkpoint SHA: `2a96076780ddc8b4802832c03387daee95482e94`
+- Checkpoint SHA: `420c45ce7059905ee780ef7845234e69a35dbf9b`
 - Initialized: 2026-11-02
 - Baseline: latest branch tip queried through combined commit-status endpoint; empty status list recorded as **unavailable**, not green/red. Older history was not retroactively audited during setup.
-- Next session: review commits after `2a96076780ddc8b4802832c03387daee95482e94`, including the next substantive commit that updates this ledger.
+- Next session: review commits after `420c45ce7059905ee780ef7845234e69a35dbf9b`, including the next substantive commit that updates this ledger.
 
 ## Initial baseline
 
@@ -70,6 +70,9 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 | `d5a4cd06376cb10b3a96d352c6bd4401f3033d71` | style(installed): highlight available package updates | **red** | 2026-11-12 | [43232579432](https://github.com/SakibShahariar/copr-hub/actions/runs/43232579432) |
 | `3162168d2c8d02fa33fb57a98162b0ebfeca5326` | fix(details): format refresh action | **red** | 2026-11-12 | [43232992297](https://github.com/SakibShahariar/copr-hub/actions/runs/43232992297) |
 | `2a96076780ddc8b4802832c03387daee95482e94` | fix(details): preserve URL validation return type | **green** | 2026-11-12 | [43233244021](https://github.com/SakibShahariar/copr-hub/actions/runs/43233244021) |
+| `e3a65b60e15c24f57a3f21da63391c3fc85e534b` | feat(installed): surface update status and audit CI history | **green** | 2026-11-12 | [43233834076](https://github.com/SakibShahariar/copr-hub/actions/runs/43233834076) |
+| `b9020080e0764ed5856bc154ba07744dc5b442dc` | fix(search): use COPR full-text project search | **green** | 2026-11-12 | [43235018143](https://github.com/SakibShahariar/copr-hub/actions/runs/43235018143) |
+| `420c45ce7059905ee780ef7845234e69a35dbf9b` | fix(search): deserialize paginated COPR results | **green** | 2026-11-12 | [43235761345](https://github.com/SakibShahariar/copr-hub/actions/runs/43235761345) |
 
 ## Red-cross investigation log
 
@@ -90,3 +93,4 @@ All failures in this reviewed range have a subsequent fix and green CI validatio
 |---|---|---|
 | 2026-11-02 | Initial checkpoint: `cf6d142db537f0bf13a2e098015cbbabad90285d` | Latest commit queried; empty status response recorded as unavailable. Earlier history not retroactively audited. |
 | 2026-11-12 | `cf6d142db537f0bf13a2e098015cbbabad90285d` → `2a96076780ddc8b4802832c03387daee95482e94` | Reviewed 31 commits: 18 green, 13 red; every red result was diagnosed and followed by a green fix/validation commit. |
+| 2026-11-12 | `2a96076780ddc8b4802832c03387daee95482e94` → `420c45ce7059905ee780ef7845234e69a35dbf9b` | Reviewed 3 commits; all 3 had completed green CI runs. |

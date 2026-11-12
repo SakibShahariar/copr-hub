@@ -37,7 +37,7 @@ pub(super) fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widge
     search_row.set_hexpand(true);
 
     let search = gtk::SearchEntry::builder()
-        .placeholder_text("Search COPR project names")
+        .placeholder_text("Search COPR projects, packages, or owners")
         .tooltip_text("Enter a query and press Enter to search COPR")
         .hexpand(true)
         .build();
@@ -54,7 +54,12 @@ pub(super) fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widge
         .hexpand(true)
         .build();
     sort_label.add_css_class("dim-label");
-    let sort = gtk::DropDown::from_strings(&["COPR order", "Project name", "Owner"]);
+    let sort = gtk::DropDown::from_strings(&[
+        "Most relevant",
+        "COPR order",
+        "Project name",
+        "Owner",
+    ]);
     sort.set_tooltip_text(Some("Sort the current search results"));
     sort_row.append(&sort_label);
     sort_row.append(&sort);
@@ -145,7 +150,14 @@ pub(super) fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widge
                 if response.is_ok() {
                     *latest_response.borrow_mut() = Some(response.clone());
                 }
-                render_projects(&parent, &results, &feedback, response, sort.selected());
+                render_projects(
+                    &parent,
+                    &results,
+                    &feedback,
+                    response,
+                    &activity_query,
+                    sort.selected(),
+                );
                 if let Err(error) = activity_result {
                     feedback.set_text(&format!(
                         "{} Activity history could not be saved: {error}",
@@ -161,16 +173,17 @@ pub(super) fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widge
         let count = cached.projects.len();
         let cached_response = Ok(cached.projects);
         *latest_response.borrow_mut() = Some(cached_response.clone());
+        let cached_query = cached.query;
         render_projects(
             parent,
             &results,
             &feedback,
             cached_response,
+            &cached_query,
             sort.selected(),
         );
         feedback.set_text(&format!(
-            "Showing {count} saved result(s) for “{}”. Cached results may be out of date; search to refresh.",
-            cached.query
+            "Showing {count} saved result(s) for “{cached_query}”. Cached results may be out of date; search to refresh."
         ));
     }
 
@@ -185,10 +198,18 @@ pub(super) fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widge
         let results = results.clone();
         let feedback = feedback.clone();
         let latest_response = latest_response.clone();
+        let search = search.clone();
         let sort = sort.clone();
         move |_| {
             if let Some(response) = latest_response.borrow().clone() {
-                render_projects(&parent, &results, &feedback, response, sort.selected());
+                render_projects(
+                    &parent,
+                    &results,
+                    &feedback,
+                    response,
+                    search.text().trim(),
+                    sort.selected(),
+                );
             }
         }
     });
@@ -200,11 +221,114 @@ pub(super) fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widge
     scroll_page(&clamp)
 }
 
+fn normalize_search_text(value: &str) -> String {
+    value
+        .chars()
+        .filter(|character| character.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+fn edit_distance(left: &str, right: &str) -> usize {
+    let right: Vec<char> = right.chars().collect();
+    let mut previous: Vec<usize> = (0..=right.len()).collect();
+
+    for (left_index, left_character) in left.chars().enumerate() {
+        let mut current = vec![left_index + 1; right.len() + 1];
+        for (right_index, right_character) in right.iter().enumerate() {
+            let substitution_cost = usize::from(left_character != *right_character);
+            current[right_index + 1] = (previous[right_index + 1] + 1)
+                .min(current[right_index] + 1)
+                .min(previous[right_index] + substitution_cost);
+        }
+        previous = current;
+    }
+
+    previous[right.len()]
+}
+
+fn fuzzy_name_distance(name: &str, query: &str) -> Option<usize> {
+    let query_length = query.chars().count();
+    if query_length < 4 {
+        return None;
+    }
+
+    let max_distance = if query_length <= 6 { 1 } else { 2 };
+    let name: Vec<char> = name.chars().collect();
+    let shortest = query_length.saturating_sub(max_distance).max(1);
+    let longest = (query_length + max_distance).min(name.len());
+    if shortest > longest {
+        return None;
+    }
+
+    (shortest..=longest)
+        .flat_map(|window_length| name.windows(window_length))
+        .map(|window| {
+            let candidate: String = window.iter().collect();
+            edit_distance(&candidate, query)
+        })
+        .filter(|distance| *distance <= max_distance)
+        .min()
+}
+
+fn project_relevance(project: &copr::CoprProject, query: &str) -> (u8, usize) {
+    let query = normalize_search_text(query);
+    if query.is_empty() {
+        return (0, 0);
+    }
+
+    let name = normalize_search_text(&project.name);
+    if name == query {
+        return (0, 0);
+    }
+    if name.starts_with(&query) {
+        return (1, name.chars().count() - query.chars().count());
+    }
+    if name.contains(&query) {
+        return (2, name.find(&query).unwrap_or_default());
+    }
+
+    let owner = normalize_search_text(&project.owner);
+    if owner == query {
+        return (3, 0);
+    }
+    if owner.starts_with(&query) {
+        return (4, owner.chars().count() - query.chars().count());
+    }
+    if owner.contains(&query) {
+        return (5, owner.find(&query).unwrap_or_default());
+    }
+
+    if let Some(distance) = fuzzy_name_distance(&name, &query) {
+        return (6, distance);
+    }
+    if let Some(distance) = fuzzy_name_distance(&owner, &query) {
+        return (7, distance);
+    }
+
+    let description = project
+        .description
+        .as_deref()
+        .map(normalize_search_text)
+        .unwrap_or_default();
+    if description.contains(&query) {
+        return (8, description.find(&query).unwrap_or_default());
+    }
+
+    (9, 0)
+}
+
+fn rank_projects(projects: &mut [copr::CoprProject], query: &str) {
+    // Stable sorting keeps COPR's server order when relevance scores tie.
+    projects.sort_by_key(|project| project_relevance(project, query));
+}
+
 fn render_projects(
     parent: &adw::ApplicationWindow,
     list: &gtk::ListBox,
     feedback: &gtk::Label,
     response: Result<Vec<copr::CoprProject>, String>,
+    query: &str,
     sort_order: u32,
 ) {
     match response {
@@ -215,7 +339,8 @@ fn render_projects(
         Ok(mut projects) => {
             clear_list_box(list);
             match sort_order {
-                1 => projects.sort_by(|a, b| {
+                0 => rank_projects(&mut projects, query),
+                2 => projects.sort_by(|a, b| {
                     a.name
                         .to_ascii_lowercase()
                         .cmp(&b.name.to_ascii_lowercase())
@@ -225,7 +350,7 @@ fn render_projects(
                                 .cmp(&b.owner.to_ascii_lowercase())
                         })
                 }),
-                2 => projects.sort_by(|a, b| {
+                3 => projects.sort_by(|a, b| {
                     a.owner
                         .to_ascii_lowercase()
                         .cmp(&b.owner.to_ascii_lowercase())
@@ -268,5 +393,93 @@ fn render_projects(
             }
         }
         Err(error) => feedback.set_text(&format!("Search failed: {error}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn project(name: &str, owner: &str, description: &str) -> copr::CoprProject {
+        copr::CoprProject {
+            name: name.to_string(),
+            owner: owner.to_string(),
+            description: Some(description.to_string()),
+            homepage: None,
+        }
+    }
+
+    #[test]
+    fn relevance_ranks_exact_and_prefix_project_names_first() {
+        let mut projects = vec![
+            project("applications", "alice", "Includes Zen Browser"),
+            project("zen-browser-nightly", "bob", "Nightly builds"),
+            project("zen-browser", "carol", "The browser"),
+        ];
+
+        rank_projects(&mut projects, "zen-browser");
+
+        assert_eq!(projects[0].name, "zen-browser");
+        assert_eq!(projects[1].name, "zen-browser-nightly");
+        assert_eq!(projects[2].name, "applications");
+    }
+
+    #[test]
+    fn fuzzy_project_name_match_beats_description_only_match() {
+        let mut projects = vec![
+            project("applications", "alice", "Includes Zen Browser"),
+            project("zen-brower", "bob", "A browser build"),
+        ];
+
+        rank_projects(&mut projects, "zen-browser");
+
+        assert_eq!(projects[0].name, "zen-brower");
+        assert_eq!(projects[1].name, "applications");
+    }
+
+    #[test]
+    fn exact_owner_match_ranks_above_description_match() {
+        let mut projects = vec![
+            project("applications", "alice", "Zen Browser packages"),
+            project("unrelated", "zen-browser", "Other software"),
+        ];
+
+        rank_projects(&mut projects, "zen-browser");
+
+        assert_eq!(projects[0].owner, "zen-browser");
+    }
+
+    #[test]
+    fn equal_relevance_preserves_copr_server_order() {
+        let mut projects = vec![
+            project("zen-browser-nightly", "alice", "Nightly"),
+            project("zen-browser-stable", "bob", "Stable"),
+        ];
+
+        rank_projects(&mut projects, "zen-browser");
+
+        assert_eq!(projects[0].name, "zen-browser-nightly");
+        assert_eq!(projects[1].name, "zen-browser-stable");
+    }
+
+    #[test]
+    fn fuzzy_matching_checks_inside_compound_project_names() {
+        let mut projects = vec![
+            project("applications", "alice", "Includes Zen Browser"),
+            project("zen-brower-nightly", "bob", "Nightly builds"),
+        ];
+
+        rank_projects(&mut projects, "zen-browser");
+
+        assert_eq!(projects[0].name, "zen-brower-nightly");
+    }
+
+    #[test]
+    fn short_queries_do_not_trigger_fuzzy_name_matches() {
+        let exact = project("zena", "alice", "Example");
+        let typo = project("zenb", "bob", "Example");
+
+        assert_eq!(project_relevance(&typo, "zen"), (9, 0));
+        assert_eq!(project_relevance(&exact, "zena"), (0, 0));
     }
 }
