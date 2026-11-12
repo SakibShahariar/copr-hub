@@ -266,7 +266,8 @@ fn dnf5_state_files_are_safe(files: &[(PathBuf, fs::Metadata)], directory: &fs::
         && directory.mode() & 0o022 == 0
         && files
             .iter()
-            .all(|(_, file)| file.uid() == 0 && file.file_type().is_file() && file.nlink() == 1)
+            .all(|(_, file)| file.uid() == 0 && file.file_type().is_file())
+        && dnf5_state_files_have_single_links(files)
 }
 
 fn dnf5_state_error_is_permission_related(error: &str) -> bool {
