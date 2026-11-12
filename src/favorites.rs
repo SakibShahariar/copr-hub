@@ -13,7 +13,9 @@ const MAX_SAVED_FILE_BYTES: u64 = 10 * 1024 * 1024;
 static FAVORITES_LOCK: Mutex<()> = Mutex::new(());
 
 fn with_favorites_lock<T>(operation: impl FnOnce() -> T) -> T {
-    let _guard = FAVORITES_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = FAVORITES_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     operation()
 }
 
@@ -154,42 +156,42 @@ fn toggle_in_list(projects: &mut Vec<CoprProject>, project: &CoprProject) -> boo
 
 pub fn toggle(project: &CoprProject) -> Result<bool, String> {
     with_favorites_lock(|| {
-    let path = favorites_path();
-    let parent = path
-        .parent()
-        .ok_or_else(|| "Could not determine the saved-projects directory.".to_string())?;
-    fs::create_dir_all(parent)
-        .map_err(|error| format!("Could not create saved-projects directory: {error}"))?;
-
-    let mut projects = load_unlocked()?;
-    let already_saved = projects
-        .iter()
-        .any(|saved| saved.owner == project.owner && saved.name == project.name);
-    if !already_saved && !project_has_valid_fields(project) {
-        return Err(
-            "The project contains invalid or oversized metadata and cannot be saved.".to_string(),
-        );
-    }
-    let saved = toggle_in_list(&mut projects, project);
-    ensure_saved_project_limit(projects.len())?;
-    let contents = serde_json::to_vec_pretty(&projects)
-        .map_err(|error| format!("Could not encode saved projects: {error}"))?;
-    ensure_saved_file_size(contents.len())?;
-    storage::atomic_write(&path, &contents)
-        .map_err(|error| format!("Could not save project list: {error}"))?;
-    Ok(saved)
+        let path = favorites_path();
+        let parent = path
+            .parent()
+            .ok_or_else(|| "Could not determine the saved-projects directory.".to_string())?;
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("Could not create saved-projects directory: {error}"))?;
+    
+        let mut projects = load_unlocked()?;
+        let already_saved = projects
+            .iter()
+            .any(|saved| saved.owner == project.owner && saved.name == project.name);
+        if !already_saved && !project_has_valid_fields(project) {
+            return Err(
+                "The project contains invalid or oversized metadata and cannot be saved.".to_string(),
+            );
+        }
+        let saved = toggle_in_list(&mut projects, project);
+        ensure_saved_project_limit(projects.len())?;
+        let contents = serde_json::to_vec_pretty(&projects)
+            .map_err(|error| format!("Could not encode saved projects: {error}"))?;
+        ensure_saved_file_size(contents.len())?;
+        storage::atomic_write(&path, &contents)
+            .map_err(|error| format!("Could not save project list: {error}"))?;
+        Ok(saved)
     })
 }
 
 /// Export the locally saved projects as a portable JSON backup.
 pub fn export_to(path: &std::path::Path) -> Result<usize, String> {
     with_favorites_lock(|| {
-    let projects = load_unlocked()?;
-    let contents = serde_json::to_vec_pretty(&projects)
-        .map_err(|error| format!("Could not encode saved projects: {error}"))?;
-    storage::atomic_write(path, &contents)
-        .map_err(|error| format!("Could not export saved projects: {error}"))?;
-    Ok(projects.len())
+        let projects = load_unlocked()?;
+        let contents = serde_json::to_vec_pretty(&projects)
+            .map_err(|error| format!("Could not encode saved projects: {error}"))?;
+        storage::atomic_write(path, &contents)
+            .map_err(|error| format!("Could not export saved projects: {error}"))?;
+        Ok(projects.len())
     })
 }
 
@@ -255,28 +257,28 @@ pub fn import_from(path: &std::path::Path) -> Result<usize, String> {
     let imported = parse_backup(&contents)?;
 
     with_favorites_lock(|| {
-    let path = favorites_path();
-    let parent = path
-        .parent()
-        .ok_or_else(|| "Could not determine the saved-projects directory.".to_string())?;
-    fs::create_dir_all(parent)
-        .map_err(|error| format!("Could not create saved-projects directory: {error}"))?;
-
-    let mut projects = load_unlocked()?;
-    let added = merge_projects(&mut projects, imported);
-    ensure_saved_project_limit(projects.len()).map_err(|_| {
-        format!(
-            "Import would exceed the {MAX_SAVED_PROJECTS}-project saved-list limit; no changes were saved."
-        )
-    })?;
-    let contents = serde_json::to_vec_pretty(&projects)
-        .map_err(|error| format!("Could not encode merged saved projects: {error}"))?;
-    ensure_saved_file_size(contents.len()).map_err(|_| {
-        "Import would exceed the 10 MiB saved-project limit; no changes were saved.".to_string()
-    })?;
-    storage::atomic_write(&path, &contents)
-        .map_err(|error| format!("Could not save imported projects: {error}"))?;
-    Ok(added)
+        let path = favorites_path();
+        let parent = path
+            .parent()
+            .ok_or_else(|| "Could not determine the saved-projects directory.".to_string())?;
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("Could not create saved-projects directory: {error}"))?;
+    
+        let mut projects = load_unlocked()?;
+        let added = merge_projects(&mut projects, imported);
+        ensure_saved_project_limit(projects.len()).map_err(|_| {
+            format!(
+                "Import would exceed the {MAX_SAVED_PROJECTS}-project saved-list limit; no changes were saved."
+            )
+        })?;
+        let contents = serde_json::to_vec_pretty(&projects)
+            .map_err(|error| format!("Could not encode merged saved projects: {error}"))?;
+        ensure_saved_file_size(contents.len()).map_err(|_| {
+            "Import would exceed the 10 MiB saved-project limit; no changes were saved.".to_string()
+        })?;
+        storage::atomic_write(&path, &contents)
+            .map_err(|error| format!("Could not save imported projects: {error}"))?;
+        Ok(added)
     })
 }
 
@@ -295,26 +297,31 @@ mod tests {
 
     #[test]
     fn favorites_serializes_concurrent_updates() {
-        use std::sync::{atomic::{AtomicUsize, Ordering}, Arc, Barrier};
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc, Barrier,
+        };
         use std::time::Duration;
 
         let active = Arc::new(AtomicUsize::new(0));
         let maximum = Arc::new(AtomicUsize::new(0));
         let barrier = Arc::new(Barrier::new(4));
-        let workers: Vec<_> = (0..4).map(|_| {
-            let active = active.clone();
-            let maximum = maximum.clone();
-            let barrier = barrier.clone();
-            std::thread::spawn(move || {
-                barrier.wait();
-                with_favorites_lock(|| {
-                    let current = active.fetch_add(1, Ordering::SeqCst) + 1;
-                    maximum.fetch_max(current, Ordering::SeqCst);
-                    std::thread::sleep(Duration::from_millis(5));
-                    active.fetch_sub(1, Ordering::SeqCst);
-                });
+        let workers: Vec<_> = (0..4)
+            .map(|_| {
+                let active = active.clone();
+                let maximum = maximum.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    with_favorites_lock(|| {
+                        let current = active.fetch_add(1, Ordering::SeqCst) + 1;
+                        maximum.fetch_max(current, Ordering::SeqCst);
+                        std::thread::sleep(Duration::from_millis(5));
+                        active.fetch_sub(1, Ordering::SeqCst);
+                    });
+                })
             })
-        }).collect();
+            .collect();
 
         for worker in workers {
             worker.join().unwrap();

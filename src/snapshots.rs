@@ -13,7 +13,9 @@ const MAX_SNAPSHOT_AGE_SECS: u64 = 180 * 24 * 60 * 60;
 static SNAPSHOT_LOCK: Mutex<()> = Mutex::new(());
 
 fn with_snapshot_lock<T>(operation: impl FnOnce() -> T) -> T {
-    let _guard = SNAPSHOT_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = SNAPSHOT_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     operation()
 }
 
@@ -190,9 +192,9 @@ pub fn save_monitoring_data(
     release: Option<UpstreamRelease>,
 ) -> Result<(), String> {
     with_snapshot_lock(|| {
-    let mut snapshot = load_or_create(project)?;
-    update_monitoring_data(&mut snapshot, monitor, history, release, now_unix());
-    write_snapshot(&snapshot)
+        let mut snapshot = load_or_create(project)?;
+        update_monitoring_data(&mut snapshot, monitor, history, release, now_unix());
+        write_snapshot(&snapshot)
     })
 }
 
@@ -201,11 +203,11 @@ pub fn save_monitor(
     monitor: copr::ProjectMonitor,
 ) -> Result<(), String> {
     with_snapshot_lock(|| {
-    let mut snapshot = load_or_create(project)?;
-    snapshot.monitor = Some(monitor);
-    snapshot.monitor_fetched_at_unix = Some(now_unix());
-    snapshot.saved_at_unix = now_unix();
-    write_snapshot(&snapshot)
+        let mut snapshot = load_or_create(project)?;
+        snapshot.monitor = Some(monitor);
+        snapshot.monitor_fetched_at_unix = Some(now_unix());
+        snapshot.saved_at_unix = now_unix();
+        write_snapshot(&snapshot)
     })
 }
 
@@ -214,11 +216,11 @@ pub fn save_history(
     history: Vec<copr::ProjectBuildEvent>,
 ) -> Result<(), String> {
     with_snapshot_lock(|| {
-    let mut snapshot = load_or_create(project)?;
-    snapshot.build_history = Some(history);
-    snapshot.history_fetched_at_unix = Some(now_unix());
-    snapshot.saved_at_unix = now_unix();
-    write_snapshot(&snapshot)
+        let mut snapshot = load_or_create(project)?;
+        snapshot.build_history = Some(history);
+        snapshot.history_fetched_at_unix = Some(now_unix());
+        snapshot.saved_at_unix = now_unix();
+        write_snapshot(&snapshot)
     })
 }
 
@@ -227,11 +229,11 @@ pub fn save_release(
     release: Option<UpstreamRelease>,
 ) -> Result<(), String> {
     with_snapshot_lock(|| {
-    let mut snapshot = load_or_create(project)?;
-    snapshot.upstream_release = release;
-    snapshot.upstream_fetched_at_unix = Some(now_unix());
-    snapshot.saved_at_unix = now_unix();
-    write_snapshot(&snapshot)
+        let mut snapshot = load_or_create(project)?;
+        snapshot.upstream_release = release;
+        snapshot.upstream_fetched_at_unix = Some(now_unix());
+        snapshot.saved_at_unix = now_unix();
+        write_snapshot(&snapshot)
     })
 }
 
@@ -273,26 +275,31 @@ mod tests {
 
     #[test]
     fn snapshot_serializes_concurrent_updates() {
-        use std::sync::{atomic::{AtomicUsize, Ordering}, Arc, Barrier};
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc, Barrier,
+        };
         use std::time::Duration;
 
         let active = Arc::new(AtomicUsize::new(0));
         let maximum = Arc::new(AtomicUsize::new(0));
         let barrier = Arc::new(Barrier::new(4));
-        let workers: Vec<_> = (0..4).map(|_| {
-            let active = active.clone();
-            let maximum = maximum.clone();
-            let barrier = barrier.clone();
-            std::thread::spawn(move || {
-                barrier.wait();
-                with_snapshot_lock(|| {
-                    let current = active.fetch_add(1, Ordering::SeqCst) + 1;
-                    maximum.fetch_max(current, Ordering::SeqCst);
-                    std::thread::sleep(Duration::from_millis(5));
-                    active.fetch_sub(1, Ordering::SeqCst);
-                });
+        let workers: Vec<_> = (0..4)
+            .map(|_| {
+                let active = active.clone();
+                let maximum = maximum.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    with_snapshot_lock(|| {
+                        let current = active.fetch_add(1, Ordering::SeqCst) + 1;
+                        maximum.fetch_max(current, Ordering::SeqCst);
+                        std::thread::sleep(Duration::from_millis(5));
+                        active.fetch_sub(1, Ordering::SeqCst);
+                    });
+                })
             })
-        }).collect();
+            .collect();
 
         for worker in workers {
             worker.join().unwrap();
