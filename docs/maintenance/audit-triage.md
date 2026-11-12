@@ -99,7 +99,7 @@ These closed findings were checked against their acceptance lists: #56, #57, #65
 - #136 and #139: validation and tests are on `master`; the formatting/test CI run is green and their acceptance lists are checked.
 - #124: leading v/V normalization is implemented and CI is green; suffix equivalence remains an owner decision.
 - #56, #57, #65, and #69: implementation and deterministic tests are on `master`; CI verification is pending.
-- #86 and #90: system commands now force a C locale, drop GTK-only environment variables while preserving proxy settings, and have a fake-DNF executable test; CI is pending.
+- #86 and #90: system commands now force a C locale, drop GTK-only environment variables while preserving proxy settings, and have fake DNF/RPM/pkexec executable tests; CI is pending.
 - #109: LRU eviction is implemented; CI is pending and the issue was reopened until the run is green.
 - #111 and #137: implementation and focused tests are on `master`; CI verification is pending and both issues remain open.
 - Remaining Category A issues stay open until their focused implementation, tests, and CI verification are complete.

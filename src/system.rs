@@ -1223,37 +1223,41 @@ enabled=0
 
     #[cfg(unix)]
     #[test]
-    fn system_command_runs_fake_dnf_with_c_locale_and_preserves_proxy() {
+    fn system_command_runs_fake_dnf_rpm_and_pkexec_with_safe_environment() {
         use std::os::unix::fs::PermissionsExt;
 
-        let directory = std::env::temp_dir().join(format!(
-            "copr-hub-fake-dnf-{}",
-            std::process::id()
-        ));
+        let directory =
+            std::env::temp_dir().join(format!("copr-hub-fake-system-command-{}", std::process::id()));
         fs::create_dir_all(&directory).unwrap();
-        let executable = directory.join("dnf");
-        fs::write(
-            &executable,
-            "#!/bin/sh\nprintf '%s|%s|%s' \"$LC_ALL\" \"$HTTP_PROXY\" \"$1\"\nprintf 'simulated DNF failure' >&2\nexit 23\n",
-        )
-        .unwrap();
-        fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
 
-        let mut command = system_command(&executable);
-        command
-            .env("HTTP_PROXY", "http://proxy.example:8080")
-            .arg("repoquery");
-        let output = command.output().unwrap();
+        for program in ["dnf", "rpm", "pkexec"] {
+            let executable = directory.join(program);
+            fs::write(
+                &executable,
+                "#!/bin/sh\nprintf '%s|%s|%s' \"$LC_ALL\" \"$HTTP_PROXY\" \"$1\"\nprintf 'simulated command failure' >&2\nexit 23\n",
+            )
+            .unwrap();
+            fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
 
-        assert_eq!(output.status.code(), Some(23));
-        assert_eq!(
-            String::from_utf8_lossy(&output.stdout),
-            "C|http://proxy.example:8080|repoquery"
-        );
-        assert_eq!(
-            String::from_utf8_lossy(&output.stderr),
-            "simulated DNF failure"
-        );
+            let mut command = system_command(&executable);
+            command
+                .env("HTTP_PROXY", "http://proxy.example:8080")
+                .arg("probe");
+            let output = command.output().unwrap();
+
+            assert_eq!(output.status.code(), Some(23), "{program}");
+            assert_eq!(
+                String::from_utf8_lossy(&output.stdout),
+                "C|http://proxy.example:8080|probe",
+                "{program}"
+            );
+            assert_eq!(
+                String::from_utf8_lossy(&output.stderr),
+                "simulated command failure",
+                "{program}"
+            );
+        }
+
         fs::remove_dir_all(directory).unwrap();
     }
 }
