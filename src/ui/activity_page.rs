@@ -72,6 +72,7 @@ pub(super) fn build_activity_page(
     content.append(&feedback);
 
     let list = gtk::ListBox::new();
+    let refresh_generation = Rc::new(RefCell::new(0u64));
     list.set_selection_mode(gtk::SelectionMode::None);
     list.add_css_class("boxed-list");
     list.set_filter_func({
@@ -131,6 +132,7 @@ pub(super) fn build_activity_page(
         let filter = filter.clone();
         let category = category.clone();
         let time_range = time_range.clone();
+        let export_button = export.clone();
         move |_| {
             let query = filter.text().to_string();
             let category_name = match category.selected() {
@@ -158,23 +160,38 @@ pub(super) fn build_activity_page(
             dialog.set_current_name("copr-hub-activity.json");
             dialog.connect_response({
                 let feedback = feedback.clone();
-                let category_name = category_name.clone();
-                let range = range.clone();
+                let export_button = export_button.clone();
                 move |dialog, response| {
                     if response == gtk::ResponseType::Accept {
                         match dialog.file().and_then(|file| file.path()) {
-                            Some(path) => match activity::export_filtered_to(
-                                &path,
-                                &query,
-                                &category_name,
-                                &range,
-                            ) {
-                                Ok(count) => feedback.set_text(&format!(
-                                    "Exported {count} activity event(s) to {}.",
-                                    path.display()
-                                )),
-                                Err(error) => feedback.set_text(&error),
-                            },
+                            Some(path) => {
+                                let path_display = path.display().to_string();
+                                feedback.set_text("Exporting activity history…");
+                                export_button.set_sensitive(false);
+                                let feedback = feedback.clone();
+                                let export_button = export_button.clone();
+                                gtk::glib::MainContext::default().spawn_local(async move {
+                                    let result = gtk::gio::spawn_blocking(move || {
+                                        activity::export_filtered_to(
+                                            &path,
+                                            &query,
+                                            &category_name,
+                                            &range,
+                                        )
+                                    })
+                                    .await;
+                                    export_button.set_sensitive(true);
+                                    match result {
+                                        Ok(Ok(count)) => feedback.set_text(&format!(
+                                            "Exported {count} activity event(s) to {path_display}."
+                                        )),
+                                        Ok(Err(error)) => feedback.set_text(&error),
+                                        Err(_) => feedback.set_text(
+                                            "The background activity export failed unexpectedly.",
+                                        ),
+                                    }
+                                });
+                            }
                             None => feedback.set_text("Could not access the selected export path."),
                         }
                     }
@@ -189,6 +206,8 @@ pub(super) fn build_activity_page(
         let parent = parent.clone();
         let list = list.clone();
         let feedback = feedback.clone();
+        let import_button = import.clone();
+        let refresh_generation = refresh_generation.clone();
         move |_| {
             let dialog = gtk::FileChooserNative::new(
                 Some("Import activity history"),
@@ -200,23 +219,41 @@ pub(super) fn build_activity_page(
             dialog.connect_response({
                 let list = list.clone();
                 let feedback = feedback.clone();
+                let import_button = import_button.clone();
+                let refresh_generation = refresh_generation.clone();
                 move |dialog, response| {
                     if response == gtk::ResponseType::Accept {
                         match dialog.file().and_then(|file| file.path()) {
-                            Some(path) => match activity::import_from(&path) {
-                                Ok(summary) => {
-                                    refresh_activity(&list, &feedback);
-                                    feedback.set_text(&format!(
-                                        "Processed {} backup event(s): {} new event(s) added, {} older event(s) omitted by the {}-event history limit, and {} duplicate event(s) skipped. Existing history was preserved.",
-                                        summary.incoming,
-                                        summary.added,
-                                        summary.dropped,
-                                        activity::MAX_ENTRIES,
-                                        summary.duplicates
-                                    ));
-                                }
-                                Err(error) => feedback.set_text(&error),
-                            },
+                            Some(path) => {
+                                feedback.set_text("Importing activity history…");
+                                import_button.set_sensitive(false);
+                                let list = list.clone();
+                                let feedback = feedback.clone();
+                                let import_button = import_button.clone();
+                                let refresh_generation = refresh_generation.clone();
+                                gtk::glib::MainContext::default().spawn_local(async move {
+                                    let result =
+                                        gtk::gio::spawn_blocking(move || activity::import_from(&path))
+                                            .await;
+                                    import_button.set_sensitive(true);
+                                    match result {
+                                        Ok(Ok(added)) => {
+                                            refresh_activity(
+                                                &list,
+                                                &feedback,
+                                                &refresh_generation,
+                                            );
+                                            feedback.set_text(&format!(
+                                                "Imported {added} new activity event(s); existing history was preserved."
+                                            ));
+                                        }
+                                        Ok(Err(error)) => feedback.set_text(&error),
+                                        Err(_) => feedback.set_text(
+                                            "The background activity import failed unexpectedly.",
+                                        ),
+                                    }
+                                });
+                            }
                             None => feedback.set_text("Could not access the selected activity backup."),
                         }
                     }
@@ -230,12 +267,15 @@ pub(super) fn build_activity_page(
     refresh.connect_clicked({
         let list = list.clone();
         let feedback = feedback.clone();
-        move |_| refresh_activity(&list, &feedback)
+        let refresh_generation = refresh_generation.clone();
+        move |_| refresh_activity(&list, &feedback, &refresh_generation)
     });
     clear.connect_clicked({
         let list = list.clone();
         let feedback = feedback.clone();
         let parent = parent.clone();
+        let clear_button = clear.clone();
+        let refresh_generation = refresh_generation.clone();
         move |_| {
             let dialog = gtk::MessageDialog::builder()
                 .transient_for(&parent)
@@ -250,15 +290,39 @@ pub(super) fn build_activity_page(
             dialog.connect_response({
                 let list = list.clone();
                 let feedback = feedback.clone();
+                let clear_button = clear_button.clone();
+                let refresh_generation = refresh_generation.clone();
                 move |dialog, response| {
                     dialog.close();
                     if response != gtk::ResponseType::Accept {
                         return;
                     }
-                    match activity::clear() {
-                        Ok(()) => {
-                            feedback.set_text("Activity history cleared.");
-                            refresh_activity(&list, &feedback);
+                    feedback.set_text("Clearing activity history…");
+                    clear_button.set_sensitive(false);
+                    let list = list.clone();
+                    let feedback = feedback.clone();
+                    let clear_button = clear_button.clone();
+                    let refresh_generation = refresh_generation.clone();
+                    gtk::glib::MainContext::default().spawn_local(async move {
+                        let result = gtk::gio::spawn_blocking(activity::clear).await;
+                        clear_button.set_sensitive(true);
+                        match result {
+                            Ok(Ok(())) => {
+                                refresh_activity(&list, &feedback, &refresh_generation);
+                                feedback.set_text("Activity history cleared.");
+                            }
+                            Ok(Err(error)) => feedback.set_text(&error),
+                            Err(_) => feedback.set_text(
+                                "The background activity clear failed unexpectedly.",
+                            ),
+                        }
+                    });
+                }
+            });
+            dialog.present();
+        }
+    });
+    refresh_activity(&list, &feedback, &refresh_generation);
                         }
                         Err(error) => feedback.set_text(&error),
                     }
@@ -267,14 +331,14 @@ pub(super) fn build_activity_page(
             dialog.present();
         }
     });
-    refresh_activity(&list, &feedback);
+    refresh_activity(&list, &feedback, &refresh_generation);
     stack.connect_visible_child_name_notify({
         let list = list.clone();
         let feedback = feedback.clone();
         let stack = stack.clone();
         move |_| {
             if stack.visible_child_name().as_deref() == Some("activity") {
-                refresh_activity(&list, &feedback);
+                refresh_activity(&list, &feedback, &refresh_generation);
             }
         }
     });
@@ -292,38 +356,58 @@ fn format_activity_timestamp(timestamp: u64) -> String {
         .unwrap_or_else(|_| "Unknown time".to_string())
 }
 
-fn refresh_activity(list: &gtk::ListBox, feedback: &gtk::Label) {
-    clear_list_box(list);
-    match activity::load() {
-        Ok(entries) if entries.is_empty() => {
-            feedback.set_text("No activity recorded yet. Project searches and repository changes will appear here.");
+fn refresh_activity(
+    list: &gtk::ListBox,
+    feedback: &gtk::Label,
+    generation: &Rc<RefCell<u64>>,
+) {
+    let request_id = {
+        let mut generation = generation.borrow_mut();
+        *generation = generation.wrapping_add(1);
+        *generation
+    };
+    feedback.set_text("Loading activity history…");
+    let list = list.clone();
+    let feedback = feedback.clone();
+    let generation = generation.clone();
+    gtk::glib::MainContext::default().spawn_local(async move {
+        let result = gtk::gio::spawn_blocking(activity::load).await;
+        if *generation.borrow() != request_id {
+            return;
         }
-        Ok(entries) => {
-            feedback.set_text(&format!(
-                "{} recent event(s) · stored locally",
-                entries.len()
-            ));
-            for entry in entries {
-                let row = adw::ActionRow::builder()
-                    .title(format!("{} — {}", entry.action, entry.target))
-                    .subtitle(format!(
-                        "{} · {}",
-                        format_activity_timestamp(entry.timestamp),
-                        entry.summary
-                    ))
-                    .build();
-                row.set_widget_name(&format!(
-                    "{}|{}|{} {} {}",
-                    activity::category_for_action(&entry.action),
-                    entry.timestamp,
-                    entry.action,
-                    entry.target,
-                    entry.summary
-                ));
-                row.add_prefix(&gtk::Image::from_icon_name("document-properties-symbolic"));
-                list.append(&row);
+        clear_list_box(&list);
+        match result {
+            Ok(Ok(entries)) if entries.is_empty() => {
+                feedback.set_text("No activity recorded yet. Project searches and repository changes will appear here.");
             }
+            Ok(Ok(entries)) => {
+                feedback.set_text(&format!(
+                    "{} recent event(s) · stored locally",
+                    entries.len()
+                ));
+                for entry in entries {
+                    let row = adw::ActionRow::builder()
+                        .title(format!("{} — {}", entry.action, entry.target))
+                        .subtitle(format!(
+                            "{} · {}",
+                            format_activity_timestamp(entry.timestamp),
+                            entry.summary
+                        ))
+                        .build();
+                    row.set_widget_name(&format!(
+                        "{}|{}|{} {} {}",
+                        activity::category_for_action(&entry.action),
+                        entry.timestamp,
+                        entry.action,
+                        entry.target,
+                        entry.summary
+                    ));
+                    row.add_prefix(&gtk::Image::from_icon_name("document-properties-symbolic"));
+                    list.append(&row);
+                }
+            }
+            Ok(Err(error)) => feedback.set_text(&error),
+            Err(_) => feedback.set_text("The background activity-history read failed unexpectedly."),
         }
-        Err(error) => feedback.set_text(&error),
-    }
+    });
 }

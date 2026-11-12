@@ -22,7 +22,7 @@ Scope: the 99 audit issues in #50–#148. This file records the A–E category f
 | #59 | B | Disable Import/Export during chooser and file operations; verify native chooser behavior. |
 | #60 | B | Replace label-text parsing with explicit loading state; verify repository action gating. |
 | #61 | B | Move favorites file I/O to a worker and verify UI responsiveness and save feedback. |
-| #62 | B | Move activity import/export/clear I/O off the GTK thread and verify refresh behavior. |
+| #62 | B | Import/export/clear and history refresh now run in background workers with stale-refresh protection; live GNOME validation remains.
 | #63 | B | Duplicate scope of #62; track clear-history behavior with #62 and verify its response path. |
 | #64 | B | Separate user-facing errors from diagnostics; verify visible copy on each page. |
 | #66 | B | Add scan progress and verify it remains responsive during a live scan. |
