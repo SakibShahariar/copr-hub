@@ -60,14 +60,18 @@ pub(super) fn build_saved_page(
         move |_| super::launch_manual_monitor(&check_all, &feedback)
     });
 
-    let monitoring_toggle = adw::SwitchRow::builder()
-        .title("Monitor saved projects")
-        .subtitle("Check for failed builds, upstream releases, and inactive projects while Copr Hub is open.")
-        .active(monitoring::load_config().enabled)
-        .build();
+    let monitoring_toggle = gtk::Switch::new();
+    monitoring_toggle.set_active(monitoring::load_config().enabled);
+    monitoring_toggle.set_valign(gtk::Align::Center);
     monitoring_toggle.set_tooltip_text(Some(
         "Checks run at most every six hours and stop when Copr Hub is closed.",
     ));
+    let monitoring_row = adw::ActionRow::builder()
+        .title("Monitor saved projects")
+        .subtitle("Check for failed builds, upstream releases, and inactive projects while Copr Hub is open.")
+        .activatable_widget(&monitoring_toggle)
+        .build();
+    monitoring_row.add_suffix(&monitoring_toggle);
 
     let monitoring_note = gtk::Label::builder()
         .label("Optional · checks run every six hours while the app is open; notifications are sent only for changes after the first baseline.")
@@ -106,16 +110,18 @@ pub(super) fn build_saved_page(
         }
     });
 
-    let backup_toggle = adw::SwitchRow::builder()
-        .title("Scheduled local backups")
-        .subtitle(
-            "Create a daily JSON backup while Copr Hub is open. Keep the latest seven backups.",
-        )
-        .active(backups::load_config().enabled)
-        .build();
+    let backup_toggle = gtk::Switch::new();
+    backup_toggle.set_active(backups::load_config().enabled);
+    backup_toggle.set_valign(gtk::Align::Center);
     backup_toggle.set_tooltip_text(Some(
         "Backups are stored in your Copr Hub data directory. No background system service is installed.",
     ));
+    let backup_row = adw::ActionRow::builder()
+        .title("Scheduled local backups")
+        .subtitle("Create a daily JSON backup while Copr Hub is open. Keep the latest seven backups.")
+        .activatable_widget(&backup_toggle)
+        .build();
+    backup_row.add_suffix(&backup_toggle);
     let backup_note = gtk::Label::new(Some("Optional · daily while the app is open · saved under the Copr Hub data directory · retains 7 backups."));
     backup_note.set_xalign(0.0);
     backup_note.set_wrap(true);
@@ -178,7 +184,7 @@ pub(super) fn build_saved_page(
         .title("Monitoring")
         .description("Choose how Copr Hub tracks the health and freshness of saved projects.")
         .build();
-    monitoring_group.add(&monitoring_toggle);
+    monitoring_group.add(&monitoring_row);
     monitoring_group.add(&freshness_row);
     content.append(&monitoring_group);
     content.append(&monitoring_note);
@@ -187,7 +193,7 @@ pub(super) fn build_saved_page(
         .title("Backups")
         .description("Keep a local copy of your saved-project list.")
         .build();
-    backup_group.add(&backup_toggle);
+    backup_group.add(&backup_row);
     content.append(&backup_group);
     content.append(&backup_note);
 
