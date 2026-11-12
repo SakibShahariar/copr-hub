@@ -2,11 +2,21 @@ use crate::{favorites, storage};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const BACKUP_INTERVAL_SECS: u64 = 24 * 60 * 60;
 const RETAIN_BACKUPS: usize = 7;
 const MAX_CONFIG_BYTES: u64 = 64 * 1024;
+
+static BACKUP_LOCK: Mutex<()> = Mutex::new(());
+
+fn with_backup_lock<T>(operation: impl FnOnce() -> T) -> T {
+    let _guard = BACKUP_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    operation()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct BackupScheduleConfig {
@@ -77,6 +87,10 @@ fn backup_timestamp(file_name: &std::ffi::OsStr) -> Option<u64> {
 /// Create a private local JSON backup when the opt-in schedule is due.
 /// Runs only while the app is open; it does not install a system service or timer.
 pub fn run_if_due() -> Result<Option<PathBuf>, String> {
+    with_backup_lock(run_if_due_unlocked)
+}
+
+fn run_if_due_unlocked() -> Result<Option<PathBuf>, String> {
     let mut config = load_config();
     if !config.enabled {
         return Ok(None);
@@ -118,6 +132,40 @@ pub fn run_if_due() -> Result<Option<PathBuf>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scheduled_backup_checks_are_serialized() {
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc, Barrier,
+        };
+        use std::time::Duration;
+
+        let active = Arc::new(AtomicUsize::new(0));
+        let maximum = Arc::new(AtomicUsize::new(0));
+        let barrier = Arc::new(Barrier::new(4));
+        let workers: Vec<_> = (0..4)
+            .map(|_| {
+                let active = active.clone();
+                let maximum = maximum.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    with_backup_lock(|| {
+                        let current = active.fetch_add(1, Ordering::SeqCst) + 1;
+                        maximum.fetch_max(current, Ordering::SeqCst);
+                        std::thread::sleep(Duration::from_millis(5));
+                        active.fetch_sub(1, Ordering::SeqCst);
+                    });
+                })
+            })
+            .collect();
+
+        for worker in workers {
+            worker.join().unwrap();
+        }
+        assert_eq!(maximum.load(Ordering::SeqCst), 1);
+    }
 
     #[test]
     fn backup_rotation_uses_numeric_timestamps_and_ignores_unrelated_files() {

@@ -18,7 +18,11 @@ fn clear_legacy_search_cache() {
         .join("last-search.json");
     // Older versions restored the previous query and results on startup.
     // The cache is no longer used; remove it so stale results do not linger.
-    let _ = fs::remove_file(path);
+    if let Err(error) = fs::remove_file(path) {
+        if error.kind() != std::io::ErrorKind::NotFound {
+            eprintln!("Could not remove the legacy Copr Hub search cache: {error}");
+        }
+    }
 }
 
 pub(crate) fn build_ui(app: &adw::Application) {
@@ -128,9 +132,16 @@ fn launch_monitoring_check(app: &adw::Application) {
     if !monitoring::load_config().enabled {
         return;
     }
+    let Some(guard) = monitoring::try_begin_monitoring_check() else {
+        return;
+    };
     let app = app.clone();
     gtk::glib::MainContext::default().spawn_local(async move {
-        let result = gtk::gio::spawn_blocking(check_saved_projects).await;
+        let result = gtk::gio::spawn_blocking(move || {
+            let _guard = guard;
+            check_saved_projects()
+        })
+        .await;
         if !monitoring::load_config().enabled {
             return;
         }
@@ -187,23 +198,32 @@ fn launch_scheduled_backup(app: &adw::Application) {
 }
 
 pub(super) fn launch_manual_monitor(button: &gtk::Button, feedback: &gtk::Label) {
+    let Some(guard) = monitoring::try_begin_monitoring_check() else {
+        feedback.set_text("A health check is already running.");
+        return;
+    };
     button.set_sensitive(false);
     feedback.set_text("Checking saved projects…");
     let button = button.clone();
     let feedback = feedback.clone();
     gtk::glib::MainContext::default().spawn_local(async move {
-        match gtk::gio::spawn_blocking(check_saved_projects).await {
+        match gtk::gio::spawn_blocking(move || {
+            let _guard = guard;
+            check_saved_projects()
+        })
+        .await
+        {
             Ok(notifications) => {
-                let changed = notifications.len();
-                feedback.set_text(&format!(
-                    "Health check finished. {} project(s) reported new changes.",
-                    changed
-                ));
+                feedback.set_text(&manual_monitor_summary(notifications.len()));
             }
             Err(error) => feedback.set_text(&format!("Health check failed: {error:?}")),
         }
         button.set_sensitive(true);
     });
+}
+
+fn manual_monitor_summary(alert_count: usize) -> String {
+    format!("Health check finished. {alert_count} alert(s) generated.")
 }
 
 fn check_saved_projects() -> Vec<(String, String, String)> {
@@ -335,8 +355,19 @@ fn clear_list_box(list: &gtk::ListBox) {
 
 #[cfg(test)]
 mod url_tests {
-    use super::project_details::{is_web_url, package_matches_filter, update_intelligence_summary};
+    use super::{
+        manual_monitor_summary,
+        project_details::{is_web_url, package_matches_filter, update_intelligence_summary},
+    };
     use crate::{copr, upstream};
+
+    #[test]
+    fn manual_monitor_feedback_counts_alerts_not_projects() {
+        assert_eq!(
+            manual_monitor_summary(3),
+            "Health check finished. 3 alert(s) generated."
+        );
+    }
 
     #[test]
     fn update_intelligence_counts_newer_packages_and_build_failures() {

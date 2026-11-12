@@ -4,10 +4,30 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAX_STATE_BYTES: u64 = 2 * 1024 * 1024;
 const DEFAULT_FRESHNESS_THRESHOLD_DAYS: u32 = 90;
+
+static MONITORING_CHECK_RUNNING: AtomicBool = AtomicBool::new(false);
+
+/// Exclusive guard for the app-wide monitoring scan.
+pub(crate) struct MonitoringCheckGuard;
+
+impl Drop for MonitoringCheckGuard {
+    fn drop(&mut self) {
+        MONITORING_CHECK_RUNNING.store(false, Ordering::Release);
+    }
+}
+
+/// Prevent scheduled and manual triggers from running overlapping scans.
+pub(crate) fn try_begin_monitoring_check() -> Option<MonitoringCheckGuard> {
+    MONITORING_CHECK_RUNNING
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .ok()
+        .map(|_| MonitoringCheckGuard)
+}
 const MIN_FRESHNESS_THRESHOLD_DAYS: u32 = 7;
 const MAX_FRESHNESS_THRESHOLD_DAYS: u32 = 3650;
 
@@ -415,6 +435,14 @@ pub fn record_observations(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn monitoring_check_guard_rejects_overlapping_scans_and_releases_on_drop() {
+        let first = try_begin_monitoring_check().expect("first scan should start");
+        assert!(try_begin_monitoring_check().is_none());
+        drop(first);
+        assert!(try_begin_monitoring_check().is_some());
+    }
 
     #[test]
     fn pruning_removes_only_projects_that_are_no_longer_saved() {
