@@ -162,14 +162,15 @@ pub fn toggle(project: &CoprProject) -> Result<bool, String> {
             .ok_or_else(|| "Could not determine the saved-projects directory.".to_string())?;
         fs::create_dir_all(parent)
             .map_err(|error| format!("Could not create saved-projects directory: {error}"))?;
-    
+
         let mut projects = load_unlocked()?;
         let already_saved = projects
             .iter()
             .any(|saved| saved.owner == project.owner && saved.name == project.name);
         if !already_saved && !project_has_valid_fields(project) {
             return Err(
-                "The project contains invalid or oversized metadata and cannot be saved.".to_string(),
+                "The project contains invalid or oversized metadata and cannot be saved."
+                    .to_string(),
             );
         }
         let saved = toggle_in_list(&mut projects, project);
@@ -263,7 +264,7 @@ pub fn import_from(path: &std::path::Path) -> Result<usize, String> {
             .ok_or_else(|| "Could not determine the saved-projects directory.".to_string())?;
         fs::create_dir_all(parent)
             .map_err(|error| format!("Could not create saved-projects directory: {error}"))?;
-    
+
         let mut projects = load_unlocked()?;
         let added = merge_projects(&mut projects, imported);
         ensure_saved_project_limit(projects.len()).map_err(|_| {

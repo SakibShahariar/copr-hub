@@ -219,7 +219,7 @@ pub fn clear() -> Result<(), String> {
             .ok_or_else(|| "Could not determine the activity history directory.".to_string())?;
         fs::create_dir_all(parent)
             .map_err(|error| format!("Could not create activity history directory: {error}"))?;
-    
+
         let contents = serde_json::to_vec_pretty(&Vec::<ActivityEntry>::new())
             .map_err(|error| format!("Could not encode empty activity history: {error}"))?;
         storage::atomic_write(&path, &contents)
@@ -239,14 +239,14 @@ pub fn record(action: &str, target: &str, summary: &str) -> Result<(), String> {
         if !activity_entry_has_valid_fields(&entry) {
             return Err("Activity entry contains invalid or oversized fields.".to_string());
         }
-    
+
         let path = history_path();
         let parent = path
             .parent()
             .ok_or_else(|| "Could not determine the activity history directory.".to_string())?;
         fs::create_dir_all(parent)
             .map_err(|error| format!("Could not create activity history directory: {error}"))?;
-    
+
         let mut entries = load_unlocked()?;
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -262,7 +262,7 @@ pub fn record(action: &str, target: &str, summary: &str) -> Result<(), String> {
             },
         );
         entries.truncate(MAX_ENTRIES);
-    
+
         // Activity history is machine-read; compact JSON reduces repeated write volume.
         let contents = serde_json::to_vec(&entries)
             .map_err(|error| format!("Could not encode activity history: {error}"))?;
