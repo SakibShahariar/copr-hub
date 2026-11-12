@@ -24,7 +24,7 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 
 - Repository: `SakibShahariar/copr-hub`
 - Default branch: `master`
-- Checkpoint SHA: `674d5dbe8b13842e653c618b2d2db978e5cc0997`
+- Checkpoint SHA: `5ba6ee70407fd7311590fc5750dcd52237fa18ca`
 - Initialized: 2026-11-02
 - Baseline: latest branch tip queried through combined commit-status endpoint; empty status list recorded as **unavailable**, not green/red. Older history was not retroactively audited during setup.
 - Next session: review commits after `6c62ba5682cbd557b89e1e7af8bd42b3f708d09d`, including the next substantive commit that updates this ledger.
@@ -87,6 +87,10 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 | `a53ecf247cf99405623383ca3e77486b4e6e41a1` | fix(repositories): show installed COPR package names | **red** | 2026-11-12 | [43258764703](https://github.com/SakibShahariar/copr-hub/actions/runs/43258764703) |
 | `0e3df7c2bf431b01d8ca2d5e5159ca12d6bd7b1e` | fix(system): delimit DNF5 package query output | **red** | 2026-11-12 | [43258923528](https://github.com/SakibShahariar/copr-hub/actions/runs/43258923528) |
 | `674d5dbe8b13842e653c618b2d2db978e5cc0997` | test(system): assert non-COPR origins are parsed | **green** | 2026-11-12 | [43258995937](https://github.com/SakibShahariar/copr-hub/actions/runs/43258995937) |
+| `0fab3a5e1e070e8b9de0dd5397d741754402e956` | fix(ui): constrain repository details popover | **red** | 2026-11-12 | [43260961537](https://github.com/SakibShahariar/copr-hub/actions/runs/43260961537) |
+| `1aede0427807d1a5af2843400d8d7ae728c7d433` | fix(ui): restore repository action menu interaction | **unavailable** | 2026-11-12 | Combined status lookup returned no entries. |
+| `9e494ccfb22cedb3b29902967ce99a8b3c4fc35` | fix(ui): use menu button popover lifecycle | **unavailable** | 2026-11-12 | Combined status lookup returned no entries. |
+| `5ba6ee70407fd7311590fc5750dcd52237fa18ca` | fix(ui): make repository menu keyboard-focusable | **unavailable** | 2026-11-12 | Combined status lookup returned no entries. |
 
 ## Red-cross investigation log
 
@@ -101,6 +105,7 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 - `33f9d69f0dfb3f7df341dee59f8814276e5cc05b` and `7025808bc620933d7af3b77647f6e024524284dd` — **Check formatting** rejected the multiline relevance dropdown expression. Applied the exact rustfmt layout in `4d9bde02883b2722ccb1d9b5695722abae4bfc42`.
 - `4d9bde02883b2722ccb1d9b5695722abae4bfc42` and `c8158cbce2cc3d5b2aee546470e1847fad595da6` — **Check formatting** rejected the edit-distance substitution expression. Applied rustfmt's multiline layout in `dea90eab197986c187ab1f97b3f03b2576bd4c71`.
 - `dea90eab197986c187ab1f97b3f03b2576bd4c71` and `eac293aacc18a9af60a298245dcf619e7bfc3674` — **Run unit tests** exposed two flawed test assumptions: different suffix lengths were not equal relevance scores, and the short-query fixture was actually a valid prefix. Corrected the short-query fixture in `eac293aacc18a9af60a298245dcf619e7bfc3674` and used equal-length suffixes in `3f43212386c5e1d14b80d653fcef149090982221`; the final run passed all 104 tests.
+- `0fab3a5e1e070e8b9de0dd5397d741754402e956` — **Check formatting** failed because rustfmt expected the repository-file label construction on one line. The formatting was corrected in `1aede0427807d1a5af2843400d8d7ae728c7d433`, but no completed CI result is exposed for that commit or the subsequent repository-menu commits.
 - `a53ecf247cf99405623383ca3e77486b4e6e41a1` and `0e3df7c2bf431b01d8ca2d5e5159ca12d6bd7b1e` — **Run unit tests** failed because a new parser test incorrectly expected non-COPR repository origins to be discarded. The parser intentionally records safe origins for all repositories; the repository UI looks up only the COPR ID it is displaying. Corrected the test to assert that the Fedora-origin row is parsed in `674d5dbe8b13842e653c618b2d2db978e5cc0997`; its CI passed all 106 tests and all remaining checks.
 - `e7500338ca2107aa9ea027b9ace4628d9c3d639a` — **Run unit tests** found one stale test expectation after moving fuzzy matches below explicit description matches. Updated the test to assert the fuzzy tier directly in `6c62ba5682cbd557b89e1e7af8bd42b3f708d09d`; its CI run passed all 104 tests.
 
@@ -115,5 +120,6 @@ All failures in this reviewed range have a subsequent fix and green CI validatio
 | 2026-11-12 | `2a96076780ddc8b4802832c03387daee95482e94` → `420c45ce7059905ee780ef7845234e69a35dbf9b` | Reviewed 3 commits; all 3 had completed green CI runs. |
 | 2026-11-12 | `420c45ce7059905ee780ef7845234e69a35dbf9b` → `3f43212386c5e1d14b80d653fcef149090982221` | Reviewed 7 commits: 1 green, 6 red; all six red results were diagnosed and followed by a green fix/validation commit. |
 | 2026-11-12 | `3f43212386c5e1d14b80d653fcef149090982221` → `0f2aff926d2b7e455b97097b2d1b1f99303dc4a2` | Reviewed 1 documentation commit; CI completed green. |
+| 2026-11-12 | `674d5dbe8b13842e653c618b2d2db978e5cc0997` → `5ba6ee70407fd7311590fc5750dcd52237fa18ca` | Reviewed 4 commits: 1 red and 3 unavailable. The red formatting failure was corrected in the next commit, but CI confirmation is unavailable; repository-menu activation remains unverified in a live GNOME session. |
 | 2026-11-12 | `6c62ba5682cbd557b89e1e7af8bd42b3f708d09d` → `674d5dbe8b13842e653c618b2d2db978e5cc0997` | Reviewed 4 commits: 2 green, 2 red; both red runs were diagnosed as a flawed new test assertion and followed by a green correction. |
 | 2026-11-12 | `0f2aff926d2b7e455b97097b2d1b1f99303dc4a2` → `6c62ba5682cbd557b89e1e7af8bd42b3f708d09d` | Reviewed 2 commits: 1 red, 1 green; the red test expectation was corrected and final CI passed. |

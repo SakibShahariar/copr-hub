@@ -1,10 +1,13 @@
 use std::collections::HashMap;
 use std::fs;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 
 const REPOSITORY_DIRECTORY: &str = "/etc/yum.repos.d";
+const DNF5_SYSTEM_STATE_FILE: &str = "/usr/lib/sysimage/libdnf5/packages.toml";
+const DNF5_SYSTEM_STATE_MODE: u32 = 0o644;
 const MAX_COMMAND_DETAILS_CHARS: usize = 1200;
 const INSTALLED_COPR_QUERY_FORMAT: &str = "%{name}\t%{evr}\t%{from_repo}\\n";
 const PACKAGE_UPDATES_QUERY_FORMAT: &str = "%{name}\t%{evr}\t%{repoid}\\n";
@@ -213,6 +216,115 @@ pub struct AvailablePackageUpdate {
 pub struct PackageDependencyImpact {
     pub requirements: Vec<String>,
     pub required_by: Vec<String>,
+}
+
+/// Whether the DNF5 package-state file has the ownership and permissions
+/// expected by the Fedora DNF5 package, and is a safe repair candidate.
+fn dnf5_state_file_is_repair_candidate(
+    file_uid: u32,
+    file_mode: u32,
+    file_is_regular: bool,
+    parent_uid: u32,
+    parent_mode: u32,
+    parent_is_directory: bool,
+) -> bool {
+    file_uid == 0
+        && file_is_regular
+        && parent_uid == 0
+        && parent_is_directory
+        && parent_mode & 0o022 == 0
+        && file_mode & 0o7777 != DNF5_SYSTEM_STATE_MODE
+}
+
+fn dnf5_state_metadata() -> Result<(fs::Metadata, fs::Metadata), String> {
+    let path = Path::new(DNF5_SYSTEM_STATE_FILE);
+    let file = fs::symlink_metadata(path)
+        .map_err(|error| format!("Could not inspect DNF5 package state: {error}"))?;
+    let parent_path = path
+        .parent()
+        .ok_or_else(|| "The DNF5 package-state path has no parent directory.".to_string())?;
+    let parent = fs::symlink_metadata(parent_path)
+        .map_err(|error| format!("Could not inspect the DNF5 state directory: {error}"))?;
+    Ok((file, parent))
+}
+
+fn dnf5_state_metadata_is_repair_candidate(file: &fs::Metadata, parent: &fs::Metadata) -> bool {
+    dnf5_state_file_is_repair_candidate(
+        file.uid(),
+        file.mode(),
+        file.file_type().is_file(),
+        parent.uid(),
+        parent.mode(),
+        parent.file_type().is_dir(),
+    )
+}
+
+/// Detect restrictive permissions that prevent an ordinary user from reading
+/// DNF5's system package state.
+pub fn dnf5_system_state_permissions_need_repair() -> bool {
+    let Ok((file, parent)) = dnf5_state_metadata() else {
+        return false;
+    };
+    dnf5_state_metadata_is_repair_candidate(&file, &parent)
+}
+
+/// Restore the mode declared by the DNF5 RPM package. The privileged command
+/// is fixed to one root-owned regular file in a root-owned, non-writable
+/// directory; no path or command arguments come from user input.
+pub fn repair_dnf5_system_state_permissions() -> Result<(), String> {
+    let (file, parent) = dnf5_state_metadata()?;
+    if file.uid() != 0
+        || !file.file_type().is_file()
+        || parent.uid() != 0
+        || !parent.file_type().is_dir()
+        || parent.mode() & 0o022 != 0
+    {
+        return Err(
+            "For safety, Copr Hub will not change this DNF5 state file because its ownership or directory is unexpected."
+                .to_string(),
+        );
+    }
+
+    if file.mode() & 0o7777 == DNF5_SYSTEM_STATE_MODE {
+        return Ok(());
+    }
+
+    let output = Command::new("pkexec")
+        .args([
+            "/usr/bin/chmod",
+            "0644",
+            "--",
+            DNF5_SYSTEM_STATE_FILE,
+        ])
+        .output()
+        .map_err(|error| format!("Could not start the privileged permission repair: {error}"))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "Could not repair DNF5 package-state permissions: {}",
+            command_failure_details(
+                &String::from_utf8_lossy(&output.stderr),
+                &String::from_utf8_lossy(&output.stdout),
+                "Administrator authorization was cancelled or the permission change failed.",
+            )
+        ));
+    }
+
+    let (repaired_file, repaired_parent) = dnf5_state_metadata()?;
+    if repaired_file.uid() != 0
+        || !repaired_file.file_type().is_file()
+        || repaired_file.mode() & 0o7777 != DNF5_SYSTEM_STATE_MODE
+        || repaired_parent.uid() != 0
+        || !repaired_parent.file_type().is_dir()
+        || repaired_parent.mode() & 0o022 != 0
+    {
+        return Err(
+            "The DNF5 state file permissions did not match the expected root-owned 0644 mode after repair."
+                .to_string(),
+        );
+    }
+
+    Ok(())
 }
 
 pub fn list_installed_copr_packages() -> Result<Vec<InstalledCoprPackage>, String> {
@@ -623,6 +735,17 @@ fn command_failure_details(stderr: &str, stdout: &str, fallback: &str) -> String
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dnf5_state_permission_repair_requires_a_root_owned_file_and_safe_directory() {
+        assert!(dnf5_state_file_is_repair_candidate(0, 0o660, true, 0, 0o755, true));
+        assert!(!dnf5_state_file_is_repair_candidate(0, 0o644, true, 0, 0o755, true));
+        assert!(!dnf5_state_file_is_repair_candidate(1000, 0o660, true, 0, 0o755, true));
+        assert!(!dnf5_state_file_is_repair_candidate(0, 0o660, false, 0, 0o755, true));
+        assert!(!dnf5_state_file_is_repair_candidate(0, 0o660, true, 1000, 0o755, true));
+        assert!(!dnf5_state_file_is_repair_candidate(0, 0o660, true, 0, 0o775, true));
+        assert!(!dnf5_state_file_is_repair_candidate(0, 0o660, true, 0, 0o755, false));
+    }
 
     #[test]
     fn command_failure_details_include_both_streams_and_bound_output() {

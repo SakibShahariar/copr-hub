@@ -62,6 +62,12 @@ pub(super) fn build_installed_page(parent: &adw::ApplicationWindow) -> gtk::Widg
     feedback_icon.set_valign(gtk::Align::Center);
     feedback_card.append(&feedback_icon);
     feedback_card.append(&feedback);
+    let repair_permissions = gtk::Button::with_label("Fix DNF permissions");
+    repair_permissions.set_tooltip_text(Some(
+        "Restore the DNF5 package-state file permissions so regular-user package queries can work.",
+    ));
+    repair_permissions.set_visible(false);
+    feedback_card.append(&repair_permissions);
     content.append(&feedback_card);
 
     let list = gtk::ListBox::new();
@@ -122,16 +128,53 @@ pub(super) fn build_installed_page(parent: &adw::ApplicationWindow) -> gtk::Widg
     refresh.connect_clicked({
         let list = list.clone();
         let feedback = feedback.clone();
+        let repair_permissions = repair_permissions.clone();
         let parent = parent.clone();
-        move |_| refresh_installed_packages(&parent, &list, &feedback)
+        move |_| refresh_installed_packages(&parent, &list, &feedback, &repair_permissions)
     });
     check_updates.connect_clicked({
         let list = list.clone();
         let feedback = feedback.clone();
+        let repair_permissions = repair_permissions.clone();
         let parent = parent.clone();
-        move |_| refresh_installed_package_updates(&parent, &list, &feedback)
+        move |_| refresh_installed_package_updates(&parent, &list, &feedback, &repair_permissions)
     });
-    refresh_installed_packages(parent, &list, &feedback);
+    repair_permissions.connect_clicked({
+        let list = list.clone();
+        let feedback = feedback.clone();
+        let repair_permissions = repair_permissions.clone();
+        let parent = parent.clone();
+        move |button| {
+            button.set_sensitive(false);
+            button.set_label("Repairing…");
+            feedback.set_text("Requesting administrator authorization to repair DNF5 permissions…");
+            let list = list.clone();
+            let feedback = feedback.clone();
+            let repair_permissions = repair_permissions.clone();
+            let parent = parent.clone();
+            gtk::glib::MainContext::default().spawn_local(async move {
+                match gtk::gio::spawn_blocking(system::repair_dnf5_system_state_permissions).await {
+                    Ok(Ok(())) => {
+                        repair_permissions.set_visible(false);
+                        repair_permissions.set_sensitive(true);
+                        repair_permissions.set_label("Fix DNF permissions");
+                        refresh_installed_packages(&parent, &list, &feedback, &repair_permissions);
+                    }
+                    Ok(Err(error)) => {
+                        feedback.set_text(&error);
+                        repair_permissions.set_sensitive(true);
+                        repair_permissions.set_label("Try again");
+                    }
+                    Err(_) => {
+                        feedback.set_text("The DNF5 permission repair failed unexpectedly.");
+                        repair_permissions.set_sensitive(true);
+                        repair_permissions.set_label("Try again");
+                    }
+                }
+            });
+        }
+    });
+    refresh_installed_packages(parent, &list, &feedback, &repair_permissions);
 
     scroll_page(&content)
 }
@@ -140,13 +183,18 @@ fn refresh_installed_packages(
     parent: &adw::ApplicationWindow,
     list: &gtk::ListBox,
     feedback: &gtk::Label,
+    repair_permissions: &gtk::Button,
 ) {
+    repair_permissions.set_visible(false);
+    repair_permissions.set_sensitive(true);
+    repair_permissions.set_label("Fix DNF permissions");
     feedback.set_text("Querying DNF for installed COPR packages…");
     clear_list_box(list);
 
     let parent = parent.clone();
     let list = list.clone();
     let feedback = feedback.clone();
+    let repair_permissions = repair_permissions.clone();
     gtk::glib::MainContext::default().spawn_local(async move {
         let response = gtk::gio::spawn_blocking(system::list_installed_copr_packages).await;
         match response {
@@ -171,11 +219,19 @@ fn refresh_installed_packages(
             }
             Ok(Err(error)) => {
                 clear_list_box(&list);
-                feedback.set_text(&error);
+                if system::dnf5_system_state_permissions_need_repair() {
+                    feedback.set_text(&format!(
+                        "{error}\n\nCopr Hub can restore the expected DNF5 file permissions. Select Fix DNF permissions to authorize that repair."
+                    ));
+                    repair_permissions.set_visible(true);
+                } else {
+                    feedback.set_text(&error);
+                }
             }
             Err(_) => {
                 clear_list_box(&list);
                 feedback.set_text("The background package query failed unexpectedly.");
+                repair_permissions.set_visible(false);
             }
         }
     });
@@ -185,13 +241,16 @@ fn refresh_installed_package_updates(
     parent: &adw::ApplicationWindow,
     list: &gtk::ListBox,
     feedback: &gtk::Label,
+    repair_permissions: &gtk::Button,
 ) {
+    repair_permissions.set_visible(false);
     feedback.set_text("Checking enabled repositories for upgrades to installed COPR packages…");
     clear_list_box(list);
 
     let parent = parent.clone();
     let list = list.clone();
     let feedback = feedback.clone();
+    let repair_permissions = repair_permissions.clone();
     gtk::glib::MainContext::default().spawn_local(async move {
         let response = gtk::gio::spawn_blocking(|| {
             (
@@ -252,11 +311,19 @@ fn refresh_installed_package_updates(
             }
             Ok((Err(error), _)) => {
                 clear_list_box(&list);
-                feedback.set_text(&format!("Could not read installed COPR packages: {error}"));
+                if system::dnf5_system_state_permissions_need_repair() {
+                    feedback.set_text(&format!(
+                        "Could not read installed COPR packages: {error}\n\nCopr Hub can restore the expected DNF5 file permissions. Select Fix DNF permissions to authorize that repair."
+                    ));
+                    repair_permissions.set_visible(true);
+                } else {
+                    feedback.set_text(&format!("Could not read installed COPR packages: {error}"));
+                }
             }
             Err(_) => {
                 clear_list_box(&list);
                 feedback.set_text("The background update query failed unexpectedly.");
+                repair_permissions.set_visible(false);
             }
         }
     });
