@@ -128,7 +128,7 @@ fn render_repositories(
                 };
                 let row = adw::ActionRow::builder()
                     .title(repository.name.as_str())
-                    .subtitle(format!("{} · {}", repository.id, repository.file.display()))
+                    .subtitle(repository.id.as_str())
                     .build();
                 row.set_widget_name(&format!(
                     "{} {} {}",
@@ -136,10 +136,33 @@ fn render_repositories(
                     repository.id,
                     repository.file.display()
                 ));
+                row.set_tooltip_text(Some(&repository.file.display().to_string()));
                 row.add_prefix(&gtk::Image::from_icon_name("folder-symbolic"));
+
                 let status_label = gtk::Label::new(Some(status));
+                status_label.add_css_class(if repository.enabled {
+                    "success"
+                } else {
+                    "warning"
+                });
                 status_label.set_tooltip_text(Some("Repository enabled state"));
                 row.add_suffix(&status_label);
+
+                // Keep secondary information and less-used actions in a popover,
+                // rather than squeezing every control into the repository row.
+                let actions = gtk::Box::new(gtk::Orientation::Vertical, 8);
+                actions.set_margin_top(12);
+                actions.set_margin_bottom(12);
+                actions.set_margin_start(12);
+                actions.set_margin_end(12);
+                actions.set_size_request(240, -1);
+
+                let file_label =
+                    gtk::Label::new(Some(&format!("Repository file: {}", repository.file.display())));
+                file_label.set_wrap(true);
+                file_label.set_xalign(0.0);
+                file_label.add_css_class("dim-label");
+                actions.append(&file_label);
 
                 // Show installed package origins before a user disables or removes
                 // a repository. A failed query is explicitly shown as unknown.
@@ -147,7 +170,7 @@ fn render_repositories(
                 origin_summary.set_wrap(true);
                 origin_summary.set_xalign(0.0);
                 origin_summary.add_css_class("dim-label");
-                row.add_suffix(&origin_summary);
+                actions.append(&origin_summary);
                 {
                     let repository_id = repository.id.clone();
                     let query_summary = origin_summary.clone();
@@ -191,7 +214,7 @@ fn render_repositories(
                     "Enable"
                 };
                 let toggle = gtk::Button::with_label(action);
-                toggle.set_valign(gtk::Align::Center);
+                toggle.set_halign(gtk::Align::Fill);
                 toggle.add_css_class("flat");
                 toggle.connect_clicked({
                     let parent = parent.clone();
@@ -207,7 +230,7 @@ fn render_repositories(
                         confirm_repository_toggle(&parent, &repository, &list, &feedback);
                     }
                 });
-                row.add_suffix(&toggle);
+                actions.append(&toggle);
 
                 if let Some(command) =
                     system::copr_repository_command(&repository.id, !repository.enabled)
@@ -218,7 +241,7 @@ fn render_repositories(
                         "Copy enable command"
                     };
                     let copy_command = gtk::Button::with_label(label);
-                    copy_command.set_valign(gtk::Align::Center);
+                    copy_command.set_halign(gtk::Align::Fill);
                     copy_command.add_css_class("flat");
                     copy_command.set_tooltip_text(Some(&command));
                     copy_command.connect_clicked({
@@ -233,12 +256,12 @@ fn render_repositories(
                             }
                         }
                     });
-                    row.add_suffix(&copy_command);
+                    actions.append(&copy_command);
                 }
 
                 if system::copr_project_spec_from_repository_id(&repository.id).is_some() {
-                    let remove = gtk::Button::with_label("Remove");
-                    remove.set_valign(gtk::Align::Center);
+                    let remove = gtk::Button::with_label("Remove repository");
+                    remove.set_halign(gtk::Align::Fill);
                     remove.add_css_class("destructive-action");
                     remove.connect_clicked({
                         let parent = parent.clone();
@@ -254,8 +277,17 @@ fn render_repositories(
                             confirm_repository_removal(&parent, &repository, &list, &feedback);
                         }
                     });
-                    row.add_suffix(&remove);
+                    actions.append(&remove);
                 }
+
+                let popover = gtk::Popover::new();
+                popover.set_child(Some(&actions));
+                let menu = gtk::MenuButton::new();
+                menu.set_icon_name("view-more-symbolic");
+                menu.set_tooltip_text(Some("Repository actions and details"));
+                menu.add_css_class("flat");
+                menu.set_popover(Some(&popover));
+                row.add_suffix(&menu);
                 list.append(&row);
             }
         }
