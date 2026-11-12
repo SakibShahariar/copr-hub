@@ -70,8 +70,8 @@ fn read_persistent_cache(
     if metadata.len() > MAX_PERSISTED_CACHE_BYTES {
         return Err("cache file exceeds the 2 MiB safety limit".to_string());
     }
-    let contents = fs::read_to_string(path)
-        .map_err(|error| format!("could not read cache file: {error}"))?;
+    let contents =
+        fs::read_to_string(path).map_err(|error| format!("could not read cache file: {error}"))?;
     let saved = serde_json::from_str::<PersistedReleaseCache>(&contents)
         .map_err(|error| format!("cache file contains invalid JSON: {error}"))?;
     let entries = saved

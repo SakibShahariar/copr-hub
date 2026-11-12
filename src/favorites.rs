@@ -33,13 +33,10 @@ fn sanitize_project_metadata(project: &mut CoprProject) {
 
 fn project_has_valid_fields(project: &CoprProject) -> bool {
     crate::copr::valid_project_identity(&project.owner, &project.name)
-        && project
-            .description
-            .as_ref()
-            .is_none_or(|value| {
-                value.len() <= 16_384
-                    && crate::copr::sanitize_project_description(value) == value.as_str()
-            })
+        && project.description.as_ref().is_none_or(|value| {
+            value.len() <= 16_384
+                && crate::copr::sanitize_project_description(value) == value.as_str()
+        })
         && project.homepage.as_deref().is_none_or(homepage_is_valid)
 }
 
@@ -395,7 +392,8 @@ mod tests {
 
     #[test]
     fn backup_parser_sanitizes_untrusted_project_descriptions() {
-        let contents = r#"[{"owner":"alice","name":"demo","description":"A\u200bB\u202eC\u0007\nline"}]"#;
+        let contents =
+            r#"[{"owner":"alice","name":"demo","description":"A\u200bB\u202eC\u0007\nline"}]"#;
         let imported = parse_backup(contents).unwrap();
         assert_eq!(imported[0].description.as_deref(), Some("ABC\nline"));
     }
