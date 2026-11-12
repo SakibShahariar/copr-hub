@@ -311,7 +311,10 @@ fn dnf5_state_error_is_permission_related(error: &str) -> bool {
 /// Whether a DNF failure is specifically caused by restrictive permissions on
 /// a known state file and the complete state-file set is safe to repair.
 pub fn dnf5_system_state_permission_repair_available(error: &str) -> bool {
-    dnf5_state_error_is_permission_related(error) && dnf5_system_state_permissions_need_repair()
+    // Show the repair action when DNF identifies a known system-state file.
+    // The repair operation performs the ownership and directory safety checks
+    // before requesting authorization or changing any permissions.
+    dnf5_state_error_is_permission_related(error)
 }
 
 /// Restore readable permissions on all known DNF5 state TOML files. The paths
