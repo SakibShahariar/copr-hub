@@ -3,11 +3,19 @@ use crate::storage;
 use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 const MAX_BACKUP_BYTES: usize = 5 * 1024 * 1024;
 const MAX_IMPORTED_PROJECTS: usize = 5_000;
 const MAX_SAVED_PROJECTS: usize = 10_000;
 const MAX_SAVED_FILE_BYTES: u64 = 10 * 1024 * 1024;
+
+static FAVORITES_LOCK: Mutex<()> = Mutex::new(());
+
+fn with_favorites_lock<T>(operation: impl FnOnce() -> T) -> T {
+    let _guard = FAVORITES_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    operation()
+}
 
 fn project_has_valid_fields(project: &CoprProject) -> bool {
     !project.name.trim().is_empty()
@@ -59,6 +67,10 @@ fn favorites_path() -> PathBuf {
 }
 
 pub fn load() -> Result<Vec<CoprProject>, String> {
+    with_favorites_lock(load_unlocked)
+}
+
+fn load_unlocked() -> Result<Vec<CoprProject>, String> {
     let path = favorites_path();
     match fs::metadata(&path) {
         Ok(metadata) if metadata.len() > MAX_SAVED_FILE_BYTES => {
@@ -141,6 +153,7 @@ fn toggle_in_list(projects: &mut Vec<CoprProject>, project: &CoprProject) -> boo
 }
 
 pub fn toggle(project: &CoprProject) -> Result<bool, String> {
+    with_favorites_lock(|| {
     let path = favorites_path();
     let parent = path
         .parent()
@@ -148,7 +161,7 @@ pub fn toggle(project: &CoprProject) -> Result<bool, String> {
     fs::create_dir_all(parent)
         .map_err(|error| format!("Could not create saved-projects directory: {error}"))?;
 
-    let mut projects = load()?;
+    let mut projects = load_unlocked()?;
     let already_saved = projects
         .iter()
         .any(|saved| saved.owner == project.owner && saved.name == project.name);
@@ -165,16 +178,19 @@ pub fn toggle(project: &CoprProject) -> Result<bool, String> {
     storage::atomic_write(&path, &contents)
         .map_err(|error| format!("Could not save project list: {error}"))?;
     Ok(saved)
+    })
 }
 
 /// Export the locally saved projects as a portable JSON backup.
 pub fn export_to(path: &std::path::Path) -> Result<usize, String> {
-    let projects = load()?;
+    with_favorites_lock(|| {
+    let projects = load_unlocked()?;
     let contents = serde_json::to_vec_pretty(&projects)
         .map_err(|error| format!("Could not encode saved projects: {error}"))?;
     storage::atomic_write(path, &contents)
         .map_err(|error| format!("Could not export saved projects: {error}"))?;
     Ok(projects.len())
+    })
 }
 
 /// A non-mutating preview of a saved-project backup.
@@ -238,6 +254,7 @@ pub fn import_from(path: &std::path::Path) -> Result<usize, String> {
         .map_err(|error| format!("Could not read the selected backup: {error}"))?;
     let imported = parse_backup(&contents)?;
 
+    with_favorites_lock(|| {
     let path = favorites_path();
     let parent = path
         .parent()
@@ -245,7 +262,7 @@ pub fn import_from(path: &std::path::Path) -> Result<usize, String> {
     fs::create_dir_all(parent)
         .map_err(|error| format!("Could not create saved-projects directory: {error}"))?;
 
-    let mut projects = load()?;
+    let mut projects = load_unlocked()?;
     let added = merge_projects(&mut projects, imported);
     ensure_saved_project_limit(projects.len()).map_err(|_| {
         format!(
@@ -260,6 +277,7 @@ pub fn import_from(path: &std::path::Path) -> Result<usize, String> {
     storage::atomic_write(&path, &contents)
         .map_err(|error| format!("Could not save imported projects: {error}"))?;
     Ok(added)
+    })
 }
 
 #[cfg(test)]
@@ -273,6 +291,35 @@ mod tests {
             description: None,
             homepage: None,
         }
+    }
+
+    #[test]
+    fn favorites_serializes_concurrent_updates() {
+        use std::sync::{atomic::{AtomicUsize, Ordering}, Arc, Barrier};
+        use std::time::Duration;
+
+        let active = Arc::new(AtomicUsize::new(0));
+        let maximum = Arc::new(AtomicUsize::new(0));
+        let barrier = Arc::new(Barrier::new(4));
+        let workers: Vec<_> = (0..4).map(|_| {
+            let active = active.clone();
+            let maximum = maximum.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                with_favorites_lock(|| {
+                    let current = active.fetch_add(1, Ordering::SeqCst) + 1;
+                    maximum.fetch_max(current, Ordering::SeqCst);
+                    std::thread::sleep(Duration::from_millis(5));
+                    active.fetch_sub(1, Ordering::SeqCst);
+                });
+            })
+        }).collect();
+
+        for worker in workers {
+            worker.join().unwrap();
+        }
+        assert_eq!(maximum.load(Ordering::SeqCst), 1);
     }
 
     #[test]

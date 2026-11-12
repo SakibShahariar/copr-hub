@@ -3,12 +3,20 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAX_ENTRIES: usize = 100;
 const MAX_HISTORY_FILE_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_IMPORT_BYTES: usize = 1024 * 1024;
 const MAX_IMPORTED_ENTRIES: usize = 1_000;
+
+static ACTIVITY_LOCK: Mutex<()> = Mutex::new(());
+
+fn with_activity_lock<T>(operation: impl FnOnce() -> T) -> T {
+    let _guard = ACTIVITY_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    operation()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActivityEntry {
@@ -33,6 +41,10 @@ fn activity_entry_has_valid_fields(entry: &ActivityEntry) -> bool {
 }
 
 pub fn load() -> Result<Vec<ActivityEntry>, String> {
+    with_activity_lock(load_unlocked)
+}
+
+fn load_unlocked() -> Result<Vec<ActivityEntry>, String> {
     let path = history_path();
     match fs::metadata(&path) {
         Ok(metadata) if metadata.len() > MAX_HISTORY_FILE_BYTES => {
@@ -104,7 +116,8 @@ pub fn export_filtered_to(
     category: &str,
     range: &str,
 ) -> Result<usize, String> {
-    let entries = load()?;
+    with_activity_lock(|| {
+    let entries = load_unlocked()?;
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -120,6 +133,7 @@ pub fn export_filtered_to(
     storage::atomic_write(path, &contents)
         .map_err(|error| format!("Could not export activity history: {error}"))?;
     Ok(filtered.len())
+    })
 }
 
 fn parse_import(contents: &str) -> Result<Vec<ActivityEntry>, String> {
@@ -178,7 +192,8 @@ pub fn import_from(path: &std::path::Path) -> Result<usize, String> {
     let contents = fs::read_to_string(path)
         .map_err(|error| format!("Could not read the selected activity backup: {error}"))?;
     let imported = parse_import(&contents)?;
-    let mut entries = load()?;
+    with_activity_lock(|| {
+    let mut entries = load_unlocked()?;
     let added = merge_entries(&mut entries, imported);
     let path = history_path();
     let parent = path
@@ -191,9 +206,11 @@ pub fn import_from(path: &std::path::Path) -> Result<usize, String> {
     storage::atomic_write(&path, &contents)
         .map_err(|error| format!("Could not save imported activity history: {error}"))?;
     Ok(added)
+    })
 }
 
 pub fn clear() -> Result<(), String> {
+    with_activity_lock(|| {
     let path = history_path();
     let parent = path
         .parent()
@@ -206,9 +223,11 @@ pub fn clear() -> Result<(), String> {
     storage::atomic_write(&path, &contents)
         .map_err(|error| format!("Could not clear activity history: {error}"))?;
     Ok(())
+    })
 }
 
 pub fn record(action: &str, target: &str, summary: &str) -> Result<(), String> {
+    with_activity_lock(|| {
     let entry = ActivityEntry {
         timestamp: 0,
         action: action.to_string(),
@@ -226,7 +245,7 @@ pub fn record(action: &str, target: &str, summary: &str) -> Result<(), String> {
     fs::create_dir_all(parent)
         .map_err(|error| format!("Could not create activity history directory: {error}"))?;
 
-    let mut entries = load()?;
+    let mut entries = load_unlocked()?;
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -248,11 +267,41 @@ pub fn record(action: &str, target: &str, summary: &str) -> Result<(), String> {
     storage::atomic_write(&path, &contents)
         .map_err(|error| format!("Could not save activity history: {error}"))?;
     Ok(())
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn activity_serializes_concurrent_updates() {
+        use std::sync::{atomic::{AtomicUsize, Ordering}, Arc, Barrier};
+        use std::time::Duration;
+
+        let active = Arc::new(AtomicUsize::new(0));
+        let maximum = Arc::new(AtomicUsize::new(0));
+        let barrier = Arc::new(Barrier::new(4));
+        let workers: Vec<_> = (0..4).map(|_| {
+            let active = active.clone();
+            let maximum = maximum.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                with_activity_lock(|| {
+                    let current = active.fetch_add(1, Ordering::SeqCst) + 1;
+                    maximum.fetch_max(current, Ordering::SeqCst);
+                    std::thread::sleep(Duration::from_millis(5));
+                    active.fetch_sub(1, Ordering::SeqCst);
+                });
+            })
+        }).collect();
+
+        for worker in workers {
+            worker.join().unwrap();
+        }
+        assert_eq!(maximum.load(Ordering::SeqCst), 1);
+    }
 
     #[test]
     fn activity_filter_matches_action_target_and_summary_case_insensitively() {

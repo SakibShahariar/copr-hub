@@ -4,10 +4,18 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAX_SNAPSHOT_BYTES: u64 = 4 * 1024 * 1024;
 const MAX_SNAPSHOT_AGE_SECS: u64 = 180 * 24 * 60 * 60;
+
+static SNAPSHOT_LOCK: Mutex<()> = Mutex::new(());
+
+fn with_snapshot_lock<T>(operation: impl FnOnce() -> T) -> T {
+    let _guard = SNAPSHOT_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    operation()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectSnapshot {
@@ -116,6 +124,10 @@ fn write_snapshot(snapshot: &ProjectSnapshot) -> Result<(), String> {
 }
 
 pub fn load(project: &copr::CoprProject) -> Option<ProjectSnapshot> {
+    with_snapshot_lock(|| load_unlocked(project))
+}
+
+fn load_unlocked(project: &copr::CoprProject) -> Option<ProjectSnapshot> {
     if !valid_project(project) {
         return None;
     }
@@ -137,7 +149,7 @@ pub fn load(project: &copr::CoprProject) -> Option<ProjectSnapshot> {
 }
 
 fn load_or_create(project: &copr::CoprProject) -> Result<ProjectSnapshot, String> {
-    Ok(load(project).unwrap_or_else(|| ProjectSnapshot {
+    Ok(load_unlocked(project).unwrap_or_else(|| ProjectSnapshot {
         project: project.clone(),
         saved_at_unix: now_unix(),
         monitor: None,
@@ -177,42 +189,50 @@ pub fn save_monitoring_data(
     history: Option<Vec<copr::ProjectBuildEvent>>,
     release: Option<UpstreamRelease>,
 ) -> Result<(), String> {
+    with_snapshot_lock(|| {
     let mut snapshot = load_or_create(project)?;
     update_monitoring_data(&mut snapshot, monitor, history, release, now_unix());
     write_snapshot(&snapshot)
+    })
 }
 
 pub fn save_monitor(
     project: &copr::CoprProject,
     monitor: copr::ProjectMonitor,
 ) -> Result<(), String> {
+    with_snapshot_lock(|| {
     let mut snapshot = load_or_create(project)?;
     snapshot.monitor = Some(monitor);
     snapshot.monitor_fetched_at_unix = Some(now_unix());
     snapshot.saved_at_unix = now_unix();
     write_snapshot(&snapshot)
+    })
 }
 
 pub fn save_history(
     project: &copr::CoprProject,
     history: Vec<copr::ProjectBuildEvent>,
 ) -> Result<(), String> {
+    with_snapshot_lock(|| {
     let mut snapshot = load_or_create(project)?;
     snapshot.build_history = Some(history);
     snapshot.history_fetched_at_unix = Some(now_unix());
     snapshot.saved_at_unix = now_unix();
     write_snapshot(&snapshot)
+    })
 }
 
 pub fn save_release(
     project: &copr::CoprProject,
     release: Option<UpstreamRelease>,
 ) -> Result<(), String> {
+    with_snapshot_lock(|| {
     let mut snapshot = load_or_create(project)?;
     snapshot.upstream_release = release;
     snapshot.upstream_fetched_at_unix = Some(now_unix());
     snapshot.saved_at_unix = now_unix();
     write_snapshot(&snapshot)
+    })
 }
 
 pub fn cache_age_label(timestamp: Option<u64>) -> String {
@@ -249,6 +269,35 @@ mod tests {
             description: None,
             homepage: None,
         }
+    }
+
+    #[test]
+    fn snapshot_serializes_concurrent_updates() {
+        use std::sync::{atomic::{AtomicUsize, Ordering}, Arc, Barrier};
+        use std::time::Duration;
+
+        let active = Arc::new(AtomicUsize::new(0));
+        let maximum = Arc::new(AtomicUsize::new(0));
+        let barrier = Arc::new(Barrier::new(4));
+        let workers: Vec<_> = (0..4).map(|_| {
+            let active = active.clone();
+            let maximum = maximum.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                with_snapshot_lock(|| {
+                    let current = active.fetch_add(1, Ordering::SeqCst) + 1;
+                    maximum.fetch_max(current, Ordering::SeqCst);
+                    std::thread::sleep(Duration::from_millis(5));
+                    active.fetch_sub(1, Ordering::SeqCst);
+                });
+            })
+        }).collect();
+
+        for worker in workers {
+            worker.join().unwrap();
+        }
+        assert_eq!(maximum.load(Ordering::SeqCst), 1);
     }
 
     #[test]
