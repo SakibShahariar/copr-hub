@@ -808,7 +808,10 @@ enabled=1
             origins.get("copr:copr.fedorainfracloud.org:achno:gowall"),
             Some(&vec!["gowall".to_string(), "gowall-cli".to_string()])
         );
-        assert!(!origins.contains_key("fedora"));
+        assert_eq!(
+            origins.get("fedora"),
+            Some(&vec!["fedora-package".to_string()])
+        );
     }
 
     #[test]
