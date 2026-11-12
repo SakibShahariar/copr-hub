@@ -1226,8 +1226,10 @@ enabled=0
     fn system_command_runs_fake_dnf_rpm_and_pkexec_with_safe_environment() {
         use std::os::unix::fs::PermissionsExt;
 
-        let directory =
-            std::env::temp_dir().join(format!("copr-hub-fake-system-command-{}", std::process::id()));
+        let directory = std::env::temp_dir().join(format!(
+            "copr-hub-fake-system-command-{}",
+            std::process::id()
+        ));
         fs::create_dir_all(&directory).unwrap();
 
         for program in ["dnf", "rpm", "pkexec"] {
