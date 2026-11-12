@@ -54,12 +54,8 @@ pub(super) fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widge
         .hexpand(true)
         .build();
     sort_label.add_css_class("dim-label");
-    let sort = gtk::DropDown::from_strings(&[
-        "Most relevant",
-        "COPR order",
-        "Project name",
-        "Owner",
-    ]);
+    let sort =
+        gtk::DropDown::from_strings(&["Most relevant", "COPR order", "Project name", "Owner"]);
     sort.set_tooltip_text(Some("Sort the current search results"));
     sort_row.append(&sort_label);
     sort_row.append(&sort);
