@@ -20,7 +20,7 @@ Scope: the 99 audit issues in #50–#148. This file records the A–E category f
 | #55 | B | Guard compatibility lookups and verify control restoration on every path. |
 | #58 | B | Disable Import during chooser/confirmation/import and verify cancellation paths. |
 | #59 | B | Disable Import/Export during chooser and file operations; verify native chooser behavior. |
-| #60 | B | Replace label-text parsing with explicit loading state; verify repository action gating. |
+| #60 | A | Explicit origin state prevents Enable/Disable/Remove until package-origin data is successfully loaded; deterministic state test included. |
 | #61 | B | Project Details save/remove and its activity write now run in a background worker; live GNOME validation remains.
 | #62 | B | Import/export/clear and history refresh now run in background workers with stale-refresh protection; live GNOME validation remains.
 | #63 | B | Duplicate scope of #62; track clear-history behavior with #62 and verify its response path. |
@@ -38,7 +38,7 @@ Scope: the 99 audit issues in #50–#148. This file records the A–E category f
 | #82 | B | Clarify that DNF reports recorded install origin, not necessarily the current provider. |
 | #83 | B | Surface candidate version and repository in Installed rows; verify layout. |
 | #84 | B | Distinguish exact 100-item results from truncated output and show the limit in dependency details. |
-| #85 | A | Timeout handling can be tested with controlled child processes. |
+| #85 | C | Process timeout and cancellation behavior needs Fedora/DNF integration validation and a deliberate timeout policy. |
 | #87 | C | Safe cancellation needs process lifecycle handling and interactive validation. |
 | #89 | B | Preserve skipped-file details and surface a nonfatal repository-scan warning. |
 | #91 | B | COPR pagination exists, but a useful Load more flow needs UI state and interaction testing. |
@@ -65,7 +65,7 @@ Scope: the 99 audit issues in #50–#148. This file records the A–E category f
 | #121 | E | Decide whether removed-project baselines should be retained, and for how long. |
 | #122 | E | Choose stale-alert cooldown/hysteresis behavior. |
 | #123 | E | Decide whether stale cached release data may advance monitoring baselines or trigger alerts. |
-| #124 | A | Leading v/V prefixes are normalized; keep suffixes distinct unless a different release-equivalence policy is chosen. CI is pending. |
+| #124 | E | Release version normalization needs owner confirmation about suffix handling and comparison policy. |
 | #125 | E | Current code suppresses the latest-build alert when new failed targets already explain the failure. |
 | #126 | E | Activity changes are recorded only after monitoring state saves successfully; the described contradictory-history path is absent. |
 | #127 | B | Distinguish oversized monitoring state from missing state, preserve the file, and surface recovery guidance. |

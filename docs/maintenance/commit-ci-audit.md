@@ -191,7 +191,7 @@ This section records every direct-to-master commit after the previous ledger tab
 | `babdcfa434e91b658f3696db1042f608e7e970cb` | style(system): format fake command test | red (#43314139710) |
 | `046fdd59f115f9a0732132a358ccb9e79a386b48` | fix(data): validate favorites and touch cached releases | red (#43314382227) |
 | `dae4088e3d250e325c3565908c3edbea769b1653` | fix(favorites): remove needless project borrows | green (#43314601853) |
-| `b10324701778c063f5ea1bce984278dd03ce95d3` | fix(activity): move history file operations off GTK thread | pending (#43315198540) |
+| `b10324701778c063f5ea1bce984278dd03ce95d3` | fix(activity): move history file operations off GTK thread | red (#43315198540) |
 
 ### Failure diagnosis and recovery
 
@@ -205,3 +205,26 @@ This section records every direct-to-master commit after the previous ledger tab
 - Reviewed through: `dae4088e3d250e325c3565908c3edbea769b1653` (green).
 - Current branch at this ledger update: `b10324701778c063f5ea1bce984278dd03ce95d3`.
 - Next review: commits after `b10324701778c063f5ea1bce984278dd03ce95d3`, including the pending activity-history I/O change.
+
+
+## Follow-up review after `b103247`
+
+| Commit SHA | Subject | CI result / workflow run |
+|---|---|---|
+| `4665aa5c7b6486da61158efb1b2d35fa93a7233d` | fix(favorites): move project save operations off GTK thread | red (#43315405910) |
+| `b9a905e2ef351e84bfdfe574e496d1dfb0eaeb15` | fix(activity): remove duplicate refresh callback tail | red (#43315508834) |
+| `bba155e21e7dbe8d513a8e94e58286da370a359c` | style(activity): format asynchronous refresh signature | red (#43315704917) |
+| `72e89e8d7f5e858d3b7a202a5a524a67accb4e55` | fix(activity): report structured import summary | red (#43315919045) |
+| `f61e49ce618eae22fd1dc1d228481df8b024020b` | fix(activity): clone export filters before background work | green (#43316104818) |
+
+### Activity and favorites follow-up diagnosis
+
+- `b103247` first exposed a duplicated tail from the replaced activity clear callback; `b9a905e` removed it, then rustfmt required the refresh signature to be collapsed in `bba155e`.
+- `72e89e8` exposed that `ActivityImportSummary` is structured data, not a displayable integer; `f61e49c` now reports its added/incoming/duplicate/dropped fields and clones chooser filters before moving them to the worker.
+- `4665aa5` and its follow-ups moved favorites save/remove plus activity-history import/export/clear/load into background workers. The final follow-up `f61e49c` is green; live GNOME responsiveness and feedback still require user validation.
+- The repository-origin guard issue `#60` is being fixed with explicit state instead of user-facing label parsing. This commit's CI result will be recorded in the next ledger update.
+
+### Checkpoint
+
+- Reviewed through: `f61e49ce618eae22fd1dc1d228481df8b024020b` (green).
+- Next review: commits after `f61e49ce618eae22fd1dc1d228481df8b024020b`.

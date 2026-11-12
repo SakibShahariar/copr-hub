@@ -1,4 +1,27 @@
 use super::*;
+use std::cell::Cell;
+use std::rc::Rc;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RepositoryOriginState {
+    Loading,
+    Available,
+    Unavailable,
+}
+
+impl RepositoryOriginState {
+    fn blocked_message(self) -> Option<&'static str> {
+        match self {
+            Self::Loading => Some(
+                "Please wait for installed package-origin information before changing this repository.",
+            ),
+            Self::Available => None,
+            Self::Unavailable => Some(
+                "Installed package-origin information is unavailable. Refresh repositories before changing this repository.",
+            ),
+        }
+    }
+}
 
 pub(super) fn build_repositories_page(parent: &adw::ApplicationWindow) -> gtk::Widget {
     let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
@@ -208,6 +231,7 @@ fn render_repositories(
 
                 // Show installed package origins before a user disables or removes
                 // a repository. A failed query is explicitly shown as unknown.
+                let origin_state = Rc::new(Cell::new(RepositoryOriginState::Loading));
                 let origin_summary = gtk::Label::new(Some("Checking installed packages…"));
                 origin_summary.set_wrap(true);
                 origin_summary.set_xalign(0.0);
@@ -223,6 +247,7 @@ fn render_repositories(
                     let repository_id = repository.id.clone();
                     let query_summary = origin_summary.clone();
                     let repair_state = repair_state.clone();
+                    let origin_state = origin_state.clone();
                     gtk::glib::MainContext::default().spawn_local(async move {
                         let result = gtk::gio::spawn_blocking(move || {
                             system::installed_packages_from_repository(&repository_id)
@@ -230,6 +255,7 @@ fn render_repositories(
                         .await;
                         match result {
                             Ok(Ok(packages)) if packages.is_empty() => {
+                                origin_state.set(RepositoryOriginState::Available);
                                 query_summary
                                     .set_text("No installed packages attributed to this repo");
                                 query_summary.set_tooltip_text(Some(
@@ -237,9 +263,11 @@ fn render_repositories(
                                 ));
                             }
                             Ok(Ok(packages)) => {
+                                origin_state.set(RepositoryOriginState::Available);
                                 set_installed_origin_summary(&query_summary, &packages);
                             }
                             Ok(Err(error)) => {
+                                origin_state.set(RepositoryOriginState::Unavailable);
                                 query_summary.set_text(&format!(
                                     "Could not read installed package origins: {error}"
                                 ));
@@ -249,6 +277,7 @@ fn render_repositories(
                                 );
                             }
                             Err(_) => {
+                                origin_state.set(RepositoryOriginState::Unavailable);
                                 query_summary.set_text("Installed package origins unavailable");
                                 query_summary
                                     .set_tooltip_text(Some("The background DNF query failed."));
@@ -261,7 +290,9 @@ fn render_repositories(
                     let repository_id = repository.id.clone();
                     let query_summary = origin_summary.clone();
                     let repair_state = repair_state.clone();
+                    let origin_state = origin_state.clone();
                     move |button| {
+                        origin_state.set(RepositoryOriginState::Loading);
                         button.set_sensitive(false);
                         button.set_label("Repairing…");
                         query_summary.set_text(
@@ -270,6 +301,7 @@ fn render_repositories(
                         let repository_id = repository_id.clone();
                         let query_summary = query_summary.clone();
                         let repair_state = repair_state.clone();
+                        let origin_state = origin_state.clone();
                         gtk::glib::MainContext::default().spawn_local(async move {
                             match gtk::gio::spawn_blocking(
                                 system::repair_dnf5_system_state_permissions,
@@ -285,12 +317,14 @@ fn render_repositories(
                                     .await
                                     {
                                         Ok(Ok(packages)) => {
+                                            origin_state.set(RepositoryOriginState::Available);
                                             set_installed_origin_summary(&query_summary, &packages);
                                             repair_state.set_visible(false);
                                             repair_state.set_label("Fix DNF permissions");
                                             repair_state.set_sensitive(true);
                                         }
                                         Ok(Err(error)) => {
+                                            origin_state.set(RepositoryOriginState::Unavailable);
                                             query_summary.set_text(&format!(
                                                 "Could not read installed package origins: {error}"
                                             ));
@@ -301,6 +335,7 @@ fn render_repositories(
                                             repair_state.set_sensitive(true);
                                         }
                                         Err(_) => {
+                                            origin_state.set(RepositoryOriginState::Unavailable);
                                             query_summary.set_text(
                                                 "The background DNF query failed unexpectedly.",
                                             );
@@ -310,11 +345,13 @@ fn render_repositories(
                                     }
                                 }
                                 Ok(Err(error)) => {
+                                    origin_state.set(RepositoryOriginState::Unavailable);
                                     query_summary.set_text(&error);
                                     repair_state.set_label("Try again");
                                     repair_state.set_sensitive(true);
                                 }
                                 Err(_) => {
+                                    origin_state.set(RepositoryOriginState::Unavailable);
                                     query_summary.set_text(
                                         "The DNF5 permission repair failed unexpectedly.",
                                     );
@@ -339,10 +376,10 @@ fn render_repositories(
                     let repository = repository.clone();
                     let list = list.clone();
                     let feedback = feedback.clone();
-                    let origin_summary = origin_summary.clone();
+                    let origin_state = origin_state.clone();
                     move |_| {
-                        if origin_summary.text().contains("Checking installed packages") {
-                            feedback.set_text("Please wait for installed package-origin information before changing this repository.");
+                        if let Some(message) = origin_state.get().blocked_message() {
+                            feedback.set_text(message);
                             return;
                         }
                         confirm_repository_toggle(&parent, &repository, &list, &feedback);
@@ -386,10 +423,10 @@ fn render_repositories(
                         let repository = repository.clone();
                         let list = list.clone();
                         let feedback = feedback.clone();
-                        let origin_summary = origin_summary.clone();
+                        let origin_state = origin_state.clone();
                         move |_| {
-                            if origin_summary.text().contains("Checking installed packages") {
-                                feedback.set_text("Please wait for installed package-origin information before removing this repository.");
+                            if let Some(message) = origin_state.get().blocked_message() {
+                                feedback.set_text(message);
                                 return;
                             }
                             confirm_repository_removal(&parent, &repository, &list, &feedback);
@@ -662,4 +699,16 @@ fn confirm_repository_removal(
         }
     });
     dialog.present();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RepositoryOriginState;
+
+    #[test]
+    fn repository_changes_require_successful_package_origin_data() {
+        assert!(RepositoryOriginState::Loading.blocked_message().is_some());
+        assert!(RepositoryOriginState::Unavailable.blocked_message().is_some());
+        assert!(RepositoryOriginState::Available.blocked_message().is_none());
+    }
 }
