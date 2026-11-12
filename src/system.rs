@@ -127,9 +127,7 @@ fn strip_repo_inline_comment(value: &str) -> &str {
             }
         } else if matches!(character, '"' | '\'') {
             quote = Some(character);
-        } else if matches!(character, '#' | ';')
-            && previous.is_none_or(char::is_whitespace)
-        {
+        } else if matches!(character, '#' | ';') && previous.is_none_or(char::is_whitespace) {
             return value[..index].trim_end();
         }
         previous = Some(character);
@@ -140,7 +138,10 @@ fn strip_repo_inline_comment(value: &str) -> &str {
 
 fn parse_enabled_value(value: &str) -> bool {
     !matches!(
-        strip_repo_inline_comment(value).trim().to_ascii_lowercase().as_str(),
+        strip_repo_inline_comment(value)
+            .trim()
+            .to_ascii_lowercase()
+            .as_str(),
         "0" | "false" | "no" | "off"
     )
 }
@@ -668,8 +669,7 @@ fn is_safe_repository_id(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 200
         && value.bytes().all(|byte| {
-            byte.is_ascii_alphanumeric()
-                || matches!(byte, b'-' | b'_' | b'.' | b'+' | b':' | b'@')
+            byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'+' | b':' | b'@')
         })
 }
 
@@ -989,9 +989,10 @@ enabled=0
         assert!(is_safe_repository_id(
             "copr:copr.fedorainfracloud.org:@team:demo"
         ));
-        assert!(copr_project_spec_from_repository_id(
-            "copr:copr.fedorainfracloud.org:@team:demo"
-        ).is_some());
+        assert!(
+            copr_project_spec_from_repository_id("copr:copr.fedorainfracloud.org:@team:demo")
+                .is_some()
+        );
     }
 
     #[test]
