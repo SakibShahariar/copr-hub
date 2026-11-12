@@ -209,6 +209,14 @@ fn is_stale(timestamp: Option<i64>, now: u64, threshold_days: u32) -> bool {
     now.saturating_sub(timestamp) >= threshold_secs
 }
 
+fn normalize_upstream_version(version: &str) -> &str {
+    let version = version.trim();
+    version
+        .strip_prefix('v')
+        .or_else(|| version.strip_prefix('V'))
+        .unwrap_or(version)
+}
+
 fn compare_states(previous: Option<&ProjectState>, current: &ProjectState) -> Vec<String> {
     let Some(previous) = previous else {
         return Vec::new();
@@ -255,7 +263,7 @@ fn compare_states(previous: Option<&ProjectState>, current: &ProjectState) -> Ve
         previous.upstream_version.as_deref(),
         current.upstream_version.as_deref(),
     ) {
-        if old != new {
+        if normalize_upstream_version(old) != normalize_upstream_version(new) {
             alerts.push(format!(
                 "New upstream release detected: {new} (previously {old})."
             ));
@@ -656,6 +664,23 @@ mod tests {
         assert!(alerts[0].contains("newly failed build target"));
 
         assert!(compare_states(Some(&current), &current).is_empty());
+    }
+
+    #[test]
+    fn upstream_release_comparison_ignores_only_a_leading_v_prefix() {
+        let previous = ProjectState {
+            upstream_version: Some("v1.2.0".to_string()),
+            ..state()
+        };
+        let mut current = previous.clone();
+        current.upstream_version = Some("1.2.0".to_string());
+        assert!(compare_states(Some(&previous), &current).is_empty());
+
+        current.upstream_version = Some("1.2.0-1".to_string());
+        let alerts = compare_states(Some(&previous), &current);
+        assert!(alerts
+            .iter()
+            .any(|alert| alert.contains("New upstream release")));
     }
 
     #[test]
