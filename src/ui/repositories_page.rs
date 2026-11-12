@@ -398,27 +398,23 @@ fn render_repositories(
                     actions.append(&remove);
                 }
 
-                // Use a small transient window instead of a popover. The
-                // repository row lives inside GtkListBox, where the popover
-                // button's pointer/keyboard activation was unreliable.
-                let action_window = adw::Window::builder()
-                    .transient_for(parent)
-                    .modal(true)
+                // Present repository details and actions in an AdwDialog,
+                // which is designed to appear within the parent application window.
+                let action_dialog = adw::Dialog::builder()
                     .title(format!("{} actions", repository.name))
-                    .default_width(320)
-                    .default_height(360)
+                    .content_width(320)
+                    .content_height(400)
+                    .child(&actions)
                     .build();
-                action_window.set_content(Some(&actions));
 
                 let menu = gtk::Button::new();
                 menu.set_icon_name("view-more-symbolic");
                 menu.set_tooltip_text(Some("Repository actions and details"));
                 menu.add_css_class("flat");
-                menu.set_can_focus(true);
-                menu.set_focusable(true);
                 menu.connect_clicked({
-                    let action_window = action_window.clone();
-                    move |_| action_window.present()
+                    let action_dialog = action_dialog.clone();
+                    let parent = parent.clone();
+                    move |_| action_dialog.present(Some(&parent))
                 });
                 row.add_suffix(&menu);
                 list.append(&row);
