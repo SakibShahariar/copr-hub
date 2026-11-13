@@ -423,3 +423,11 @@ This section records every direct-to-master commit after the previous ledger tab
 | a45dfcca4a7b73201124141ed985fd2212f59757 | fix(discover): remove unused search wrapper | green (#43364761455) |
 
 - The a45dfcc follow-up passed formatting, all 142 unit tests, cargo check --all-targets, and Clippy. The pagination implementation is now compiled and lint-clean; live COPR search behavior remains to be verified.
+ 
+## Follow-up review after a45dfcc
+
+| Commit SHA | Subject | CI result / workflow run |
+|---|---|---|
+| 1264f16dab1d76867caae8cc962914da7ce59365 | fix(discover): deduplicate paginated project results | red (#43364911453) |
+
+- The 1264f16 run failed only at cargo fmt --all -- --check because rustfmt wanted the helper signature on one line. Formatting is corrected in the follow-up; tests, compilation, and Clippy were skipped.

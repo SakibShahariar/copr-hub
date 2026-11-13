@@ -420,10 +420,7 @@ fn build_project_search_page(items: Vec<CoprProject>, offset: usize) -> ProjectS
     }
 }
 
-pub(crate) fn append_unique_projects(
-    existing: &mut Vec<CoprProject>,
-    incoming: Vec<CoprProject>,
-) {
+pub(crate) fn append_unique_projects(existing: &mut Vec<CoprProject>, incoming: Vec<CoprProject>) {
     let mut seen: HashSet<(String, String)> = existing
         .iter()
         .map(|project| (project.owner.clone(), project.name.clone()))
