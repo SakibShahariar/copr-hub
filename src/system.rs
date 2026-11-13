@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::thread;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 const REPOSITORY_DIRECTORY: &str = "/etc/yum.repos.d";
 const DNF5_SYSTEM_STATE_DIRECTORY: &str = "/usr/lib/sysimage/libdnf5";
@@ -64,8 +64,6 @@ fn output_with_timeout(command: &mut Command, timeout: Duration) -> std::io::Res
             Ok(None) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                let _ = stdout_reader.join();
-                let _ = stderr_reader.join();
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::TimedOut,
                     format!("Command exceeded its {timeout:?} timeout"),
@@ -74,12 +72,22 @@ fn output_with_timeout(command: &mut Command, timeout: Duration) -> std::io::Res
             Err(error) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                let _ = stdout_reader.join();
-                let _ = stderr_reader.join();
                 return Err(error);
             }
         }
     };
+
+    // A child may exit while a descendant still holds an inherited output
+    // pipe open. Bound reader completion by the same deadline as the process.
+    while !stdout_reader.is_finished() || !stderr_reader.is_finished() {
+        if started.elapsed() >= timeout {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                format!("Command output exceeded its {timeout:?} timeout"),
+            ));
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
 
     let stdout = stdout_reader
         .join()
@@ -902,6 +910,7 @@ fn command_failure_details(stderr: &str, stdout: &str, fallback: &str) -> String
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[cfg(unix)]
     #[test]
@@ -920,6 +929,18 @@ mod tests {
     fn timed_command_kills_a_child_that_exceeds_its_deadline() {
         let mut command = Command::new("sh");
         command.args(["-c", "exec sleep 2"]);
+        let started = Instant::now();
+        let error = output_with_timeout(&mut command, Duration::from_millis(100)).unwrap_err();
+
+        assert_eq!(error.kind(), std::io::ErrorKind::TimedOut);
+        assert!(started.elapsed() < Duration::from_secs(1));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn timed_command_does_not_wait_for_descendants_holding_output_pipes() {
+        let mut command = Command::new("sh");
+        command.args(["-c", "sleep 2 & exit 0"]);
         let started = Instant::now();
         let error = output_with_timeout(&mut command, Duration::from_millis(100)).unwrap_err();
 

@@ -467,3 +467,13 @@ This section records every direct-to-master commit after the previous ledger tab
 | aa5ebf2b41e7ce5b4d214dc9542f55b2be1cda71 | fix(repositories): report unreadable configuration files | red (#43366114771) |
 
 - The aa5ebf2 run passed formatting but failed compilation because the new recovery test lacked SystemTime/UNIX_EPOCH imports. It also exposed two missing mutable bindings in the concurrent command-timeout reader after its output cap was removed. Both are corrected in this follow-up.
+
+
+## Follow-up review after 15a66db
+
+| Commit SHA | Subject | CI result / workflow run |
+|---|---|---|
+| 15a66db56dcde0ace6743e4f91a1f55534c09b3a | fix(system): correct timed command readers and recovery test | red (#43366267733) |
+
+- Formatting, unit tests, and compilation passed. Clippy rejected test-only `SystemTime`/`UNIX_EPOCH` imports at module scope; they are now scoped to the test module.
+- Review also found that a child can exit while a descendant keeps inherited stdout/stderr pipes open. Reader completion is now covered by the same deadline, with a regression test for this case.
