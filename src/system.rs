@@ -1,9 +1,12 @@
 use std::collections::HashMap;
 use std::fs;
+use std::io::Read;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output, Stdio};
 use std::sync::{Mutex, MutexGuard, OnceLock};
+use std::thread;
+use std::time::{Duration, Instant};
 
 const REPOSITORY_DIRECTORY: &str = "/etc/yum.repos.d";
 const DNF5_SYSTEM_STATE_DIRECTORY: &str = "/usr/lib/sysimage/libdnf5";
@@ -18,6 +21,8 @@ const DNF5_SYSTEM_STATE_FILES: &[&str] = &[
 const DNF5_SYSTEM_STATE_MODE: u32 = 0o644;
 const DNF_EXECUTABLE: &str = "/usr/bin/dnf";
 const MAX_COMMAND_DETAILS_CHARS: usize = 1200;
+const QUERY_COMMAND_TIMEOUT: Duration = Duration::from_secs(60);
+const PRIVILEGED_COMMAND_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 const INSTALLED_COPR_QUERY_FORMAT: &str = "%{name}\t%{evr}\t%{from_repo}\\n";
 const PACKAGE_UPDATES_QUERY_FORMAT: &str = "%{name}\t%{evr}\t%{repoid}\\n";
 const INSTALLED_ORIGINS_QUERY_FORMAT: &str = "%{name}|%{from_repo}\\n";
@@ -29,6 +34,61 @@ fn system_command(program: impl AsRef<std::ffi::OsStr>) -> Command {
         command.env_remove(variable);
     }
     command
+}
+
+/// Run a system command with a bounded lifetime while draining both output
+/// streams concurrently so a verbose child cannot block on a full pipe.
+fn output_with_timeout(command: &mut Command, timeout: Duration) -> std::io::Result<Output> {
+    let mut child = command.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
+    let stdout = child.stdout.take().expect("stdout was configured as piped");
+    let stderr = child.stderr.take().expect("stderr was configured as piped");
+    let stdout_reader = thread::spawn(move || {
+        let mut bytes = Vec::new();
+        stdout.take(16 * 1024 * 1024).read_to_end(&mut bytes).map(|_| bytes)
+    });
+    let stderr_reader = thread::spawn(move || {
+        let mut bytes = Vec::new();
+        stderr.take(16 * 1024 * 1024).read_to_end(&mut bytes).map(|_| bytes)
+    });
+    let started = Instant::now();
+
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if started.elapsed() < timeout => {
+                thread::sleep(Duration::from_millis(50));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = stdout_reader.join();
+                let _ = stderr_reader.join();
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    format!("Command exceeded its {}-second timeout", timeout.as_secs()),
+                ));
+            }
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = stdout_reader.join();
+                let _ = stderr_reader.join();
+                return Err(error);
+            }
+        }
+    };
+
+    let stdout = stdout_reader
+        .join()
+        .map_err(|_| std::io::Error::other("The command stdout reader failed"))??;
+    let stderr = stderr_reader
+        .join()
+        .map_err(|_| std::io::Error::other("The command stderr reader failed"))??;
+    Ok(Output {
+        status,
+        stdout,
+        stderr,
+    })
 }
 
 /// Read the major Fedora release from a parsed /etc/os-release file.
@@ -361,9 +421,8 @@ pub fn repair_dnf5_system_state_permissions() -> Result<(), String> {
     for (path, _) in &files {
         command.arg(path);
     }
-    let output = command
-        .output()
-        .map_err(|error| format!("Could not start the privileged permission repair: {error}"))?;
+    let output = output_with_timeout(&mut command, PRIVILEGED_COMMAND_TIMEOUT)
+        .map_err(|error| format!("Could not complete the privileged permission repair: {error}"))?;
 
     if !output.status.success() {
         return Err(format!(
@@ -392,15 +451,16 @@ pub fn repair_dnf5_system_state_permissions() -> Result<(), String> {
 }
 
 pub fn list_installed_copr_packages() -> Result<Vec<InstalledCoprPackage>, String> {
-    let output = system_command("dnf")
-        .args([
+    let output = output_with_timeout(
+        system_command("dnf").args([
             "repoquery",
             "--installed",
             "--queryformat",
             INSTALLED_COPR_QUERY_FORMAT,
-        ])
-        .output()
-        .map_err(|error| format!("Could not start DNF to inspect installed packages: {error}"))?;
+        ]),
+        QUERY_COMMAND_TIMEOUT,
+    )
+    .map_err(|error| format!("Could not complete the DNF installed-package query: {error}"))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
@@ -420,15 +480,16 @@ pub fn list_installed_copr_packages() -> Result<Vec<InstalledCoprPackage>, Strin
 /// Query enabled repositories for upgrade candidates. DNF handles RPM EVR
 /// ordering and repository policy; callers should only display returned candidates.
 pub fn list_package_updates() -> Result<Vec<AvailablePackageUpdate>, String> {
-    let output = system_command("dnf")
-        .args([
+    let output = output_with_timeout(
+        system_command("dnf").args([
             "repoquery",
             "--upgrades",
             "--queryformat",
             PACKAGE_UPDATES_QUERY_FORMAT,
-        ])
-        .output()
-        .map_err(|error| format!("Could not start DNF to check package updates: {error}"))?;
+        ]),
+        QUERY_COMMAND_TIMEOUT,
+    )
+    .map_err(|error| format!("Could not complete the DNF update query: {error}"))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
@@ -493,10 +554,11 @@ pub fn inspect_package_dependency_impact(
 }
 
 fn run_rpm_query(arguments: &[&str]) -> Result<String, String> {
-    let output = system_command("rpm")
-        .args(arguments)
-        .output()
-        .map_err(|error| format!("Could not start RPM to inspect dependencies: {error}"))?;
+    let output = output_with_timeout(
+        system_command("rpm").args(arguments),
+        QUERY_COMMAND_TIMEOUT,
+    )
+    .map_err(|error| format!("Could not complete the RPM dependency query: {error}"))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         return Err(if stderr.is_empty() {
@@ -509,10 +571,11 @@ fn run_rpm_query(arguments: &[&str]) -> Result<String, String> {
 }
 
 fn run_rpm_query_allow_empty(arguments: &[&str]) -> Result<String, String> {
-    let output = system_command("rpm")
-        .args(arguments)
-        .output()
-        .map_err(|error| format!("Could not start RPM to inspect dependencies: {error}"))?;
+    let output = output_with_timeout(
+        system_command("rpm").args(arguments),
+        QUERY_COMMAND_TIMEOUT,
+    )
+    .map_err(|error| format!("Could not complete the RPM reverse-dependency query: {error}"))?;
     if output.status.success() {
         return Ok(String::from_utf8_lossy(&output.stdout).into_owned());
     }
@@ -634,17 +697,18 @@ pub fn installed_packages_from_repository(repository_id: &str) -> Result<Vec<Str
 }
 
 fn query_installed_package_origins() -> InstalledOrigins {
-    let output = system_command("dnf")
-        .args([
+    let output = output_with_timeout(
+        system_command("dnf").args([
             "repoquery",
             "--installed",
             "--queryformat",
             INSTALLED_ORIGINS_QUERY_FORMAT,
-        ])
-        .output()
-        .map_err(|error| {
-            format!("Could not run DNF to inspect installed package origins: {error}")
-        })?;
+        ]),
+        QUERY_COMMAND_TIMEOUT,
+    )
+    .map_err(|error| {
+        format!("Could not complete the DNF installed-origin query: {error}")
+    })?;
     if !output.status.success() {
         return Err(format!(
             "DNF could not inspect installed package origins: {}",
@@ -717,16 +781,17 @@ pub fn remove_copr_repository(repository_id: &str) -> Result<(), String> {
             .to_string()
     })?;
 
-    let output = system_command("pkexec")
-        .args([
+    let output = output_with_timeout(
+        system_command("pkexec").args([
             DNF_EXECUTABLE,
             "--assumeyes",
             "copr",
             "remove",
             &project_spec,
-        ])
-        .output()
-        .map_err(|error| format!("Could not start the privileged DNF helper: {error}"))?;
+        ]),
+        PRIVILEGED_COMMAND_TIMEOUT,
+    )
+    .map_err(|error| format!("Could not complete the privileged DNF removal: {error}"))?;
 
     if output.status.success() {
         return Ok(());
@@ -749,10 +814,11 @@ pub fn set_copr_repository_enabled(repository_id: &str, enabled: bool) -> Result
         "{repository_id}.enabled={}",
         if enabled { "1" } else { "0" }
     );
-    let output = system_command("pkexec")
-        .args([DNF_EXECUTABLE, "config-manager", "setopt", &setting])
-        .output()
-        .map_err(|error| format!("Could not start the privileged DNF helper: {error}"))?;
+    let output = output_with_timeout(
+        system_command("pkexec").args([DNF_EXECUTABLE, "config-manager", "setopt", &setting]),
+        PRIVILEGED_COMMAND_TIMEOUT,
+    )
+    .map_err(|error| format!("Could not complete the privileged DNF repository change: {error}"))?;
 
     if output.status.success() {
         return Ok(());
@@ -780,10 +846,11 @@ pub fn set_package_installed(package_name: &str, install: bool) -> Result<(), St
         // insufficient to resolve the transaction.
         command.arg("--cacheonly");
     }
-    let output = command
-        .arg(package_name)
-        .output()
-        .map_err(|error| format!("Could not start the privileged DNF helper: {error}"))?;
+    let output = output_with_timeout(
+        command.arg(package_name),
+        PRIVILEGED_COMMAND_TIMEOUT,
+    )
+    .map_err(|error| format!("Could not complete the privileged DNF package operation: {error}"))?;
 
     if output.status.success() {
         return Ok(());
