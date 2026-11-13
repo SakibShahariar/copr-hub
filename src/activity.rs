@@ -50,7 +50,7 @@ fn load_unlocked() -> Result<Vec<ActivityEntry>, String> {
     let path = history_path();
     match fs::metadata(&path) {
         Ok(metadata) if metadata.len() > MAX_HISTORY_FILE_BYTES => {
-            return Err("The activity history exceeds the 2 MiB safety limit.".to_string());
+            return Err("Activity history is damaged or exceeds the safety limit. The original file is untouched; use Recover to preserve it and start fresh.".to_string());
         }
         Ok(_) => {}
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
@@ -60,25 +60,48 @@ fn load_unlocked() -> Result<Vec<ActivityEntry>, String> {
     match fs::read_to_string(&path) {
         Ok(contents) => {
             let entries: Vec<ActivityEntry> = serde_json::from_str(&contents)
-                .map_err(|error| format!("Could not read activity history: {error}"))?;
-            if entries.len() > MAX_ENTRIES {
-                return Err(format!(
-                    "The activity history contains more than {MAX_ENTRIES} entries."
-                ));
-            }
-            if entries
-                .iter()
-                .any(|entry| !activity_entry_has_valid_fields(entry))
+                .map_err(|_| "Activity history is damaged or invalid. The original file is untouched; use Recover to preserve it and start fresh.".to_string())?;
+            if entries.len() > MAX_ENTRIES
+                || entries.iter().any(|entry| !activity_entry_has_valid_fields(entry))
             {
-                return Err(
-                    "The activity history contains an invalid or oversized entry.".to_string(),
-                );
+                return Err("Activity history is damaged or invalid. The original file is untouched; use Recover to preserve it and start fresh.".to_string());
             }
             Ok(entries)
         }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
         Err(error) => Err(format!("Could not open activity history: {error}")),
     }
+}
+
+fn history_file_is_valid(path: &std::path::Path) -> Result<bool, String> {
+    let metadata = fs::metadata(path)
+        .map_err(|error| format!("Could not inspect activity history: {error}"))?;
+    if metadata.len() > MAX_HISTORY_FILE_BYTES {
+        return Ok(false);
+    }
+    let contents = match fs::read_to_string(path) {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == std::io::ErrorKind::InvalidData => return Ok(false),
+        Err(error) => return Err(format!("Could not read activity history: {error}")),
+    };
+    let Ok(entries) = serde_json::from_str::<Vec<ActivityEntry>>(&contents) else {
+        return Ok(false);
+    };
+    Ok(entries.len() <= MAX_ENTRIES
+        && entries.iter().all(activity_entry_has_valid_fields))
+}
+
+fn preserve_invalid_history(path: &std::path::Path) -> Result<PathBuf, String> {
+    if history_file_is_valid(path)? {
+        return Err("The activity-history file is valid; no recovery is needed.".to_string());
+    }
+    storage::preserve_corrupt_file(path)
+        .map_err(|error| format!("Could not preserve the damaged activity-history file: {error}"))
+}
+
+/// Preserve invalid activity history under a timestamped name before starting fresh.
+pub fn recover_corrupt() -> Result<PathBuf, String> {
+    with_activity_lock(|| preserve_invalid_history(&history_path()))
 }
 
 fn matches_filter(entry: &ActivityEntry, query: &str) -> bool {
@@ -333,6 +356,37 @@ mod tests {
             worker.join().unwrap();
         }
         assert_eq!(maximum.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn recovery_preserves_invalid_activity_history_without_overwriting_it() {
+        let path = std::env::temp_dir().join(format!(
+            "copr-hub-activity-corrupt-{}-{}.json",
+            std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        fs::write(&path, b"{broken json").unwrap();
+
+        let backup = preserve_invalid_history(&path).unwrap();
+
+        assert!(!path.exists());
+        assert_eq!(fs::read(&backup).unwrap(), b"{broken json");
+        assert!(preserve_invalid_history(&backup).is_err());
+        fs::remove_file(backup).unwrap();
+    }
+
+    #[test]
+    fn recovery_refuses_to_move_valid_activity_history() {
+        let path = std::env::temp_dir().join(format!(
+            "copr-hub-activity-valid-{}-{}.json",
+            std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        fs::write(&path, b"[]").unwrap();
+
+        assert!(preserve_invalid_history(&path).is_err());
+        assert_eq!(fs::read(&path).unwrap(), b"[]");
+        fs::remove_file(path).unwrap();
     }
 
     #[test]
