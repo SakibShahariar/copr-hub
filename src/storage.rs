@@ -6,6 +6,38 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static TEMP_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
+/// Move damaged user data aside without deleting or overwriting the original bytes.
+/// The returned path is a timestamped sibling that users can inspect or restore.
+pub fn preserve_corrupt_file(path: &Path) -> io::Result<std::path::PathBuf> {
+    let parent = path.parent().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidInput, "damaged file has no parent directory")
+    })?;
+    let file_name = path.file_name().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidInput, "damaged file has no file name")
+    })?;
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    loop {
+        let sequence = TEMP_FILE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let backup = parent.join(format!(
+            "{}.corrupt-{timestamp}-{}-{sequence}",
+            file_name.to_string_lossy(),
+            std::process::id()
+        ));
+        if backup.exists() {
+            continue;
+        }
+        match fs::rename(path, &backup) {
+            Ok(()) => return Ok(backup),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    }
+}
+
 /// Replace a file atomically using a private temporary file.
 ///
 /// User data files are created with owner-only permissions so that activity
@@ -84,6 +116,21 @@ mod tests {
         ));
         fs::create_dir_all(&directory).unwrap();
         directory
+    }
+
+    #[test]
+    fn preserves_corrupt_file_bytes_under_a_unique_backup_name() {
+        let directory = test_directory("preserve-corrupt");
+        let path = directory.join("favorites.json");
+        fs::write(&path, b"not valid json").unwrap();
+
+        let backup = preserve_corrupt_file(&path).unwrap();
+
+        assert!(!path.exists());
+        assert_eq!(fs::read(&backup).unwrap(), b"not valid json");
+        assert!(backup.file_name().unwrap().to_string_lossy().contains(".corrupt-"));
+
+        fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]
