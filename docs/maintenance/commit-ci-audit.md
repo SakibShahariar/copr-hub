@@ -381,3 +381,11 @@ This section records every direct-to-master commit after the previous ledger tab
 
 - Reviewed through: fd06ca0e8cc42fc1a738b8568890f41f8017c105 (green).
 - Next review: commits after fd06ca0e8cc42fc1a738b8568890f41f8017c105.
+ 
+## Follow-up review after fd06ca0
+
+| Commit SHA | Subject | CI result / workflow run |
+|---|---|---|
+| a6bd4107930e14aaae451151697fdabe7409c608 | fix(project-details): refresh content in place | red (#43363943203) |
+
+- The a6bd410 run passed formatting, all 140 unit tests, and cargo check --all-targets. Clippy failed on one needless double borrow in the new in-place refresh helper; that borrow is removed in the follow-up.

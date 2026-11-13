@@ -547,7 +547,7 @@ fn populate_project_details(
         if let Some(monitor) = snapshot.monitor.clone() {
             *monitor_state.borrow_mut() = Some(Ok(monitor.clone()));
             render_project_monitor(
-                &window,
+                window,
                 &packages,
                 (&status, &compatibility_status),
                 &intelligence,
