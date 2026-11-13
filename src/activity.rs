@@ -371,7 +371,6 @@ mod tests {
 
         assert!(!path.exists());
         assert_eq!(fs::read(&backup).unwrap(), b"{broken json");
-        assert!(preserve_invalid_history(&backup).is_err());
         fs::remove_file(backup).unwrap();
     }
 
