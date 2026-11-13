@@ -449,10 +449,6 @@ pub fn search_projects_page(pattern: &str, offset: usize) -> Result<ProjectSearc
     Ok(build_project_search_page(result.items, offset_value))
 }
 
-pub fn search_projects(pattern: &str) -> Result<Vec<CoprProject>, String> {
-    Ok(search_projects_page(pattern, 0)?.projects)
-}
-
 /// Fetch recent real project build records for a chronological build timeline.
 pub fn fetch_project_build_history(
     owner: &str,
@@ -801,7 +797,7 @@ mod tests {
 
     #[test]
     fn empty_search_does_not_make_a_request() {
-        assert!(search_projects("   ").unwrap().is_empty());
+        assert!(search_projects_page("   ", 0).unwrap().projects.is_empty());
     }
 
     #[test]

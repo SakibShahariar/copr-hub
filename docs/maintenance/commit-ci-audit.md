@@ -407,3 +407,11 @@ This section records every direct-to-master commit after the previous ledger tab
 | 81904756ffa30adc3a2951cb27998020afaf6994 | feat(discover): paginate COPR search results | red (#43364383819) |
 
 - The 8190475 run failed only at cargo fmt --all -- --check. The reported line-wrapping differences are corrected in the follow-up formatting commit; tests, compilation, and Clippy were skipped.
+ 
+## Follow-up review after 0b76178
+
+| Commit SHA | Subject | CI result / workflow run |
+|---|---|---|
+| ff4f3ac957390ae09451aa230e2b3206c51eed5a | style(discover): format paginated search requests | red (#43364552967) |
+
+- The ff4f3ac run passed formatting, all 142 unit tests, and cargo check --all-targets. Clippy found only the now-unused legacy search_projects wrapper; the UI and tests use search_projects_page directly, so the wrapper is removed and its empty-query test now covers the paginated API.
