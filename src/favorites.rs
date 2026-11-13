@@ -386,7 +386,10 @@ mod tests {
         let path = std::env::temp_dir().join(format!(
             "copr-hub-favorites-corrupt-{}-{}.json",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
         ));
         fs::write(&path, b"{broken json").unwrap();
 
