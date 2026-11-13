@@ -62,7 +62,9 @@ fn load_unlocked() -> Result<Vec<ActivityEntry>, String> {
             let entries: Vec<ActivityEntry> = serde_json::from_str(&contents)
                 .map_err(|_| "Activity history is damaged or invalid. The original file is untouched; use Recover to preserve it and start fresh.".to_string())?;
             if entries.len() > MAX_ENTRIES
-                || entries.iter().any(|entry| !activity_entry_has_valid_fields(entry))
+                || entries
+                    .iter()
+                    .any(|entry| !activity_entry_has_valid_fields(entry))
             {
                 return Err("Activity history is damaged or invalid. The original file is untouched; use Recover to preserve it and start fresh.".to_string());
             }
@@ -87,8 +89,7 @@ fn history_file_is_valid(path: &std::path::Path) -> Result<bool, String> {
     let Ok(entries) = serde_json::from_str::<Vec<ActivityEntry>>(&contents) else {
         return Ok(false);
     };
-    Ok(entries.len() <= MAX_ENTRIES
-        && entries.iter().all(activity_entry_has_valid_fields))
+    Ok(entries.len() <= MAX_ENTRIES && entries.iter().all(activity_entry_has_valid_fields))
 }
 
 fn preserve_invalid_history(path: &std::path::Path) -> Result<PathBuf, String> {
@@ -363,7 +364,10 @@ mod tests {
         let path = std::env::temp_dir().join(format!(
             "copr-hub-activity-corrupt-{}-{}.json",
             std::process::id(),
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
         ));
         fs::write(&path, b"{broken json").unwrap();
 
