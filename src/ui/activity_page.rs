@@ -411,8 +411,73 @@ fn refresh_activity(list: &gtk::ListBox, feedback: &gtk::Label, generation: &Rc<
                     list.append(&row);
                 }
             }
-            Ok(Err(error)) => feedback.set_text(&error),
+            Ok(Err(error)) => {
+                feedback.set_text(&error);
+                add_activity_recovery_action(&list, &feedback, &generation);
+            },
             Err(_) => feedback.set_text("The background activity-history read failed unexpectedly."),
         }
     });
+
+fn add_activity_recovery_action(
+    list: &gtk::ListBox,
+    feedback: &gtk::Label,
+    generation: &Rc<RefCell<u64>>,
+) {
+    let recover = gtk::Button::with_label("Preserve damaged history and start fresh…");
+    recover.set_halign(gtk::Align::Start);
+    recover.add_css_class("destructive-action");
+    recover.connect_clicked({
+        let list = list.clone();
+        let feedback = feedback.clone();
+        let generation = generation.clone();
+        move |button| {
+            let dialog = gtk::MessageDialog::builder()
+                .modal(true)
+                .message_type(gtk::MessageType::Warning)
+                .buttons(gtk::ButtonsType::None)
+                .text("Preserve damaged activity history?")
+                .secondary_text("Copr Hub will move the unreadable file to a timestamped .corrupt backup beside it, then start with an empty activity history. The original bytes will not be deleted.")
+                .build();
+            dialog.add_button("Cancel", gtk::ResponseType::Cancel);
+            dialog.add_button("Preserve and recover", gtk::ResponseType::Accept);
+            dialog.connect_response({
+                let list = list.clone();
+                let feedback = feedback.clone();
+                let generation = generation.clone();
+                let button = button.clone();
+                move |dialog, response| {
+                    dialog.close();
+                    if response != gtk::ResponseType::Accept {
+                        return;
+                    }
+                    button.set_sensitive(false);
+                    feedback.set_text("Preserving damaged activity history…");
+                    let list = list.clone();
+                    let feedback = feedback.clone();
+                    let generation = generation.clone();
+                    let button = button.clone();
+                    gtk::glib::MainContext::default().spawn_local(async move {
+                        let result = gtk::gio::spawn_blocking(activity::recover_corrupt).await;
+                        button.set_sensitive(true);
+                        match result {
+                            Ok(Ok(backup)) => {
+                                refresh_activity(&list, &feedback, &generation);
+                                feedback.set_text(&format!(
+                                    "Damaged history was preserved at {}. A fresh activity history is ready.",
+                                    backup.display()
+                                ));
+                            }
+                            Ok(Err(error)) => feedback.set_text(&format!("Recovery failed: {error}")),
+                            Err(_) => feedback.set_text("The activity-history recovery task failed unexpectedly."),
+                        }
+                    });
+                }
+            });
+            dialog.present();
+        }
+    });
+    list.append(&recover);
+}
+
 }
