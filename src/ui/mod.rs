@@ -420,6 +420,7 @@ mod url_tests {
             scheduled_backup_failure_summary("No space left on device").contains("disk is full")
         );
         assert!(scheduled_backup_failure_summary("Read-only file system").contains("read-only"));
+        assert!(scheduled_backup_failure_summary("Disk quota exceeded").contains("quota"));
         assert!(scheduled_backup_failure_summary("unexpected failure").contains("writable"));
     }
 

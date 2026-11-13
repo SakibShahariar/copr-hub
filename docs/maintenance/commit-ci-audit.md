@@ -357,3 +357,13 @@ This section records every direct-to-master commit after the previous ledger tab
 
 - The 4b3d267 run failed only at cargo fmt --all -- --check. The reported rustfmt differences are corrected in the follow-up formatting commit; tests, compilation, and Clippy had not run on this failed attempt.
 - The monitoring progress indicator, human-readable worker failure, and actionable scheduled-backup error guidance are implemented; final CI verification is pending.
+ 
+## Follow-up review after d77d2ab
+
+| Commit SHA | Subject | CI result / workflow run |
+|---|---|---|
+| d77d2abc592d63a4e3e9bed366f5d39cd5657349 | style(monitoring): format progress and backup guidance | green (#43363490031) |
+
+- The progress indicator and backup-guidance changes passed formatting, all 140 unit tests, cargo check --all-targets, and Clippy.
+- #66–#68 are implemented; live GNOME animation, error feedback, and notification delivery remain to be verified.
+- The next review starts after d77d2abc592d63a4e3e9bed366f5d39cd5657349.

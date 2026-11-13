@@ -74,6 +74,14 @@ pub(super) fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widge
         .build();
     feedback.add_css_class("dim-label");
     content.append(&feedback);
+
+    let activity_warning = gtk::Label::new(None);
+    activity_warning.set_xalign(0.0);
+    activity_warning.set_wrap(true);
+    activity_warning.add_css_class("dim-label");
+    activity_warning.set_visible(false);
+    content.append(&activity_warning);
+
     let progress = add_loading_bar(&content);
 
     let results = gtk::ListBox::new();
@@ -97,6 +105,7 @@ pub(super) fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widge
         let search = search.clone();
         let results = results.clone();
         let feedback = feedback.clone();
+        let activity_warning = activity_warning.clone();
         let search_button = search_button.clone();
         let progress = progress.clone();
         let parent = parent.clone();
@@ -106,11 +115,13 @@ pub(super) fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widge
             let query = search.text().trim().to_string();
             if query.is_empty() {
                 clear_list_box(&results);
+                activity_warning.set_visible(false);
                 feedback.set_text("Enter a COPR project name to search.");
                 return;
             }
 
             feedback.set_text("Searching COPR…");
+            activity_warning.set_visible(false);
             progress.set_visible(true);
             search.set_sensitive(false);
             search_button.set_sensitive(false);
@@ -118,6 +129,7 @@ pub(super) fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widge
             let activity_query = query.clone();
             let results = results.clone();
             let feedback = feedback.clone();
+            let activity_warning = activity_warning.clone();
             let search_button = search_button.clone();
             let search = search.clone();
             let progress = progress.clone();
@@ -151,10 +163,11 @@ pub(super) fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widge
                     sort.selected(),
                 );
                 if let Err(error) = activity_result {
-                    feedback.set_text(&format!(
-                        "{} Activity history could not be saved: {error}",
-                        feedback.text()
-                    ));
+                    eprintln!("Could not record Discover search activity: {error}");
+                    activity_warning.set_text(
+                        "Search results are ready, but local activity history could not be saved. Check the app log for details.",
+                    );
+                    activity_warning.set_visible(true);
                 }
             });
         }
