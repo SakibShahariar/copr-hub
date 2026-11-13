@@ -44,11 +44,11 @@ fn output_with_timeout(command: &mut Command, timeout: Duration) -> std::io::Res
     let stderr = child.stderr.take().expect("stderr was configured as piped");
     let stdout_reader = thread::spawn(move || {
         let mut bytes = Vec::new();
-        stdout.take(16 * 1024 * 1024).read_to_end(&mut bytes).map(|_| bytes)
+        stdout.read_to_end(&mut bytes).map(|_| bytes)
     });
     let stderr_reader = thread::spawn(move || {
         let mut bytes = Vec::new();
-        stderr.take(16 * 1024 * 1024).read_to_end(&mut bytes).map(|_| bytes)
+        stderr.read_to_end(&mut bytes).map(|_| bytes)
     });
     let started = Instant::now();
 
@@ -65,7 +65,7 @@ fn output_with_timeout(command: &mut Command, timeout: Duration) -> std::io::Res
                 let _ = stderr_reader.join();
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::TimedOut,
-                    format!("Command exceeded its {}-second timeout", timeout.as_secs()),
+                    format!("Command exceeded its {timeout:?} timeout"),
                 ));
             }
             Err(error) => {
@@ -889,6 +889,32 @@ fn command_failure_details(stderr: &str, stdout: &str, fallback: &str) -> String
 #[cfg(test)]
 mod tests {
     use super::*;
+
+
+    #[cfg(unix)]
+    #[test]
+    fn timed_command_captures_both_streams_and_exit_status() {
+        let mut command = Command::new("sh");
+        command.args(["-c", "printf stdout; printf stderr >&2; exit 23"]);
+        let output = output_with_timeout(&mut command, Duration::from_secs(2)).unwrap();
+
+        assert_eq!(output.status.code(), Some(23));
+        assert_eq!(output.stdout, b"stdout");
+        assert_eq!(output.stderr, b"stderr");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn timed_command_kills_a_child_that_exceeds_its_deadline() {
+        let mut command = Command::new("sh");
+        command.args(["-c", "exec sleep 2"]);
+        let started = Instant::now();
+        let error =
+            output_with_timeout(&mut command, Duration::from_millis(100)).unwrap_err();
+
+        assert_eq!(error.kind(), std::io::ErrorKind::TimedOut);
+        assert!(started.elapsed() < Duration::from_secs(1));
+    }
 
     #[test]
     fn dnf5_state_permission_error_matches_any_known_state_file() {
