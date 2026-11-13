@@ -197,7 +197,9 @@ fn launch_scheduled_backup(app: &adw::Application) {
             Err(error) => {
                 eprintln!("Scheduled saved-project backup worker failed: {error:?}");
                 let notification = gtk::gio::Notification::new("Copr Hub backup failed");
-                notification.set_body(Some("The backup task could not finish. Reopen Copr Hub and try again."));
+                notification.set_body(Some(
+                    "The backup task could not finish. Reopen Copr Hub and try again.",
+                ));
                 app.send_notification(Some("copr-hub-scheduled-backup-error"), &notification);
             }
         }
@@ -233,13 +235,11 @@ pub(super) fn launch_manual_monitor(
     progress.set_fraction(0.0);
     progress.set_visible(true);
     let pulse_progress = progress.clone();
-    let pulse_source = gtk::glib::timeout_add_local(
-        std::time::Duration::from_millis(120),
-        move || {
+    let pulse_source =
+        gtk::glib::timeout_add_local(std::time::Duration::from_millis(120), move || {
             pulse_progress.pulse();
             gtk::glib::ControlFlow::Continue
-        },
-    );
+        });
     let button = button.clone();
     let feedback = feedback.clone();
     let progress = progress.clone();
@@ -255,7 +255,8 @@ pub(super) fn launch_manual_monitor(
             }
             Err(error) => {
                 eprintln!("Manual monitoring worker failed: {error:?}");
-                feedback.set_text("The health check could not finish. Reopen Copr Hub and try again.");
+                feedback
+                    .set_text("The health check could not finish. Reopen Copr Hub and try again.");
             }
         }
         pulse_source.remove();
@@ -398,8 +399,9 @@ fn clear_list_box(list: &gtk::ListBox) {
 #[cfg(test)]
 mod url_tests {
     use super::{
-        manual_monitor_summary, scheduled_backup_failure_summary,
+        manual_monitor_summary,
         project_details::{is_web_url, package_matches_filter, update_intelligence_summary},
+        scheduled_backup_failure_summary,
     };
     use crate::{copr, upstream};
 
@@ -414,7 +416,9 @@ mod url_tests {
     #[test]
     fn scheduled_backup_failure_guidance_covers_common_filesystem_errors() {
         assert!(scheduled_backup_failure_summary("Permission denied").contains("permissions"));
-        assert!(scheduled_backup_failure_summary("No space left on device").contains("disk is full"));
+        assert!(
+            scheduled_backup_failure_summary("No space left on device").contains("disk is full")
+        );
         assert!(scheduled_backup_failure_summary("Read-only file system").contains("read-only"));
         assert!(scheduled_backup_failure_summary("unexpected failure").contains("writable"));
     }

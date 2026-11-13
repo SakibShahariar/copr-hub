@@ -348,3 +348,12 @@ This section records every direct-to-master commit after the previous ledger tab
 
 - Reviewed through: c7b966987341a11ef1b1a4a73754d837c29be595 (green).
 - Next review: commits after c7b966987341a11ef1b1a4a73754d837c29be595.
+ 
+## Follow-up review after c7b9669
+
+| Commit SHA | Subject | CI result / workflow run |
+|---|---|---|
+| 4b3d267bdb3991917a6f5fe132879e847bfbffc0 | fix(monitoring): improve manual scan and backup feedback | red (#43363293716) |
+
+- The 4b3d267 run failed only at cargo fmt --all -- --check. The reported rustfmt differences are corrected in the follow-up formatting commit; tests, compilation, and Clippy had not run on this failed attempt.
+- The monitoring progress indicator, human-readable worker failure, and actionable scheduled-backup error guidance are implemented; final CI verification is pending.
