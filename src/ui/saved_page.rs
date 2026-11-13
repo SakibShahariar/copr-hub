@@ -69,10 +69,17 @@ pub(super) fn build_saved_page(
     feedback.add_css_class("dim-label");
     content.append(&feedback);
 
+    let monitor_progress = gtk::ProgressBar::new();
+    monitor_progress.set_show_text(true);
+    monitor_progress.set_text(Some("Checking saved projects…"));
+    monitor_progress.set_visible(false);
+    content.append(&monitor_progress);
+
     check_all.connect_clicked({
         let feedback = feedback.clone();
         let check_all = check_all.clone();
-        move |_| super::launch_manual_monitor(&check_all, &feedback)
+        let monitor_progress = monitor_progress.clone();
+        move |_| super::launch_manual_monitor(&check_all, &feedback, &monitor_progress)
     });
 
     let monitoring_toggle = gtk::Switch::new();

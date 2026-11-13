@@ -317,3 +317,34 @@ This section records every direct-to-master commit after the previous ledger tab
 
 - Reviewed through: `bcc213e3158a06f257cdb220c7fbd4dae9ac335a` (green).
 - Next review: commits after `bcc213e3158a06f257cdb220c7fbd4dae9ac335a`.
+ 
+## Follow-up review after bcc213e
+
+| Commit SHA | Subject | CI result / workflow run |
+|---|---|---|
+| 4ec170f32ca0bbc334d926682ba0ae74236550f6 | fix(packages): prevent duplicate dependency windows | green (#43318570535) |
+| 1e32e174c7e8c94fe66c97ba2f2b51f388aa82b6 | fix(storage): preserve damaged user data for recovery | red (#43362403596) |
+| f70d87cebc190ffb979465f6a59812b5a6f5637a | fix(favorites): preserve corrupted saved-project data | red (#43362429792) |
+| 259acbb6bd2729ddfcda9ac885b7c39a24466ad8 | fix(activity): preserve corrupted history for recovery | red (#43362450488) |
+| be390b3ae0583b800f799b0b443defa507a7d65b | fix(saved): offer recovery for damaged project data | red (#43362491757) |
+| 2eb1edfccfa07a0a2b69298111d33a9982df23f0 | fix(activity): offer recovery for damaged history | red (#43362510560) |
+| 93983b0d208b8622a59ca561edbebbdebf6e302d | fix(activity): keep recovery action at module scope | red (#43362534199) |
+| 963d3c3b11b7402f9852303d195f66f9112bd04a | test(data): keep preserved corruption backups intact | red (#43362557972) |
+| 7adfb19cbe8aab1d2fea865aa422de7df45935a4 | test(data): keep preserved corruption backups intact | red (#43362562620) |
+| 0d87c9a4e01a13cc88f660c33c1d535c679e6ace | style(storage): format corruption preservation helper | red (#43362621079) |
+| 313d2fbd79484e0a0e275a7037604f31036ae8f5 | style(favorites): format recovery test timestamps | red (#43362632740) |
+| c91993692d192d9b9c830a502ae34b09b30fdee2 | style(activity): format recovery validation and tests | red (#43362771934) |
+| 892a8b88d2792d084383571e7333a30ee3980f87 | style(activity): format recovery action boundaries | red (#43362785860) |
+| 2e4b6cb3841c56099dd6358368db7b9972a0c076 | style(activity): format recovery test timestamps | red (#43362931195) |
+| c7b966987341a11ef1b1a4a73754d837c29be595 | style(favorites): format recovery test timestamps | green (#43362937433) |
+
+### Damaged local-data recovery follow-up
+
+- The intermediate red runs above failed only at cargo fmt --all -- --check; their formatting differences were corrected in subsequent commits. No test, compilation, or Clippy failure remained on the final recovery commit.
+- #141 and #146 now preserve invalid favorites/activity files under timestamped sibling .corrupt-* names only after explicit user confirmation. The original bytes are retained; the app then starts with an empty list/history. Valid files are refused by the recovery path.
+- Final validation at c7b9669 passed formatting, all 139 unit tests, cargo check --all-targets, and Clippy. Live GNOME recovery and manual-restore validation remains outstanding.
+
+### Checkpoint
+
+- Reviewed through: c7b966987341a11ef1b1a4a73754d837c29be595 (green).
+- Next review: commits after c7b966987341a11ef1b1a4a73754d837c29be595.

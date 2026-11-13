@@ -188,24 +188,61 @@ fn launch_scheduled_backup(app: &adw::Application) {
                 app.send_notification(Some("copr-hub-scheduled-backup"), &notification);
             }
             Ok(Ok(None)) => {}
-            Ok(Err(_)) | Err(_) => {
+            Ok(Err(error)) => {
+                eprintln!("Scheduled saved-project backup failed: {error}");
                 let notification = gtk::gio::Notification::new("Copr Hub backup failed");
-                notification.set_body(Some("The scheduled saved-project backup could not be created. Open Copr Hub for details."));
+                notification.set_body(Some(scheduled_backup_failure_summary(&error)));
+                app.send_notification(Some("copr-hub-scheduled-backup-error"), &notification);
+            }
+            Err(error) => {
+                eprintln!("Scheduled saved-project backup worker failed: {error:?}");
+                let notification = gtk::gio::Notification::new("Copr Hub backup failed");
+                notification.set_body(Some("The backup task could not finish. Reopen Copr Hub and try again."));
                 app.send_notification(Some("copr-hub-scheduled-backup-error"), &notification);
             }
         }
     });
 }
 
-pub(super) fn launch_manual_monitor(button: &gtk::Button, feedback: &gtk::Label) {
+fn scheduled_backup_failure_summary(error: &str) -> &'static str {
+    if error.contains("Permission denied") {
+        "Copr Hub cannot write to its backup folder. Check your user-folder permissions."
+    } else if error.contains("No space left on device") {
+        "Your disk is full. Free up space before the next scheduled backup."
+    } else if error.contains("Read-only file system") {
+        "The backup folder is on a read-only filesystem."
+    } else if error.contains("Disk quota exceeded") {
+        "Your user storage quota is full. Free up space before the next backup."
+    } else {
+        "Check that your user data folder is writable and has enough free space."
+    }
+}
+
+pub(super) fn launch_manual_monitor(
+    button: &gtk::Button,
+    feedback: &gtk::Label,
+    progress: &gtk::ProgressBar,
+) {
     let Some(guard) = monitoring::try_begin_monitoring_check() else {
         feedback.set_text("A health check is already running.");
         return;
     };
     button.set_sensitive(false);
     feedback.set_text("Checking saved projects…");
+    progress.set_text(Some("Checking saved projects…"));
+    progress.set_fraction(0.0);
+    progress.set_visible(true);
+    let pulse_progress = progress.clone();
+    let pulse_source = gtk::glib::timeout_add_local(
+        std::time::Duration::from_millis(120),
+        move || {
+            pulse_progress.pulse();
+            gtk::glib::ControlFlow::Continue
+        },
+    );
     let button = button.clone();
     let feedback = feedback.clone();
+    let progress = progress.clone();
     gtk::glib::MainContext::default().spawn_local(async move {
         match gtk::gio::spawn_blocking(move || {
             let _guard = guard;
@@ -216,8 +253,13 @@ pub(super) fn launch_manual_monitor(button: &gtk::Button, feedback: &gtk::Label)
             Ok(notifications) => {
                 feedback.set_text(&manual_monitor_summary(notifications.len()));
             }
-            Err(error) => feedback.set_text(&format!("Health check failed: {error:?}")),
+            Err(error) => {
+                eprintln!("Manual monitoring worker failed: {error:?}");
+                feedback.set_text("The health check could not finish. Reopen Copr Hub and try again.");
+            }
         }
+        pulse_source.remove();
+        progress.set_visible(false);
         button.set_sensitive(true);
     });
 }
@@ -356,7 +398,7 @@ fn clear_list_box(list: &gtk::ListBox) {
 #[cfg(test)]
 mod url_tests {
     use super::{
-        manual_monitor_summary,
+        manual_monitor_summary, scheduled_backup_failure_summary,
         project_details::{is_web_url, package_matches_filter, update_intelligence_summary},
     };
     use crate::{copr, upstream};
@@ -367,6 +409,14 @@ mod url_tests {
             manual_monitor_summary(3),
             "Health check finished. 3 alert(s) generated."
         );
+    }
+
+    #[test]
+    fn scheduled_backup_failure_guidance_covers_common_filesystem_errors() {
+        assert!(scheduled_backup_failure_summary("Permission denied").contains("permissions"));
+        assert!(scheduled_backup_failure_summary("No space left on device").contains("disk is full"));
+        assert!(scheduled_backup_failure_summary("Read-only file system").contains("read-only"));
+        assert!(scheduled_backup_failure_summary("unexpected failure").contains("writable"));
     }
 
     #[test]
