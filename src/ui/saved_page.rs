@@ -803,6 +803,71 @@ fn refresh_saved_projects(
                 list.append(&row);
             }
         }
-        Err(error) => feedback.set_text(&error),
+        Err(error) => {
+            feedback.set_text(&error);
+            add_saved_recovery_action(parent, list, feedback);
+        }
     }
+}
+
+fn add_saved_recovery_action(
+    parent: &adw::ApplicationWindow,
+    list: &gtk::ListBox,
+    feedback: &gtk::Label,
+) {
+    let recover = gtk::Button::with_label("Preserve damaged saved data and start fresh…");
+    recover.set_halign(gtk::Align::Start);
+    recover.add_css_class("destructive-action");
+    recover.connect_clicked({
+        let parent = parent.clone();
+        let list = list.clone();
+        let feedback = feedback.clone();
+        move |button| {
+            let dialog = gtk::MessageDialog::builder()
+                .transient_for(&parent)
+                .modal(true)
+                .message_type(gtk::MessageType::Warning)
+                .buttons(gtk::ButtonsType::None)
+                .text("Preserve damaged saved-project data?")
+                .secondary_text("Copr Hub will move the unreadable file to a timestamped .corrupt backup beside it, then start with an empty saved-project list. The original bytes will not be deleted.")
+                .build();
+            dialog.add_button("Cancel", gtk::ResponseType::Cancel);
+            dialog.add_button("Preserve and recover", gtk::ResponseType::Accept);
+            dialog.connect_response({
+                let parent = parent.clone();
+                let list = list.clone();
+                let feedback = feedback.clone();
+                let button = button.clone();
+                move |dialog, response| {
+                    dialog.close();
+                    if response != gtk::ResponseType::Accept {
+                        return;
+                    }
+                    button.set_sensitive(false);
+                    feedback.set_text("Preserving damaged saved-project data…");
+                    let parent = parent.clone();
+                    let list = list.clone();
+                    let feedback = feedback.clone();
+                    let button = button.clone();
+                    gtk::glib::MainContext::default().spawn_local(async move {
+                        let result = gtk::gio::spawn_blocking(favorites::recover_corrupt).await;
+                        button.set_sensitive(true);
+                        match result {
+                            Ok(Ok(backup)) => {
+                                refresh_saved_projects(&parent, &list, &feedback);
+                                feedback.set_text(&format!(
+                                    "Damaged data was preserved at {}. A fresh saved-project list is ready.",
+                                    backup.display()
+                                ));
+                            }
+                            Ok(Err(error)) => feedback.set_text(&format!("Recovery failed: {error}")),
+                            Err(_) => feedback.set_text("The saved-project recovery task failed unexpectedly."),
+                        }
+                    });
+                }
+            });
+            dialog.present();
+        }
+    });
+    list.append(&recover);
 }
