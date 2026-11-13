@@ -111,8 +111,18 @@ fn refresh_repositories_with_notice(
     let feedback = feedback.clone();
     gtk::glib::MainContext::default().spawn_local(async move {
         let response = gtk::gio::spawn_blocking(system::scan_copr_repositories).await;
+        let mut notices = Vec::new();
         match response {
-            Ok(result) => render_repositories(&parent, &list, &feedback, result),
+            Ok(Ok(scan)) => {
+                if !scan.unreadable_files.is_empty() {
+                    notices.push(format!(
+                        "Skipped {} unreadable repository configuration file(s). Check file permissions and contents.",
+                        scan.unreadable_files.len()
+                    ));
+                }
+                render_repositories(&parent, &list, &feedback, Ok(scan.repositories));
+            }
+            Ok(Err(error)) => render_repositories(&parent, &list, &feedback, Err(error)),
             Err(_) => {
                 clear_list_box(&list);
                 feedback.set_text("The background repository scan failed unexpectedly.");
@@ -120,8 +130,11 @@ fn refresh_repositories_with_notice(
         }
 
         if let Some(notice) = notice {
+            notices.push(notice);
+        }
+        if !notices.is_empty() {
             let current_feedback = feedback.text();
-            feedback.set_text(&format!("{current_feedback}\n{notice}"));
+            feedback.set_text(&format!("{current_feedback}\n{}", notices.join("\n")));
         }
     });
 }

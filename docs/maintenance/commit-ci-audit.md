@@ -449,3 +449,13 @@ This section records every direct-to-master commit after the previous ledger tab
 
 - The c248cf2 run failed only at cargo fmt --all -- --check. Rustfmt requested line wrapping in bounded_lines and the repository-origin UI; those changes are corrected in the follow-up. Tests, compilation, and Clippy were skipped.
 - Corrected the prior pagination ledger entry: run 43365049415 passed 143 tests, not 144.
+ 
+## Follow-up review after ce487ce
+
+| Commit SHA | Subject | CI result / workflow run |
+|---|---|---|
+| ba9a2c9b0a2a7d00fbb3b85dcdc05a9f2b42a25d | fix(system): bound external command execution | red (#43365845693) |
+| ca21e861caef5670a7f0b070595ff67d903fc0d0 | test(system): cover command timeouts | red (#43365866794) |
+
+- Both command-timeout commits failed only at cargo fmt --all -- --check. Their formatting differences are corrected in this follow-up; no tests or compilation ran on those attempts.
+- The bounded-command work is preserved unchanged apart from rustfmt formatting.

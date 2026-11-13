@@ -39,7 +39,10 @@ fn system_command(program: impl AsRef<std::ffi::OsStr>) -> Command {
 /// Run a system command with a bounded lifetime while draining both output
 /// streams concurrently so a verbose child cannot block on a full pipe.
 fn output_with_timeout(command: &mut Command, timeout: Duration) -> std::io::Result<Output> {
-    let mut child = command.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
+    let mut child = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
     let stdout = child.stdout.take().expect("stdout was configured as piped");
     let stderr = child.stderr.take().expect("stderr was configured as piped");
     let stdout_reader = thread::spawn(move || {
@@ -129,12 +132,29 @@ pub struct CoprRepository {
     pub file: PathBuf,
 }
 
-pub fn scan_copr_repositories() -> Result<Vec<CoprRepository>, String> {
+#[derive(Debug, Clone, Default)]
+pub struct CoprRepositoryScan {
+    pub repositories: Vec<CoprRepository>,
+    pub unreadable_files: Vec<PathBuf>,
+}
+
+fn read_repository_file(path: &Path, unreadable_files: &mut Vec<PathBuf>) -> Option<String> {
+    match fs::read_to_string(path) {
+        Ok(contents) => Some(contents),
+        Err(_) => {
+            unreadable_files.push(path.to_path_buf());
+            None
+        }
+    }
+}
+
+pub fn scan_copr_repositories() -> Result<CoprRepositoryScan, String> {
     let directory = Path::new(REPOSITORY_DIRECTORY);
     let entries = fs::read_dir(directory)
         .map_err(|error| format!("Could not read {}: {error}", directory.display()))?;
 
     let mut repositories = Vec::new();
+    let mut unreadable_files = Vec::new();
     let mut entries: Vec<_> = entries.flatten().collect();
     entries.sort_by_key(|entry| entry.path());
     for entry in entries {
@@ -143,10 +163,9 @@ pub fn scan_copr_repositories() -> Result<Vec<CoprRepository>, String> {
             continue;
         }
 
-        let Ok(contents) = fs::read_to_string(&path) else {
-            continue;
-        };
-        repositories.extend(parse_copr_repositories(&contents, &path));
+        if let Some(contents) = read_repository_file(&path, &mut unreadable_files) {
+            repositories.extend(parse_copr_repositories(&contents, &path));
+        }
     }
 
     let mut overrides = HashMap::new();
@@ -159,7 +178,7 @@ pub fn scan_copr_repositories() -> Result<Vec<CoprRepository>, String> {
             if path.extension().and_then(|extension| extension.to_str()) != Some("repo") {
                 continue;
             }
-            if let Ok(contents) = fs::read_to_string(&path) {
+            if let Some(contents) = read_repository_file(&path, &mut unreadable_files) {
                 overrides.extend(parse_enabled_overrides(&contents));
             }
         }
@@ -172,7 +191,10 @@ pub fn scan_copr_repositories() -> Result<Vec<CoprRepository>, String> {
     }
 
     repositories.sort_by(|left, right| left.id.cmp(&right.id));
-    Ok(repositories)
+    Ok(CoprRepositoryScan {
+        repositories,
+        unreadable_files,
+    })
 }
 
 fn strip_repo_inline_comment(value: &str) -> &str {
@@ -554,11 +576,8 @@ pub fn inspect_package_dependency_impact(
 }
 
 fn run_rpm_query(arguments: &[&str]) -> Result<String, String> {
-    let output = output_with_timeout(
-        system_command("rpm").args(arguments),
-        QUERY_COMMAND_TIMEOUT,
-    )
-    .map_err(|error| format!("Could not complete the RPM dependency query: {error}"))?;
+    let output = output_with_timeout(system_command("rpm").args(arguments), QUERY_COMMAND_TIMEOUT)
+        .map_err(|error| format!("Could not complete the RPM dependency query: {error}"))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         return Err(if stderr.is_empty() {
@@ -571,11 +590,8 @@ fn run_rpm_query(arguments: &[&str]) -> Result<String, String> {
 }
 
 fn run_rpm_query_allow_empty(arguments: &[&str]) -> Result<String, String> {
-    let output = output_with_timeout(
-        system_command("rpm").args(arguments),
-        QUERY_COMMAND_TIMEOUT,
-    )
-    .map_err(|error| format!("Could not complete the RPM reverse-dependency query: {error}"))?;
+    let output = output_with_timeout(system_command("rpm").args(arguments), QUERY_COMMAND_TIMEOUT)
+        .map_err(|error| format!("Could not complete the RPM reverse-dependency query: {error}"))?;
     if output.status.success() {
         return Ok(String::from_utf8_lossy(&output.stdout).into_owned());
     }
@@ -706,9 +722,7 @@ fn query_installed_package_origins() -> InstalledOrigins {
         ]),
         QUERY_COMMAND_TIMEOUT,
     )
-    .map_err(|error| {
-        format!("Could not complete the DNF installed-origin query: {error}")
-    })?;
+    .map_err(|error| format!("Could not complete the DNF installed-origin query: {error}"))?;
     if !output.status.success() {
         return Err(format!(
             "DNF could not inspect installed package origins: {}",
@@ -846,11 +860,10 @@ pub fn set_package_installed(package_name: &str, install: bool) -> Result<(), St
         // insufficient to resolve the transaction.
         command.arg("--cacheonly");
     }
-    let output = output_with_timeout(
-        command.arg(package_name),
-        PRIVILEGED_COMMAND_TIMEOUT,
-    )
-    .map_err(|error| format!("Could not complete the privileged DNF package operation: {error}"))?;
+    let output = output_with_timeout(command.arg(package_name), PRIVILEGED_COMMAND_TIMEOUT)
+        .map_err(|error| {
+            format!("Could not complete the privileged DNF package operation: {error}")
+        })?;
 
     if output.status.success() {
         return Ok(());
@@ -890,7 +903,6 @@ fn command_failure_details(stderr: &str, stdout: &str, fallback: &str) -> String
 mod tests {
     use super::*;
 
-
     #[cfg(unix)]
     #[test]
     fn timed_command_captures_both_streams_and_exit_status() {
@@ -909,8 +921,7 @@ mod tests {
         let mut command = Command::new("sh");
         command.args(["-c", "exec sleep 2"]);
         let started = Instant::now();
-        let error =
-            output_with_timeout(&mut command, Duration::from_millis(100)).unwrap_err();
+        let error = output_with_timeout(&mut command, Duration::from_millis(100)).unwrap_err();
 
         assert_eq!(error.kind(), std::io::ErrorKind::TimedOut);
         assert!(started.elapsed() < Duration::from_secs(1));
@@ -1053,6 +1064,22 @@ mod tests {
     fn rejects_package_names_with_option_or_shell_characters() {
         assert!(set_package_installed("--assumeyes", true).is_err());
         assert!(set_package_installed("demo;touch /tmp/bad", true).is_err());
+    }
+
+    #[test]
+    fn unreadable_repository_files_are_reported_without_failing_the_scan() {
+        let path = std::env::temp_dir().join(format!(
+            "copr-hub-unreadable-repo-{}-{}.repo",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut unreadable = Vec::new();
+
+        assert!(read_repository_file(&path, &mut unreadable).is_none());
+        assert_eq!(unreadable, vec![path]);
     }
 
     #[test]
