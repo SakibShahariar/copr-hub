@@ -266,7 +266,7 @@ pub(super) fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widge
                             .clone()
                             .unwrap_or_else(|| Ok(Vec::new()));
                         if let Ok(projects) = &mut combined {
-                            projects.extend(page.projects);
+                            copr::append_unique_projects(projects, page.projects);
                             *next_offset.borrow_mut() = page.next_offset;
                             *has_more.borrow_mut() = page.has_more;
                             *latest_response.borrow_mut() = Some(combined.clone());

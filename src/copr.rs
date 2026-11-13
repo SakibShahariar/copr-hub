@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::thread;
 use std::time::Duration;
 
@@ -416,7 +416,22 @@ fn build_project_search_page(items: Vec<CoprProject>, offset: usize) -> ProjectS
     ProjectSearchPage {
         projects,
         next_offset: offset.saturating_add(returned),
-        has_more: returned == SEARCH_LIMIT,
+        has_more: returned >= SEARCH_LIMIT,
+    }
+}
+
+pub(crate) fn append_unique_projects(
+    existing: &mut Vec<CoprProject>,
+    incoming: Vec<CoprProject>,
+) {
+    let mut seen: HashSet<(String, String)> = existing
+        .iter()
+        .map(|project| (project.owner.clone(), project.name.clone()))
+        .collect();
+    for project in incoming {
+        if seen.insert((project.owner.clone(), project.name.clone())) {
+            existing.push(project);
+        }
     }
 }
 
@@ -840,6 +855,26 @@ mod tests {
         assert_eq!(page.projects.len(), SEARCH_LIMIT - 1);
         assert_eq!(page.next_offset, 50 + SEARCH_LIMIT);
         assert!(page.has_more);
+    }
+
+    #[test]
+    fn appending_search_pages_deduplicates_owner_project_pairs() {
+        let project = |owner: &str, name: &str| CoprProject {
+            name: name.to_string(),
+            owner: owner.to_string(),
+            description: None,
+            homepage: None,
+        };
+        let mut existing = vec![project("alice", "demo")];
+
+        append_unique_projects(
+            &mut existing,
+            vec![project("alice", "demo"), project("bob", "demo")],
+        );
+
+        assert_eq!(existing.len(), 2);
+        assert_eq!(existing[0].owner, "alice");
+        assert_eq!(existing[1].owner, "bob");
     }
 
     #[test]
