@@ -10,7 +10,10 @@ static TEMP_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 /// The returned path is a timestamped sibling that users can inspect or restore.
 pub fn preserve_corrupt_file(path: &Path) -> io::Result<std::path::PathBuf> {
     let parent = path.parent().ok_or_else(|| {
-        io::Error::new(io::ErrorKind::InvalidInput, "damaged file has no parent directory")
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "damaged file has no parent directory",
+        )
     })?;
     let file_name = path.file_name().ok_or_else(|| {
         io::Error::new(io::ErrorKind::InvalidInput, "damaged file has no file name")
@@ -128,7 +131,11 @@ mod tests {
 
         assert!(!path.exists());
         assert_eq!(fs::read(&backup).unwrap(), b"not valid json");
-        assert!(backup.file_name().unwrap().to_string_lossy().contains(".corrupt-"));
+        assert!(backup
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .contains(".corrupt-"));
 
         fs::remove_dir_all(directory).unwrap();
     }
