@@ -232,7 +232,8 @@ fn render_repositories(
                 // Show installed package origins before a user disables or removes
                 // a repository. A failed query is explicitly shown as unknown.
                 let origin_state = Rc::new(Cell::new(RepositoryOriginState::Loading));
-                let origin_summary = gtk::Label::new(Some("Checking DNF recorded install origins…"));
+                let origin_summary =
+                    gtk::Label::new(Some("Checking DNF recorded install origins…"));
                 origin_summary.set_wrap(true);
                 origin_summary.set_xalign(0.0);
                 origin_summary.add_css_class("dim-label");
@@ -490,7 +491,10 @@ fn set_installed_origin_summary(summary: &gtk::Label, packages: &[String]) {
     let text = if remaining == 0 {
         format!("Recorded install origin: {}", preview.join(", "))
     } else {
-        format!("Recorded install origin: {}, +{remaining} more", preview.join(", "))
+        format!(
+            "Recorded install origin: {}, +{remaining} more",
+            preview.join(", ")
+        )
     };
     summary.set_text(&text);
     summary.set_tooltip_text(Some(&format!(

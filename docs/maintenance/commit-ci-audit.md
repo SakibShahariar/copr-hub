@@ -438,5 +438,14 @@ This section records every direct-to-master commit after the previous ledger tab
 |---|---|---|
 | 1b7af707099c58ef3aca1f2493500e650788d8ee | style(discover): format project deduplication helper | green (#43365049415) |
 
-- The pagination/deduplication follow-up passed formatting, all 144 unit tests, cargo check --all-targets, and Clippy.
+- The pagination/deduplication follow-up passed formatting, all 143 unit tests, cargo check --all-targets, and Clippy.
 - #91 now has offset pagination, a Load more control, retry-safe error handling, stable local sorting/filtering, and duplicate suppression across pages. Live COPR search validation remains pending.
+ 
+## Follow-up review after 1b7af70
+
+| Commit SHA | Subject | CI result / workflow run |
+|---|---|---|
+| c248cf2dce0d0b36d8011e75b5634a5f96c89f09 | fix(ui): clarify package and build target summaries | red (#43365495750) |
+
+- The c248cf2 run failed only at cargo fmt --all -- --check. Rustfmt requested line wrapping in bounded_lines and the repository-origin UI; those changes are corrected in the follow-up. Tests, compilation, and Clippy were skipped.
+- Corrected the prior pagination ledger entry: run 43365049415 passed 143 tests, not 144.

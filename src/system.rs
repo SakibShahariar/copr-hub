@@ -539,7 +539,11 @@ fn bounded_lines(output: &str) -> (Vec<String>, usize) {
         .lines()
         .map(str::trim)
         .filter(|line| !line.is_empty());
-    let visible = lines.by_ref().take(100).map(str::to_string).collect::<Vec<_>>();
+    let visible = lines
+        .by_ref()
+        .take(100)
+        .map(str::to_string)
+        .collect::<Vec<_>>();
     let total = visible.len() + lines.count();
     (visible, total)
 }
