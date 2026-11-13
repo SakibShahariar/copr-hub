@@ -291,11 +291,11 @@ fn refresh_installed_package_updates(
                 );
                 if updated_packages > 0 {
                     feedback.set_text(&format!(
-                        "Updates available · {updated_packages} of {package_count} installed COPR package(s) have an upgrade candidate in enabled repositories. This is not a security audit."
+                        "DNF found upgrade candidates in enabled repositories for {updated_packages} of {package_count} installed COPR package(s). Candidate versions and repository IDs are shown on each row. This is not a security audit."
                     ));
                 } else {
                     feedback.set_text(&format!(
-                        "You're up to date · no upgrade candidates were found for {package_count} installed COPR package(s) in enabled repositories."
+                        "DNF found no upgrade candidates in enabled repositories for {package_count} installed COPR package(s). This is not a security audit."
                     ));
                 }
             }
@@ -354,7 +354,7 @@ fn render_installed_package_rows(
             } else {
                 String::new()
             };
-            format!(" · Update available: {versions}{extra}")
+            format!(" · Upgrade candidate: {versions}{extra}")
         });
         let subtitle = format!(
             "{} · {}{}",
@@ -383,7 +383,7 @@ fn render_installed_package_rows(
             let update_badge = gtk::Label::new(Some("Update available"));
             update_badge.add_css_class("warning");
             update_badge.set_tooltip_text(Some(
-                "An upgrade candidate for this package was found in enabled repositories.",
+                "DNF found an upgrade candidate in an enabled repository. The candidate version and repository ID are shown in the row details; this does not indicate security importance.",
             ));
             row.add_suffix(&update_badge);
         }
@@ -543,7 +543,29 @@ fn show_package_dependency_impact(
         .await;
         match result {
             Ok(Ok(impact)) => {
-                status.set_text("Dependency data loaded from the local RPM database.");
+                let mut truncation_notes = Vec::new();
+                if impact.requirements_total > impact.requirements.len() {
+                    truncation_notes.push(format!(
+                        "showing first {} of {} direct requirements",
+                        impact.requirements.len(),
+                        impact.requirements_total
+                    ));
+                }
+                if impact.required_by_total > impact.required_by.len() {
+                    truncation_notes.push(format!(
+                        "showing first {} of {} installed dependents",
+                        impact.required_by.len(),
+                        impact.required_by_total
+                    ));
+                }
+                if truncation_notes.is_empty() {
+                    status.set_text("Dependency data loaded from the local RPM database.");
+                } else {
+                    status.set_text(&format!(
+                        "Dependency data loaded from the local RPM database; {}",
+                        truncation_notes.join("; ")
+                    ));
+                }
                 let requirements_text = if impact.requirements.is_empty() {
                     "No direct requirements were reported.".to_string()
                 } else {
@@ -556,9 +578,6 @@ fn show_package_dependency_impact(
                     impact.required_by.join("\n")
                 };
                 required_by.set_text(&required_by_text);
-                if impact.requirements.len() == 100 || impact.required_by.len() == 100 {
-                    status.set_text("Dependency data loaded; each list is capped at 100 entries.");
-                }
             }
             Ok(Err(error)) => {
                 status.set_text(&format!("Could not inspect dependencies: {error}"));

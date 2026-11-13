@@ -17,7 +17,7 @@ impl RepositoryOriginState {
             ),
             Self::Available => None,
             Self::Unavailable => Some(
-                "Installed package-origin information is unavailable. Refresh repositories before changing this repository.",
+                "Recorded DNF install-origin information is unavailable. Refresh repositories before changing this repository.",
             ),
         }
     }
@@ -232,7 +232,7 @@ fn render_repositories(
                 // Show installed package origins before a user disables or removes
                 // a repository. A failed query is explicitly shown as unknown.
                 let origin_state = Rc::new(Cell::new(RepositoryOriginState::Loading));
-                let origin_summary = gtk::Label::new(Some("Checking installed packages…"));
+                let origin_summary = gtk::Label::new(Some("Checking DNF recorded install origins…"));
                 origin_summary.set_wrap(true);
                 origin_summary.set_xalign(0.0);
                 origin_summary.add_css_class("dim-label");
@@ -257,9 +257,9 @@ fn render_repositories(
                             Ok(Ok(packages)) if packages.is_empty() => {
                                 origin_state.set(RepositoryOriginState::Available);
                                 query_summary
-                                    .set_text("No installed packages attributed to this repo");
+                                    .set_text("No RPMs report this as their recorded install origin");
                                 query_summary.set_tooltip_text(Some(
-                                    "DNF reports no installed RPMs with this source repository ID.",
+                                    "This is DNF recorded install-origin data, not proof that the repository currently provides the package or would supply an upgrade.",
                                 ));
                             }
                             Ok(Ok(packages)) => {
@@ -269,7 +269,7 @@ fn render_repositories(
                             Ok(Err(error)) => {
                                 origin_state.set(RepositoryOriginState::Unavailable);
                                 query_summary.set_text(&format!(
-                                    "Could not read installed package origins: {error}"
+                                    "Could not read recorded DNF install origins: {error}"
                                 ));
                                 query_summary.set_tooltip_text(Some(&error));
                                 repair_state.set_visible(
@@ -278,7 +278,7 @@ fn render_repositories(
                             }
                             Err(_) => {
                                 origin_state.set(RepositoryOriginState::Unavailable);
-                                query_summary.set_text("Installed package origins unavailable");
+                                query_summary.set_text("Recorded DNF install origins unavailable");
                                 query_summary
                                     .set_tooltip_text(Some("The background DNF query failed."));
                             }
@@ -477,9 +477,9 @@ fn render_repositories(
 
 fn set_installed_origin_summary(summary: &gtk::Label, packages: &[String]) {
     if packages.is_empty() {
-        summary.set_text("No installed packages attributed to this repo");
+        summary.set_text("No RPMs report this as their recorded install origin");
         summary.set_tooltip_text(Some(
-            "DNF reports no installed RPMs with this source repository ID.",
+            "This is DNF recorded install-origin data, not proof that the repository currently provides the package or would supply an upgrade.",
         ));
         return;
     }
@@ -488,12 +488,14 @@ fn set_installed_origin_summary(summary: &gtk::Label, packages: &[String]) {
     let preview = packages.iter().take(5).cloned().collect::<Vec<_>>();
     let remaining = packages.len().saturating_sub(preview.len());
     let text = if remaining == 0 {
-        format!("Installed: {}", preview.join(", "))
+        format!("Recorded install origin: {}", preview.join(", "))
     } else {
-        format!("Installed: {}, +{remaining} more", preview.join(", "))
+        format!("Recorded install origin: {}, +{remaining} more", preview.join(", "))
     };
     summary.set_text(&text);
-    summary.set_tooltip_text(Some(&names));
+    summary.set_tooltip_text(Some(&format!(
+        "DNF recorded these RPM install origins. This does not prove the repository currently provides them or would supply an upgrade.\n\nPackages: {names}"
+    )));
 }
 
 fn confirm_repository_toggle(

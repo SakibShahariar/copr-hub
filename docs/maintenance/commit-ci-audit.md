@@ -431,3 +431,12 @@ This section records every direct-to-master commit after the previous ledger tab
 | 1264f16dab1d76867caae8cc962914da7ce59365 | fix(discover): deduplicate paginated project results | red (#43364911453) |
 
 - The 1264f16 run failed only at cargo fmt --all -- --check because rustfmt wanted the helper signature on one line. Formatting is corrected in the follow-up; tests, compilation, and Clippy were skipped.
+ 
+## Follow-up review after 1b7af70
+
+| Commit SHA | Subject | CI result / workflow run |
+|---|---|---|
+| 1b7af707099c58ef3aca1f2493500e650788d8ee | style(discover): format project deduplication helper | green (#43365049415) |
+
+- The pagination/deduplication follow-up passed formatting, all 144 unit tests, cargo check --all-targets, and Clippy.
+- #91 now has offset pagination, a Load more control, retry-safe error handling, stable local sorting/filtering, and duplicate suppression across pages. Live COPR search validation remains pending.

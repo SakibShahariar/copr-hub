@@ -615,7 +615,8 @@ pub fn build_target_health_summary(packages: &[MonitoredPackage]) -> String {
         return "No per-target build states were reported".to_string();
     }
 
-    targets
+    let total_targets = targets.len();
+    let summaries = targets
         .into_iter()
         .take(5)
         .map(|(target, counts)| {
@@ -634,8 +635,14 @@ pub fn build_target_health_summary(packages: &[MonitoredPackage]) -> String {
             }
             format!("{target}: {}", parts.join(", "))
         })
-        .collect::<Vec<_>>()
-        .join(" · ")
+        .collect::<Vec<_>>();
+    let remaining = total_targets.saturating_sub(summaries.len());
+    let summary = summaries.join(" · ");
+    if remaining > 0 {
+        format!("{summary} · and {remaining} more target(s)")
+    } else {
+        summary
+    }
 }
 
 pub fn build_freshness_message(build: Option<&ProjectBuildSummary>, now: i64) -> String {
@@ -805,6 +812,29 @@ mod tests {
             build_target_health_summary(&[]),
             "No per-target build states were reported"
         );
+    }
+
+    #[test]
+    fn build_target_health_summary_reports_targets_beyond_the_first_five() {
+        let chroots = (0..6)
+            .map(|index| {
+                (
+                    format!("fedora-{index}-x86_64"),
+                    ChrootBuild {
+                        state: Some("succeeded".to_string()),
+                        pkg_version: None,
+                    },
+                )
+            })
+            .collect();
+        let packages = [MonitoredPackage {
+            name: "demo".to_string(),
+            chroots,
+        }];
+
+        let summary = build_target_health_summary(&packages);
+
+        assert!(summary.contains("and 1 more target(s)"));
     }
 
     #[test]

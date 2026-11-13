@@ -272,7 +272,9 @@ pub struct AvailablePackageUpdate {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct PackageDependencyImpact {
     pub requirements: Vec<String>,
+    pub requirements_total: usize,
     pub required_by: Vec<String>,
+    pub required_by_total: usize,
 }
 
 /// Whether the DNF5 package-state file has the ownership and permissions
@@ -480,9 +482,13 @@ pub fn inspect_package_dependency_impact(
 
     let requirements = run_rpm_query(&["-q", "--requires", package_name])?;
     let reverse_output = run_rpm_query_allow_empty(&["-q", "--whatrequires", package_name])?;
+    let (requirements, requirements_total) = bounded_lines(&requirements);
+    let (required_by, required_by_total) = bounded_lines(&reverse_output);
     Ok(PackageDependencyImpact {
-        requirements: bounded_lines(&requirements),
-        required_by: bounded_lines(&reverse_output),
+        requirements,
+        requirements_total,
+        required_by,
+        required_by_total,
     })
 }
 
@@ -528,14 +534,14 @@ fn run_rpm_query_allow_empty(arguments: &[&str]) -> Result<String, String> {
     })
 }
 
-fn bounded_lines(output: &str) -> Vec<String> {
-    output
+fn bounded_lines(output: &str) -> (Vec<String>, usize) {
+    let mut lines = output
         .lines()
         .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .take(100)
-        .map(str::to_string)
-        .collect()
+        .filter(|line| !line.is_empty());
+    let visible = lines.by_ref().take(100).map(str::to_string).collect::<Vec<_>>();
+    let total = visible.len() + lines.count();
+    (visible, total)
 }
 
 fn is_valid_package_name(package_name: &str) -> bool {
@@ -1077,10 +1083,22 @@ enabled=1
             .map(|index| format!(" capability-{index} "))
             .collect::<Vec<_>>()
             .join("\n");
-        let lines = bounded_lines(&output);
+        let (lines, total) = bounded_lines(&output);
         assert_eq!(lines.len(), 100);
+        assert_eq!(total, 105);
         assert_eq!(lines[0], "capability-0");
         assert_eq!(lines[99], "capability-99");
+    }
+
+    #[test]
+    fn dependency_output_of_exactly_one_hundred_entries_is_not_marked_truncated() {
+        let output = (0..100)
+            .map(|index| format!("capability-{index}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let (lines, total) = bounded_lines(&output);
+        assert_eq!(lines.len(), 100);
+        assert_eq!(total, 100);
     }
 
     #[test]
