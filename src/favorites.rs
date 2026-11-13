@@ -82,7 +82,7 @@ fn load_unlocked() -> Result<Vec<CoprProject>, String> {
     let path = favorites_path();
     match fs::metadata(&path) {
         Ok(metadata) if metadata.len() > MAX_SAVED_FILE_BYTES => {
-            return Err("The saved-project list exceeds the 10 MiB safety limit.".to_string());
+            return Err("Saved-project data is damaged or exceeds the safety limit. The original file is untouched; use Recover to preserve it and start a fresh list.".to_string());
         }
         Ok(_) => {}
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
@@ -91,17 +91,54 @@ fn load_unlocked() -> Result<Vec<CoprProject>, String> {
     match fs::read_to_string(&path) {
         Ok(contents) => {
             let mut projects: Vec<CoprProject> = serde_json::from_str(&contents)
-                .map_err(|error| format!("Could not read saved projects: {error}"))?;
+                .map_err(|_| "Saved-project data is damaged or invalid. The original file is untouched; use Recover to preserve it and start a fresh list.".to_string())?;
             for project in &mut projects {
                 sanitize_project_metadata(project);
             }
-            ensure_saved_project_limit(projects.len())?;
-            validate_project_entries(&projects)?;
+            if ensure_saved_project_limit(projects.len()).is_err()
+                || validate_project_entries(&projects).is_err()
+            {
+                return Err("Saved-project data is damaged or invalid. The original file is untouched; use Recover to preserve it and start a fresh list.".to_string());
+            }
             Ok(projects)
         }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
         Err(error) => Err(format!("Could not open saved projects: {error}")),
     }
+}
+
+fn saved_file_is_valid(path: &std::path::Path) -> Result<bool, String> {
+    let metadata = fs::metadata(path)
+        .map_err(|error| format!("Could not inspect saved-project data: {error}"))?;
+    if metadata.len() > MAX_SAVED_FILE_BYTES {
+        return Ok(false);
+    }
+    let contents = match fs::read_to_string(path) {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == std::io::ErrorKind::InvalidData => return Ok(false),
+        Err(error) => return Err(format!("Could not read saved-project data: {error}")),
+    };
+    let Ok(mut projects) = serde_json::from_str::<Vec<CoprProject>>(&contents) else {
+        return Ok(false);
+    };
+    for project in &mut projects {
+        sanitize_project_metadata(project);
+    }
+    Ok(ensure_saved_project_limit(projects.len()).is_ok()
+        && validate_project_entries(&projects).is_ok())
+}
+
+fn preserve_invalid_saved_file(path: &std::path::Path) -> Result<PathBuf, String> {
+    if saved_file_is_valid(path)? {
+        return Err("The saved-project file is valid; no recovery is needed.".to_string());
+    }
+    storage::preserve_corrupt_file(path)
+        .map_err(|error| format!("Could not preserve the damaged saved-project file: {error}"))
+}
+
+/// Preserve invalid saved-project data under a timestamped name before starting fresh.
+pub fn recover_corrupt() -> Result<PathBuf, String> {
+    with_favorites_lock(|| preserve_invalid_saved_file(&favorites_path()))
 }
 
 pub fn is_saved(project: &CoprProject) -> Result<bool, String> {
@@ -342,6 +379,37 @@ mod tests {
             worker.join().unwrap();
         }
         assert_eq!(maximum.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn recovery_preserves_invalid_saved_projects_without_overwriting_them() {
+        let path = std::env::temp_dir().join(format!(
+            "copr-hub-favorites-corrupt-{}-{}.json",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        fs::write(&path, b"{broken json").unwrap();
+
+        let backup = preserve_invalid_saved_file(&path).unwrap();
+
+        assert!(!path.exists());
+        assert_eq!(fs::read(&backup).unwrap(), b"{broken json");
+        assert!(preserve_invalid_saved_file(&backup).is_err());
+        fs::remove_file(backup).unwrap();
+    }
+
+    #[test]
+    fn recovery_refuses_to_move_a_valid_saved_project_file() {
+        let path = std::env::temp_dir().join(format!(
+            "copr-hub-favorites-valid-{}-{}.json",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        fs::write(&path, b"[]").unwrap();
+
+        assert!(preserve_invalid_saved_file(&path).is_err());
+        assert_eq!(fs::read(&path).unwrap(), b"[]");
+        fs::remove_file(path).unwrap();
     }
 
     #[test]
