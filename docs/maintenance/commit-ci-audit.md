@@ -389,3 +389,13 @@ This section records every direct-to-master commit after the previous ledger tab
 | a6bd4107930e14aaae451151697fdabe7409c608 | fix(project-details): refresh content in place | red (#43363943203) |
 
 - The a6bd410 run passed formatting, all 140 unit tests, and cargo check --all-targets. Clippy failed on one needless double borrow in the new in-place refresh helper; that borrow is removed in the follow-up.
+ 
+## Follow-up review after fd06ca0
+
+| Commit SHA | Subject | CI result / workflow run |
+|---|---|---|
+| a6bd4107930e14aaae451151697fdabe7409c608 | fix(project-details): refresh content in place | red (#43363943203) |
+| 0b7617839fbac2e5842b2512a943a7dca9982d60 | fix(project-details): remove redundant window borrow | green (#43364104258) |
+
+- The first in-place refresh attempt passed formatting, all 140 tests, and compilation but Clippy found one needless double borrow. The follow-up removed it and passed all CI checks, including Clippy.
+- #72 now refreshes the existing details window and restores the prior scroll position. Live GNOME validation remains pending.

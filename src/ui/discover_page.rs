@@ -86,6 +86,8 @@ pub(super) fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widge
 
     let results = gtk::ListBox::new();
     let latest_response: Rc<RefCell<Option<ProjectSearchResponse>>> = Rc::new(RefCell::new(None));
+    let next_offset = Rc::new(RefCell::new(0usize));
+    let has_more = Rc::new(RefCell::new(false));
     results.set_selection_mode(gtk::SelectionMode::None);
     results.add_css_class("boxed-list");
     results.set_filter_func({
@@ -101,6 +103,11 @@ pub(super) fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widge
     });
     content.append(&results);
 
+    let load_more = gtk::Button::with_label("Load more results");
+    load_more.set_halign(gtk::Align::Center);
+    load_more.set_visible(false);
+    content.append(&load_more);
+
     let perform_search = {
         let search = search.clone();
         let results = results.clone();
@@ -110,11 +117,18 @@ pub(super) fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widge
         let progress = progress.clone();
         let parent = parent.clone();
         let latest_response = latest_response.clone();
+        let next_offset = next_offset.clone();
+        let has_more = has_more.clone();
+        let load_more = load_more.clone();
         let sort = sort.clone();
         move || {
             let query = search.text().trim().to_string();
             if query.is_empty() {
                 clear_list_box(&results);
+                *latest_response.borrow_mut() = None;
+                *next_offset.borrow_mut() = 0;
+                *has_more.borrow_mut() = false;
+                load_more.set_visible(false);
                 activity_warning.set_visible(false);
                 feedback.set_text("Enter a COPR project name to search.");
                 return;
@@ -122,6 +136,12 @@ pub(super) fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widge
 
             feedback.set_text("Searching COPR…");
             activity_warning.set_visible(false);
+            clear_list_box(&results);
+            *latest_response.borrow_mut() = None;
+            *next_offset.borrow_mut() = 0;
+            *has_more.borrow_mut() = false;
+            load_more.set_visible(false);
+            load_more.set_sensitive(false);
             progress.set_visible(true);
             search.set_sensitive(false);
             search_button.set_sensitive(false);
@@ -135,16 +155,34 @@ pub(super) fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widge
             let progress = progress.clone();
             let parent = parent.clone();
             let latest_response = latest_response.clone();
+            let next_offset = next_offset.clone();
+            let has_more = has_more.clone();
+            let load_more = load_more.clone();
             let sort = sort.clone();
             gtk::glib::MainContext::default().spawn_local(async move {
-                let response =
-                    gtk::gio::spawn_blocking(move || copr::search_projects(&query)).await;
+                let response = gtk::gio::spawn_blocking(move || {
+                    copr::search_projects_page(&query, 0)
+                })
+                .await;
                 search.set_sensitive(true);
                 search_button.set_sensitive(true);
                 progress.set_visible(false);
-                let response = match response {
+                let page = match response {
                     Ok(result) => result,
                     Err(_) => Err("The background search task failed unexpectedly.".to_string()),
+                };
+                let response: ProjectSearchResponse = match page {
+                    Ok(page) => {
+                        *next_offset.borrow_mut() = page.next_offset;
+                        *has_more.borrow_mut() = page.has_more;
+                        load_more.set_visible(page.has_more);
+                        load_more.set_sensitive(page.has_more);
+                        Ok(page.projects)
+                    }
+                    Err(error) => {
+                        load_more.set_visible(false);
+                        Err(error)
+                    }
                 };
                 let summary = match &response {
                     Ok(projects) => format!("{} result(s)", projects.len()),
@@ -178,6 +216,87 @@ pub(super) fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widge
         move |_| perform_search()
     });
     search_button.connect_clicked(move |_| perform_search());
+
+    load_more.connect_clicked({
+        let parent = parent.clone();
+        let results = results.clone();
+        let feedback = feedback.clone();
+        let search = search.clone();
+        let search_button = search_button.clone();
+        let latest_response = latest_response.clone();
+        let next_offset = next_offset.clone();
+        let has_more = has_more.clone();
+        let load_more = load_more.clone();
+        let progress = progress.clone();
+        let sort = sort.clone();
+        move |_| {
+            let query = search.text().trim().to_string();
+            let offset = *next_offset.borrow();
+            if query.is_empty() || !*has_more.borrow() {
+                return;
+            }
+            load_more.set_sensitive(false);
+            search.set_sensitive(false);
+            search_button.set_sensitive(false);
+            feedback.set_text(&format!("Loading more results after {offset}…"));
+            progress.set_visible(true);
+
+            let parent = parent.clone();
+            let results = results.clone();
+            let feedback = feedback.clone();
+            let search = search.clone();
+            let search_button = search_button.clone();
+            let latest_response = latest_response.clone();
+            let next_offset = next_offset.clone();
+            let has_more = has_more.clone();
+            let load_more = load_more.clone();
+            let progress = progress.clone();
+            let sort = sort.clone();
+            gtk::glib::MainContext::default().spawn_local(async move {
+                let response = gtk::gio::spawn_blocking(move || {
+                    copr::search_projects_page(&query, offset)
+                })
+                .await;
+                progress.set_visible(false);
+                search.set_sensitive(true);
+                search_button.set_sensitive(true);
+                match response {
+                    Ok(Ok(page)) => {
+                        let mut combined = latest_response
+                            .borrow()
+                            .clone()
+                            .unwrap_or_else(|| Ok(Vec::new()));
+                        if let Ok(projects) = &mut combined {
+                            projects.extend(page.projects);
+                            *next_offset.borrow_mut() = page.next_offset;
+                            *has_more.borrow_mut() = page.has_more;
+                            *latest_response.borrow_mut() = Some(combined.clone());
+                            render_projects(
+                                &parent,
+                                &results,
+                                &feedback,
+                                combined,
+                                search.text().trim(),
+                                sort.selected(),
+                            );
+                            load_more.set_visible(page.has_more);
+                            load_more.set_sensitive(page.has_more);
+                        } else {
+                            load_more.set_sensitive(true);
+                        }
+                    }
+                    Ok(Err(error)) => {
+                        feedback.set_text(&format!("Could not load more results: {error}"));
+                        load_more.set_sensitive(true);
+                    }
+                    Err(_) => {
+                        feedback.set_text("The background load-more task failed unexpectedly.");
+                        load_more.set_sensitive(true);
+                    }
+                }
+            });
+        }
+    });
 
     sort.connect_selected_notify({
         let parent = parent.clone();

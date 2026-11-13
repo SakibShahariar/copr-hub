@@ -7,7 +7,7 @@ const STALE_BUILD_AFTER_DAYS: i64 = 90;
 
 const COPR_API_BASE: &str = "https://copr.fedorainfracloud.org/api_3";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
-const SEARCH_LIMIT: &str = "25";
+const SEARCH_LIMIT: usize = 25;
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct CoprProject {
@@ -393,27 +393,16 @@ fn service_response_error(error: reqwest::Error, operation: &str) -> String {
         .unwrap_or_else(|| format!("The COPR service request failed: {error}"))
 }
 
-pub fn search_projects(pattern: &str) -> Result<Vec<CoprProject>, String> {
-    let pattern = pattern.trim();
-    if pattern.is_empty() {
-        return Ok(Vec::new());
-    }
+#[derive(Debug, Clone)]
+pub struct ProjectSearchPage {
+    pub projects: Vec<CoprProject>,
+    pub next_offset: usize,
+    pub has_more: bool,
+}
 
-    // COPR's project/list endpoint only lists projects; full-text discovery
-    // belongs to project/search and uses the "query" parameter.
-    let response = client()?
-        .get(format!("{COPR_API_BASE}/project/search"))
-        .query(&[("query", pattern), ("limit", SEARCH_LIMIT)]);
-    let response = send_with_retry(response)?
-        .error_for_status()
-        .map_err(|error| service_response_error(error, "search"))?;
-
-    let result: ProjectListResponse = response
-        .json()
-        .map_err(|error| format!("Could not read the COPR response: {error}"))?;
-
-    Ok(result
-        .items
+fn build_project_search_page(items: Vec<CoprProject>, offset: usize) -> ProjectSearchPage {
+    let returned = items.len();
+    let projects = items
         .into_iter()
         .filter(|project| valid_project_identity(&project.owner, &project.name))
         .map(|mut project| {
@@ -422,7 +411,48 @@ pub fn search_projects(pattern: &str) -> Result<Vec<CoprProject>, String> {
             }
             project
         })
-        .collect())
+        .collect();
+
+    ProjectSearchPage {
+        projects,
+        next_offset: offset.saturating_add(returned),
+        has_more: returned == SEARCH_LIMIT,
+    }
+}
+
+pub fn search_projects_page(
+    pattern: &str,
+    offset: usize,
+) -> Result<ProjectSearchPage, String> {
+    let pattern = pattern.trim();
+    if pattern.is_empty() {
+        return Ok(build_project_search_page(Vec::new(), offset));
+    }
+
+    // COPR's project/list endpoint only lists projects; full-text discovery
+    // belongs to project/search and supports limit/offset pagination.
+    let limit = SEARCH_LIMIT.to_string();
+    let offset = offset.to_string();
+    let response = client()?
+        .get(format!("{COPR_API_BASE}/project/search"))
+        .query(&[
+            ("query", pattern),
+            ("limit", limit.as_str()),
+            ("offset", offset.as_str()),
+        ]);
+    let response = send_with_retry(response)?
+        .error_for_status()
+        .map_err(|error| service_response_error(error, "search"))?;
+
+    let result: ProjectListResponse = response
+        .json()
+        .map_err(|error| format!("Could not read the COPR response: {error}"))?;
+
+    Ok(build_project_search_page(result.items, offset.parse().unwrap_or_default()))
+}
+
+pub fn search_projects(pattern: &str) -> Result<Vec<CoprProject>, String> {
+    Ok(search_projects_page(pattern, 0)?.projects)
 }
 
 /// Fetch recent real project build records for a chronological build timeline.
@@ -797,6 +827,41 @@ mod tests {
             let error = CoprError::new(kind, "generic failure");
             assert!(!should_stop_monitoring_scan(&error), "{kind:?}");
         }
+    }
+
+    #[test]
+    fn project_search_page_advances_by_raw_results_and_detects_more() {
+        let mut items: Vec<CoprProject> = (0..SEARCH_LIMIT)
+            .map(|index| CoprProject {
+                name: format!("project-{index}"),
+                owner: "alice".to_string(),
+                description: None,
+                homepage: None,
+            })
+            .collect();
+        items[0].owner.clear();
+
+        let page = build_project_search_page(items, 50);
+
+        assert_eq!(page.projects.len(), SEARCH_LIMIT - 1);
+        assert_eq!(page.next_offset, 50 + SEARCH_LIMIT);
+        assert!(page.has_more);
+    }
+
+    #[test]
+    fn short_project_search_page_marks_the_end_of_results() {
+        let items = vec![CoprProject {
+            name: "demo".to_string(),
+            owner: "alice".to_string(),
+            description: None,
+            homepage: None,
+        }];
+
+        let page = build_project_search_page(items, 25);
+
+        assert_eq!(page.projects.len(), 1);
+        assert_eq!(page.next_offset, 26);
+        assert!(!page.has_more);
     }
 
     #[test]
