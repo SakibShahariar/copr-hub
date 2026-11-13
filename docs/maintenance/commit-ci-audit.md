@@ -317,7 +317,7 @@ This section records every direct-to-master commit after the previous ledger tab
 
 - Reviewed through: `bcc213e3158a06f257cdb220c7fbd4dae9ac335a` (green).
 - Next review: commits after `bcc213e3158a06f257cdb220c7fbd4dae9ac335a`.
- 
+
 ## Follow-up review after bcc213e
 
 | Commit SHA | Subject | CI result / workflow run |
@@ -348,7 +348,7 @@ This section records every direct-to-master commit after the previous ledger tab
 
 - Reviewed through: c7b966987341a11ef1b1a4a73754d837c29be595 (green).
 - Next review: commits after c7b966987341a11ef1b1a4a73754d837c29be595.
- 
+
 ## Follow-up review after c7b9669
 
 | Commit SHA | Subject | CI result / workflow run |
@@ -357,7 +357,7 @@ This section records every direct-to-master commit after the previous ledger tab
 
 - The 4b3d267 run failed only at cargo fmt --all -- --check. The reported rustfmt differences are corrected in the follow-up formatting commit; tests, compilation, and Clippy had not run on this failed attempt.
 - The monitoring progress indicator, human-readable worker failure, and actionable scheduled-backup error guidance are implemented; final CI verification is pending.
- 
+
 ## Follow-up review after d77d2ab
 
 | Commit SHA | Subject | CI result / workflow run |
@@ -367,3 +367,17 @@ This section records every direct-to-master commit after the previous ledger tab
 - The progress indicator and backup-guidance changes passed formatting, all 140 unit tests, cargo check --all-targets, and Clippy.
 - #66–#68 are implemented; live GNOME animation, error feedback, and notification delivery remain to be verified.
 - The next review starts after d77d2abc592d63a4e3e9bed366f5d39cd5657349.
+ 
+## Follow-up review after d77d2ab
+
+| Commit SHA | Subject | CI result / workflow run |
+|---|---|---|
+| fd06ca0e8cc42fc1a738b8568890f41f8017c105 | fix(discover): separate activity persistence warnings | green (#43363655724) |
+
+- The Discover feedback change passed formatting, all 140 unit tests, cargo check --all-targets, and Clippy.
+- #70 now keeps search-result feedback independent from activity-history persistence errors; the separate warning and detailed stderr diagnostic remain to be checked in a live GNOME session.
+
+### Checkpoint
+
+- Reviewed through: fd06ca0e8cc42fc1a738b8568890f41f8017c105 (green).
+- Next review: commits after fd06ca0e8cc42fc1a738b8568890f41f8017c105.

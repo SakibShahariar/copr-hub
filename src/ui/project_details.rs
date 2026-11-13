@@ -54,7 +54,17 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
         .default_width(760)
         .default_height(760)
         .build();
+    let scroll_position = Rc::new(RefCell::new(0.0));
+    populate_project_details(&window, parent, project, scroll_position, 0.0);
+}
 
+fn populate_project_details(
+    window: &adw::Window,
+    parent: &adw::ApplicationWindow,
+    project: &copr::CoprProject,
+    scroll_position: Rc<RefCell<f64>>,
+    initial_scroll_position: f64,
+) {
     let content = gtk::Box::new(gtk::Orientation::Vertical, 16);
     content.set_margin_top(24);
     content.set_margin_bottom(24);
@@ -236,10 +246,20 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
     refresh.connect_clicked({
         let parent = parent.clone();
         let project = project.clone();
-        let window = window.clone();
+        let window = window.downgrade();
+        let scroll_position = scroll_position.clone();
         move |_| {
-            window.close();
-            show_project_details(&parent, &project);
+            if let Some(window) = window.upgrade() {
+                let position = *scroll_position.borrow();
+                window.set_content(None::<&gtk::Widget>);
+                populate_project_details(
+                    &window,
+                    &parent,
+                    &project,
+                    scroll_position.clone(),
+                    position,
+                );
+            }
         }
     });
     project_actions.append(&refresh);
@@ -397,6 +417,15 @@ pub(super) fn show_project_details(parent: &adw::ApplicationWindow, project: &co
         .vscrollbar_policy(gtk::PolicyType::Automatic)
         .child(&clamp)
         .build();
+    let adjustment = scroll.vadjustment();
+    adjustment.connect_value_changed({
+        let scroll_position = scroll_position.clone();
+        move |adjustment| *scroll_position.borrow_mut() = adjustment.value()
+    });
+    scroll.connect_map({
+        let adjustment = adjustment.clone();
+        move |_| adjustment.set_value(initial_scroll_position)
+    });
     window.set_content(Some(&scroll));
     window.present();
 
