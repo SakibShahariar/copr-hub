@@ -420,10 +420,7 @@ fn build_project_search_page(items: Vec<CoprProject>, offset: usize) -> ProjectS
     }
 }
 
-pub fn search_projects_page(
-    pattern: &str,
-    offset: usize,
-) -> Result<ProjectSearchPage, String> {
+pub fn search_projects_page(pattern: &str, offset: usize) -> Result<ProjectSearchPage, String> {
     let pattern = pattern.trim();
     if pattern.is_empty() {
         return Ok(build_project_search_page(Vec::new(), offset));
@@ -432,7 +429,8 @@ pub fn search_projects_page(
     // COPR's project/list endpoint only lists projects; full-text discovery
     // belongs to project/search and supports limit/offset pagination.
     let limit = SEARCH_LIMIT.to_string();
-    let offset = offset.to_string();
+    let offset_value = offset;
+    let offset = offset_value.to_string();
     let response = client()?
         .get(format!("{COPR_API_BASE}/project/search"))
         .query(&[
@@ -448,7 +446,7 @@ pub fn search_projects_page(
         .json()
         .map_err(|error| format!("Could not read the COPR response: {error}"))?;
 
-    Ok(build_project_search_page(result.items, offset.parse().unwrap_or_default()))
+    Ok(build_project_search_page(result.items, offset_value))
 }
 
 pub fn search_projects(pattern: &str) -> Result<Vec<CoprProject>, String> {

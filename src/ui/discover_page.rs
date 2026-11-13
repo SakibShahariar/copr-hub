@@ -253,10 +253,9 @@ pub(super) fn build_discover_page(parent: &adw::ApplicationWindow) -> gtk::Widge
             let progress = progress.clone();
             let sort = sort.clone();
             gtk::glib::MainContext::default().spawn_local(async move {
-                let response = gtk::gio::spawn_blocking(move || {
-                    copr::search_projects_page(&query, offset)
-                })
-                .await;
+                let response =
+                    gtk::gio::spawn_blocking(move || copr::search_projects_page(&query, offset))
+                        .await;
                 progress.set_visible(false);
                 search.set_sensitive(true);
                 search_button.set_sensitive(true);

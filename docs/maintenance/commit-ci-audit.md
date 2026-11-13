@@ -399,3 +399,11 @@ This section records every direct-to-master commit after the previous ledger tab
 
 - The first in-place refresh attempt passed formatting, all 140 tests, and compilation but Clippy found one needless double borrow. The follow-up removed it and passed all CI checks, including Clippy.
 - #72 now refreshes the existing details window and restores the prior scroll position. Live GNOME validation remains pending.
+ 
+## Follow-up review after 0b76178
+
+| Commit SHA | Subject | CI result / workflow run |
+|---|---|---|
+| 81904756ffa30adc3a2951cb27998020afaf6994 | feat(discover): paginate COPR search results | red (#43364383819) |
+
+- The 8190475 run failed only at cargo fmt --all -- --check. The reported line-wrapping differences are corrected in the follow-up formatting commit; tests, compilation, and Clippy were skipped.
