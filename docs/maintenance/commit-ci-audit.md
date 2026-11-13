@@ -459,3 +459,11 @@ This section records every direct-to-master commit after the previous ledger tab
 
 - Both command-timeout commits failed only at cargo fmt --all -- --check. Their formatting differences are corrected in this follow-up; no tests or compilation ran on those attempts.
 - The bounded-command work is preserved unchanged apart from rustfmt formatting.
+ 
+## Follow-up review after ca21e86
+
+| Commit SHA | Subject | CI result / workflow run |
+|---|---|---|
+| aa5ebf2b41e7ce5b4d214dc9542f55b2be1cda71 | fix(repositories): report unreadable configuration files | red (#43366114771) |
+
+- The aa5ebf2 run passed formatting but failed compilation because the new recovery test lacked SystemTime/UNIX_EPOCH imports. It also exposed two missing mutable bindings in the concurrent command-timeout reader after its output cap was removed. Both are corrected in this follow-up.
