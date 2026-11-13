@@ -419,6 +419,7 @@ fn refresh_activity(list: &gtk::ListBox, feedback: &gtk::Label, generation: &Rc<
         }
     });
 
+}
 fn add_activity_recovery_action(
     list: &gtk::ListBox,
     feedback: &gtk::Label,
@@ -480,4 +481,3 @@ fn add_activity_recovery_action(
     list.append(&recover);
 }
 
-}
