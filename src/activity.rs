@@ -383,7 +383,10 @@ mod tests {
         let path = std::env::temp_dir().join(format!(
             "copr-hub-activity-valid-{}-{}.json",
             std::process::id(),
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
         ));
         fs::write(&path, b"[]").unwrap();
 
