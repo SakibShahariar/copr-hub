@@ -1394,74 +1394,80 @@ pub(super) fn confirm_package_operation<F: Fn() + Clone + 'static>(
 ) {
     action_button.set_sensitive(false);
     let action = if install { "Install" } else { "Remove" };
-    let dialog = gtk::MessageDialog::builder()
-        .transient_for(parent)
-        .modal(true)
-        .message_type(gtk::MessageType::Question)
-        .buttons(gtk::ButtonsType::None)
-        .text(format!("{action} {package_name}?"))
-        .secondary_text(
+    let dialog = adw::AlertDialog::builder()
+        .heading(format!("{action} {package_name}?"))
+        .body(
             "DNF will perform this system package operation and resolve dependencies. Administrator authentication is required. COPR is a community build service: install packages only from project owners you trust.",
         )
         .build();
-    dialog.add_button("Cancel", gtk::ResponseType::Cancel);
-    dialog.add_button(action, gtk::ResponseType::Accept);
+    dialog.add_response("cancel", "Cancel");
+    dialog.add_response("confirm", action);
+    if install {
+        dialog.set_response_appearance("confirm", adw::ResponseAppearance::Suggested);
+    } else {
+        dialog.set_response_appearance("confirm", adw::ResponseAppearance::Destructive);
+    }
+    dialog.set_default_response(Some("cancel"));
+    dialog.set_close_response("cancel");
 
-    dialog.connect_response({
-        let package_name = package_name.clone();
-        let feedback = feedback.clone();
+    dialog.connect_response(Some("cancel"), {
         let action_button = action_button.clone();
-        move |dialog, response| {
-            dialog.close();
-            if response != gtk::ResponseType::Accept {
-                action_button.set_sensitive(true);
-                return;
-            }
-
-            feedback.set_text(&format!(
-                "Waiting for DNF to {action_lower} {package_name}…",
-                action_lower = action.to_lowercase()
-            ));
+        move |_dialog, _response| {
+            action_button.set_sensitive(true);
+        }
+    });
+    dialog.connect_response(
+        Some("confirm"),
+        {
             let package_name = package_name.clone();
             let feedback = feedback.clone();
             let action_button = action_button.clone();
-            let on_success = on_success.clone();
-            gtk::glib::MainContext::default().spawn_local(async move {
-                let operation_name = package_name.clone();
-                let result = gtk::gio::spawn_blocking(move || {
-                    system::set_package_installed(&package_name, install)
-                })
-                .await;
-                match result {
-                    Ok(Ok(())) => {
-                        action_button.set_sensitive(true);
-                        let action_past = if install { "installed" } else { "removed" };
-                        match activity::record(
-                            "Package operation",
-                            &operation_name,
-                            &format!("Package {action_past} successfully"),
-                        ) {
-                            Ok(()) => feedback.set_text(&format!("Package {action_past} successfully.")),
-                            Err(error) => feedback.set_text(&format!(
-                                "Package {action_past} successfully, but activity history could not be saved: {error}"
-                            )),
+            let action_lower = action.to_lowercase();
+            move |dialog, _response| {
+                dialog.close();
+                feedback.set_text(&format!(
+                    "Waiting for DNF to {action_lower} {package_name}…"
+                ));
+                let package_name = package_name.clone();
+                let feedback = feedback.clone();
+                let action_button = action_button.clone();
+                let on_success = on_success.clone();
+                gtk::glib::MainContext::default().spawn_local(async move {
+                    let operation_name = package_name.clone();
+                    let result = gtk::gio::spawn_blocking(move || {
+                        system::set_package_installed(&package_name, install)
+                    })
+                    .await;
+                    match result {
+                        Ok(Ok(())) => {
+                            action_button.set_sensitive(true);
+                            let action_past = if install { "installed" } else { "removed" };
+                            match activity::record(
+                                "Package operation",
+                                &operation_name,
+                                &format!("Package {action_past} successfully"),
+                            ) {
+                                Ok(()) => feedback.set_text(&format!("Package {action_past} successfully.")),
+                                Err(error) => feedback.set_text(&format!(
+                                    "Package {action_past} successfully, but activity history could not be saved: {error}"
+                                )),
+                            }
+                            on_success();
                         }
-                        on_success();
+                        Ok(Err(error)) => {
+                            action_button.set_sensitive(true);
+                            feedback.set_text(&error);
+                        }
+                        Err(_) => {
+                            action_button.set_sensitive(true);
+                            feedback.set_text("The background package operation failed unexpectedly.");
+                        }
                     }
-                    Ok(Err(error)) => {
-                        action_button.set_sensitive(true);
-                        feedback.set_text(&error);
-                    }
-                    Err(_) => {
-                        action_button.set_sensitive(true);
-                        feedback.set_text("The background package operation failed unexpectedly.");
-                    }
-                }
-            });
-        }
-    });
-    dialog.present();
-}
+                });
+            }
+        },
+    );
+    dialog.present(Some(parent.upcast_ref()));}
 
 #[cfg(test)]
 mod release_notes_tests {

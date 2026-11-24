@@ -294,49 +294,49 @@ pub(super) fn build_activity_page(
         let clear_button = clear.clone();
         let refresh_generation = refresh_generation.clone();
         move |_| {
-            let dialog = gtk::MessageDialog::builder()
-                .transient_for(&parent)
-                .modal(true)
-                .message_type(gtk::MessageType::Warning)
-                .buttons(gtk::ButtonsType::None)
-                .text("Clear activity history?")
-                .secondary_text("This permanently removes the local activity log. Saved projects will not be affected.")
+            let dialog = adw::AlertDialog::builder()
+                .heading("Clear activity history?")
+                .body("This permanently removes the local activity log. Saved projects will not be affected.")
                 .build();
-            dialog.add_button("Cancel", gtk::ResponseType::Cancel);
-            dialog.add_button("Clear history", gtk::ResponseType::Accept);
-            dialog.connect_response({
-                let list = list.clone();
-                let feedback = feedback.clone();
-                let clear_button = clear_button.clone();
-                let refresh_generation = refresh_generation.clone();
-                move |dialog, response| {
-                    dialog.close();
-                    if response != gtk::ResponseType::Accept {
-                        return;
-                    }
-                    feedback.set_text("Clearing activity history…");
-                    clear_button.set_sensitive(false);
+            dialog.add_response("cancel", "Cancel");
+            dialog.add_response("clear", "Clear history");
+            dialog.set_response_appearance("clear", adw::ResponseAppearance::Destructive);
+            dialog.set_default_response(Some("cancel"));
+            dialog.set_close_response("cancel");
+            dialog.connect_response(Some("cancel"), |_dialog, _response| {});
+            dialog.connect_response(
+                Some("clear"),
+                {
                     let list = list.clone();
                     let feedback = feedback.clone();
                     let clear_button = clear_button.clone();
                     let refresh_generation = refresh_generation.clone();
-                    gtk::glib::MainContext::default().spawn_local(async move {
-                        let result = gtk::gio::spawn_blocking(activity::clear).await;
-                        clear_button.set_sensitive(true);
-                        match result {
-                            Ok(Ok(())) => {
-                                refresh_activity(&list, &feedback, &refresh_generation);
-                                feedback.set_text("Activity history cleared.");
+                    move |dialog, _response| {
+                        dialog.close();
+                        feedback.set_text("Clearing activity history…");
+                        clear_button.set_sensitive(false);
+                        let list = list.clone();
+                        let feedback = feedback.clone();
+                        let clear_button = clear_button.clone();
+                        let refresh_generation = refresh_generation.clone();
+                        gtk::glib::MainContext::default().spawn_local(async move {
+                            let result = gtk::gio::spawn_blocking(activity::clear).await;
+                            clear_button.set_sensitive(true);
+                            match result {
+                                Ok(Ok(())) => {
+                                    refresh_activity(&list, &feedback, &refresh_generation);
+                                    feedback.set_text("Activity history cleared.");
+                                }
+                                Ok(Err(error)) => feedback.set_text(&error),
+                                Err(_) => feedback.set_text(
+                                    "The background activity clear failed unexpectedly.",
+                                ),
                             }
-                            Ok(Err(error)) => feedback.set_text(&error),
-                            Err(_) => feedback.set_text(
-                                "The background activity clear failed unexpectedly.",
-                            ),
-                        }
-                    });
-                }
-            });
-            dialog.present();
+                        });
+                    }
+                },
+            );
+            dialog.present(Some(&parent));
         }
     });
     refresh_activity(&list, &feedback, &refresh_generation);
@@ -433,49 +433,50 @@ fn add_activity_recovery_action(
         let feedback = feedback.clone();
         let generation = generation.clone();
         move |button| {
-            let dialog = gtk::MessageDialog::builder()
-                .modal(true)
-                .message_type(gtk::MessageType::Warning)
-                .buttons(gtk::ButtonsType::None)
-                .text("Preserve damaged activity history?")
-                .secondary_text("Copr Hub will move the unreadable file to a timestamped .corrupt backup beside it, then start with an empty activity history. The original bytes will not be deleted.")
+            let dialog = adw::AlertDialog::builder()
+                .heading("Preserve damaged activity history?")
+                .body("Copr Hub will move the unreadable file to a timestamped .corrupt backup beside it, then start with an empty activity history. The original bytes will not be deleted.")
                 .build();
-            dialog.add_button("Cancel", gtk::ResponseType::Cancel);
-            dialog.add_button("Preserve and recover", gtk::ResponseType::Accept);
-            dialog.connect_response({
-                let list = list.clone();
-                let feedback = feedback.clone();
-                let generation = generation.clone();
-                let button = button.clone();
-                move |dialog, response| {
-                    dialog.close();
-                    if response != gtk::ResponseType::Accept {
-                        return;
-                    }
-                    button.set_sensitive(false);
-                    feedback.set_text("Preserving damaged activity history…");
+            dialog.add_response("cancel", "Cancel");
+            dialog.add_response("recover", "Preserve and recover");
+            dialog.set_response_appearance("recover", adw::ResponseAppearance::Destructive);
+            dialog.set_default_response(Some("cancel"));
+            dialog.set_close_response("cancel");
+            dialog.connect_response(Some("cancel"), |_dialog, _response| {});
+            dialog.connect_response(
+                Some("recover"),
+                {
                     let list = list.clone();
                     let feedback = feedback.clone();
                     let generation = generation.clone();
                     let button = button.clone();
-                    gtk::glib::MainContext::default().spawn_local(async move {
-                        let result = gtk::gio::spawn_blocking(activity::recover_corrupt).await;
-                        button.set_sensitive(true);
-                        match result {
-                            Ok(Ok(backup)) => {
-                                refresh_activity(&list, &feedback, &generation);
-                                feedback.set_text(&format!(
-                                    "Damaged history was preserved at {}. A fresh activity history is ready.",
-                                    backup.display()
-                                ));
+                    move |dialog, _response| {
+                        dialog.close();
+                        button.set_sensitive(false);
+                        feedback.set_text("Preserving damaged activity history…");
+                        let list = list.clone();
+                        let feedback = feedback.clone();
+                        let generation = generation.clone();
+                        let button = button.clone();
+                        gtk::glib::MainContext::default().spawn_local(async move {
+                            let result = gtk::gio::spawn_blocking(activity::recover_corrupt).await;
+                            button.set_sensitive(true);
+                            match result {
+                                Ok(Ok(backup)) => {
+                                    refresh_activity(&list, &feedback, &generation);
+                                    feedback.set_text(&format!(
+                                        "Damaged history was preserved at {}. A fresh activity history is ready.",
+                                        backup.display()
+                                    ));
+                                }
+                                Ok(Err(error)) => feedback.set_text(&format!("Recovery failed: {error}")),
+                                Err(_) => feedback.set_text("The activity-history recovery task failed unexpectedly."),
                             }
-                            Ok(Err(error)) => feedback.set_text(&format!("Recovery failed: {error}")),
-                            Err(_) => feedback.set_text("The activity-history recovery task failed unexpectedly."),
-                        }
-                    });
-                }
-            });
-            dialog.present();
+                        });
+                    }
+                },
+            );
+            dialog.present(None::<&gtk::Widget>);
         }
     });
     list.append(&recover);

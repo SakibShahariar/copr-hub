@@ -628,30 +628,35 @@ fn show_repository_toggle_dialog(
             ),
         }
     };
-    let dialog = gtk::MessageDialog::builder()
-        .transient_for(parent)
-        .modal(true)
-        .message_type(gtk::MessageType::Question)
-        .buttons(gtk::ButtonsType::None)
-        .text(format!("{action} {}?", repository.name))
-        .secondary_text(secondary_text)
+    let dialog = adw::AlertDialog::builder()
+        .heading(format!("{action} {}?", repository.name))
+        .body(secondary_text)
         .build();
-    dialog.add_button("Cancel", gtk::ResponseType::Cancel);
-    dialog.add_button(&action_label, gtk::ResponseType::Accept);
+    dialog.add_response("cancel", "Cancel");
+    dialog.add_response("accept", &action_label);
+    if !enabling || action_label == "Enable anyway" {
+        dialog.set_response_appearance("accept", adw::ResponseAppearance::Destructive);
+    } else {
+        dialog.set_response_appearance("accept", adw::ResponseAppearance::Suggested);
+    }
+    dialog.set_default_response(Some("cancel"));
+    dialog.set_close_response("cancel");
 
-    dialog.connect_response({
+    dialog.connect_response(Some("cancel"), {
+        let action_button = action_button.clone();
+        move |_dialog, _response| {
+            action_button.set_sensitive(true);
+        }
+    });
+    dialog.connect_response(Some("accept"), {
         let parent = parent.clone();
         let repository = repository.clone();
         let list = list.clone();
         let feedback = feedback.clone();
         let action_button = action_button.clone();
-        move |dialog, response| {
+        let action_past = action_past.to_string();
+        move |dialog, _response| {
             dialog.close();
-            if response != gtk::ResponseType::Accept {
-                action_button.set_sensitive(true);
-                return;
-            }
-
             feedback.set_text("Applying repository change…");
             let repository_id = repository.id.clone();
             let activity_repository_id = repository.id.clone();
@@ -659,6 +664,7 @@ fn show_repository_toggle_dialog(
             let feedback = feedback.clone();
             let parent = parent.clone();
             let action_button = action_button.clone();
+            let action_past = action_past.clone();
             gtk::glib::MainContext::default().spawn_local(async move {
                 let result = gtk::gio::spawn_blocking(move || {
                     system::set_copr_repository_enabled(&repository_id, enabling)
@@ -687,7 +693,7 @@ fn show_repository_toggle_dialog(
             });
         }
     });
-    dialog.present();
+    dialog.present(Some(parent));
 }
 
 fn confirm_repository_removal(
@@ -698,32 +704,32 @@ fn confirm_repository_removal(
     action_button: &gtk::Button,
 ) {
     action_button.set_sensitive(false);
-    let dialog = gtk::MessageDialog::builder()
-        .transient_for(parent)
-        .modal(true)
-        .message_type(gtk::MessageType::Warning)
-        .buttons(gtk::ButtonsType::None)
-        .text(format!("Remove {}?", repository.name))
-        .secondary_text(
+    let dialog = adw::AlertDialog::builder()
+        .heading(format!("Remove {}?", repository.name))
+        .body(
             "This removes the COPR repository configuration from this system; it does not uninstall packages already installed from it. You will be asked to authenticate.",
         )
         .build();
-    dialog.add_button("Cancel", gtk::ResponseType::Cancel);
-    dialog.add_button("Remove repository", gtk::ResponseType::Accept);
+    dialog.add_response("cancel", "Cancel");
+    dialog.add_response("remove", "Remove repository");
+    dialog.set_response_appearance("remove", adw::ResponseAppearance::Destructive);
+    dialog.set_default_response(Some("cancel"));
+    dialog.set_close_response("cancel");
 
-    dialog.connect_response({
+    dialog.connect_response(Some("cancel"), {
+        let action_button = action_button.clone();
+        move |_dialog, _response| {
+            action_button.set_sensitive(true);
+        }
+    });
+    dialog.connect_response(Some("remove"), {
         let parent = parent.clone();
         let repository = repository.clone();
         let list = list.clone();
         let feedback = feedback.clone();
         let action_button = action_button.clone();
-        move |dialog, response| {
+        move |dialog, _response| {
             dialog.close();
-            if response != gtk::ResponseType::Accept {
-                action_button.set_sensitive(true);
-                return;
-            }
-
             feedback.set_text("Removing repository…");
             let repository_id = repository.id.clone();
             let activity_repository_id = repository.id.clone();
@@ -759,7 +765,7 @@ fn confirm_repository_removal(
             });
         }
     });
-    dialog.present();
+    dialog.present(Some(parent));
 }
 
 #[cfg(test)]

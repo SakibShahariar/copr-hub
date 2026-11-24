@@ -273,13 +273,9 @@ pub(super) fn build_saved_page(
                         match dialog.file().and_then(|file| file.path()) {
                             Some(path) => match favorites::preview_import(&path) {
                                 Ok(preview) => {
-                                    let confirmation = gtk::MessageDialog::builder()
-                                        .transient_for(&parent)
-                                        .modal(true)
-                                        .message_type(gtk::MessageType::Question)
-                                        .buttons(gtk::ButtonsType::None)
-                                        .text("Preview import changes")
-                                        .secondary_text(format!(
+                                    let confirmation = adw::AlertDialog::builder()
+                                        .heading("Preview import changes")
+                                        .body(format!(
                                             "{} project entries in backup\n{} new project(s) will be added\n{} already saved locally\n{} duplicate entry/entries within the backup will be skipped\n\nYour current saved projects will be preserved.",
                                             preview.incoming,
                                             preview.new_projects,
@@ -287,50 +283,61 @@ pub(super) fn build_saved_page(
                                             preview.duplicate_in_backup
                                         ))
                                         .build();
-                                    confirmation.add_button("Cancel", gtk::ResponseType::Cancel);
-                                    confirmation.add_button("Import changes", gtk::ResponseType::Accept);
-                                    confirmation.connect_response({
-                                        let parent = parent.clone();
-                                        let list = list.clone();
-                                        let feedback = feedback.clone();
-                                        let import_button = import_button.clone();
-                                        let path = path.clone();
-                                        move |confirmation, answer| {
-                                            confirmation.close();
-                                            if answer != gtk::ResponseType::Accept {
+                                    confirmation.add_response("cancel", "Cancel");
+                                    confirmation.add_response("import", "Import changes");
+                                    confirmation.set_default_response(Some("cancel"));
+                                    confirmation.set_close_response("cancel");
+                                    confirmation.set_response_appearance("import", adw::ResponseAppearance::Suggested);
+                                    confirmation.connect_response(
+                                        Some("cancel"),
+                                        {
+                                            let import_button = import_button.clone();
+                                            move |_confirmation, _response| {
                                                 import_button.set_sensitive(true);
-                                                return;
                                             }
-                                            feedback.set_text("Importing saved projects…");
+                                        },
+                                    );
+                                    confirmation.connect_response(
+                                        Some("import"),
+                                        {
                                             let parent = parent.clone();
                                             let list = list.clone();
                                             let feedback = feedback.clone();
                                             let import_button = import_button.clone();
                                             let path = path.clone();
-                                            gtk::glib::MainContext::default().spawn_local(async move {
-                                                let result = gtk::gio::spawn_blocking(move || {
-                                                    favorites::import_from(&path)
-                                                })
-                                                .await;
-                                                import_button.set_sensitive(true);
-                                                match result {
-                                                    Ok(Ok(added)) => {
-                                                        refresh_saved_projects(&parent, &list, &feedback);
-                                                        feedback.set_text(&format!(
-                                                            "Imported {added} new project(s); existing saved projects were preserved."
-                                                        ));
+                                            move |confirmation, _response| {
+                                                confirmation.close();
+                                                feedback.set_text("Importing saved projects…");
+                                                let parent = parent.clone();
+                                                let list = list.clone();
+                                                let feedback = feedback.clone();
+                                                let import_button = import_button.clone();
+                                                let path = path.clone();
+                                                gtk::glib::MainContext::default().spawn_local(async move {
+                                                    let result = gtk::gio::spawn_blocking(move || {
+                                                        favorites::import_from(&path)
+                                                    })
+                                                    .await;
+                                                    import_button.set_sensitive(true);
+                                                    match result {
+                                                        Ok(Ok(added)) => {
+                                                            refresh_saved_projects(&parent, &list, &feedback);
+                                                            feedback.set_text(&format!(
+                                                                "Imported {added} new project(s); existing saved projects were preserved."
+                                                            ));
+                                                        }
+                                                        Ok(Err(error)) => feedback.set_text(&format!(
+                                                            "Import failed: {error}"
+                                                        )),
+                                                        Err(_) => feedback.set_text(
+                                                            "The background import task failed unexpectedly.",
+                                                        ),
                                                     }
-                                                    Ok(Err(error)) => feedback.set_text(&format!(
-                                                        "Import failed: {error}"
-                                                    )),
-                                                    Err(_) => feedback.set_text(
-                                                        "The background import task failed unexpectedly.",
-                                                    ),
-                                                }
-                                            });
-                                        }
-                                    });
-                                    confirmation.present();
+                                                });
+                                            }
+                                        },
+                                    );
+                                    confirmation.present(Some(&parent));
                                 }
                                 Err(error) => {
                                     feedback.set_text(&format!("Import preview failed: {error}"));
@@ -381,31 +388,29 @@ fn show_compare_picker(parent: &adw::ApplicationWindow) {
     let projects = match favorites::load() {
         Ok(projects) => projects,
         Err(error) => {
-            let dialog = gtk::MessageDialog::builder()
-                .transient_for(parent)
-                .modal(true)
-                .message_type(gtk::MessageType::Error)
-                .buttons(gtk::ButtonsType::Close)
-                .text("Could not load saved projects")
-                .secondary_text(&error)
+            let dialog = adw::AlertDialog::builder()
+                .heading("Could not load saved projects")
+                .body(error)
                 .build();
-            dialog.connect_response(|dialog, _| dialog.close());
-            dialog.present();
+            dialog.add_response("close", "Close");
+            dialog.set_default_response(Some("close"));
+            dialog.set_close_response("close");
+            dialog.connect_response(Some("close"), |_dialog, _response| {});
+            dialog.present(Some(parent));
             return;
         }
     };
 
     if projects.len() < 2 {
-        let dialog = gtk::MessageDialog::builder()
-            .transient_for(parent)
-            .modal(true)
-            .message_type(gtk::MessageType::Info)
-            .buttons(gtk::ButtonsType::Close)
-            .text("Save at least two projects")
-            .secondary_text("Project comparison needs at least two saved COPR projects. Save projects from their details windows, then try again.")
+        let dialog = adw::AlertDialog::builder()
+            .heading("Save at least two projects")
+            .body("Project comparison needs at least two saved COPR projects. Save projects from their details windows, then try again.")
             .build();
-        dialog.connect_response(|dialog, _| dialog.close());
-        dialog.present();
+        dialog.add_response("close", "Close");
+        dialog.set_default_response(Some("close"));
+        dialog.set_close_response("close");
+        dialog.connect_response(Some("close"), |_dialog, _response| {});
+        dialog.present(Some(parent));
         return;
     }
 
@@ -830,50 +835,53 @@ fn add_saved_recovery_action(
         let list = list.clone();
         let feedback = feedback.clone();
         move |button| {
-            let dialog = gtk::MessageDialog::builder()
-                .transient_for(&parent)
-                .modal(true)
-                .message_type(gtk::MessageType::Warning)
-                .buttons(gtk::ButtonsType::None)
-                .text("Preserve damaged saved-project data?")
-                .secondary_text("Copr Hub will move the unreadable file to a timestamped .corrupt backup beside it, then start with an empty saved-project list. The original bytes will not be deleted.")
+            let dialog = adw::AlertDialog::builder()
+                .heading("Preserve damaged saved-project data?")
+                .body("Copr Hub will move the unreadable file to a timestamped .corrupt backup beside it, then start with an empty saved-project list. The original bytes will not be deleted.")
                 .build();
-            dialog.add_button("Cancel", gtk::ResponseType::Cancel);
-            dialog.add_button("Preserve and recover", gtk::ResponseType::Accept);
-            dialog.connect_response({
-                let parent = parent.clone();
-                let list = list.clone();
-                let feedback = feedback.clone();
-                let button = button.clone();
-                move |dialog, response| {
-                    dialog.close();
-                    if response != gtk::ResponseType::Accept {
-                        return;
-                    }
-                    button.set_sensitive(false);
-                    feedback.set_text("Preserving damaged saved-project data…");
+            dialog.add_response("cancel", "Cancel");
+            dialog.add_response("recover", "Preserve and recover");
+            dialog.set_response_appearance("recover", adw::ResponseAppearance::Destructive);
+            dialog.set_default_response(Some("cancel"));
+            dialog.set_close_response("cancel");
+            dialog.connect_response(
+                Some("cancel"),
+                |_dialog, _response| {},
+            );
+            dialog.connect_response(
+                Some("recover"),
+                {
                     let parent = parent.clone();
                     let list = list.clone();
                     let feedback = feedback.clone();
                     let button = button.clone();
-                    gtk::glib::MainContext::default().spawn_local(async move {
-                        let result = gtk::gio::spawn_blocking(favorites::recover_corrupt).await;
-                        button.set_sensitive(true);
-                        match result {
-                            Ok(Ok(backup)) => {
-                                refresh_saved_projects(&parent, &list, &feedback);
-                                feedback.set_text(&format!(
-                                    "Damaged data was preserved at {}. A fresh saved-project list is ready.",
-                                    backup.display()
-                                ));
+                    move |dialog, _response| {
+                        dialog.close();
+                        button.set_sensitive(false);
+                        feedback.set_text("Preserving damaged saved-project data…");
+                        let parent = parent.clone();
+                        let list = list.clone();
+                        let feedback = feedback.clone();
+                        let button = button.clone();
+                        gtk::glib::MainContext::default().spawn_local(async move {
+                            let result = gtk::gio::spawn_blocking(favorites::recover_corrupt).await;
+                            button.set_sensitive(true);
+                            match result {
+                                Ok(Ok(backup)) => {
+                                    refresh_saved_projects(&parent, &list, &feedback);
+                                    feedback.set_text(&format!(
+                                        "Damaged data was preserved at {}. A fresh saved-project list is ready.",
+                                        backup.display()
+                                    ));
+                                }
+                                Ok(Err(error)) => feedback.set_text(&format!("Recovery failed: {error}")),
+                                Err(_) => feedback.set_text("The saved-project recovery task failed unexpectedly."),
                             }
-                            Ok(Err(error)) => feedback.set_text(&format!("Recovery failed: {error}")),
-                            Err(_) => feedback.set_text("The saved-project recovery task failed unexpectedly."),
-                        }
-                    });
-                }
-            });
-            dialog.present();
+                        });
+                    }
+                },
+            );
+            dialog.present(Some(&parent));
         }
     });
     list.append(&recover);
