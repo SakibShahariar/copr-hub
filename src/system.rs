@@ -1390,19 +1390,27 @@ enabled=0
         use std::os::unix::fs::PermissionsExt;
 
         let directory = std::env::temp_dir().join(format!(
-            "copr-hub-fake-system-command-{}",
-            std::process::id()
+            "copr-hub-fake-system-command-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
         ));
         fs::create_dir_all(&directory).unwrap();
 
         for program in ["dnf", "rpm", "pkexec"] {
             let executable = directory.join(program);
+            let staged = directory.join(format!("{program}.staged"));
             fs::write(
-                &executable,
+                &staged,
                 "#!/bin/sh\nprintf '%s|%s|%s' \"$LC_ALL\" \"$HTTP_PROXY\" \"$1\"\nprintf 'simulated command failure' >&2\nexit 23\n",
             )
             .unwrap();
-            fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
+            fs::set_permissions(&staged, fs::Permissions::from_mode(0o755)).unwrap();
+            // Replace the directory entry with a fresh inode so a stale or
+            // still-open executable from another run cannot cause ETXTBSY.
+            fs::rename(&staged, &executable).unwrap();
 
             let mut command = system_command(&executable);
             command

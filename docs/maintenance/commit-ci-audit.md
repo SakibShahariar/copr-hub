@@ -477,3 +477,13 @@ This section records every direct-to-master commit after the previous ledger tab
 
 - Formatting, unit tests, and compilation passed. Clippy rejected test-only `SystemTime`/`UNIX_EPOCH` imports at module scope; they are now scoped to the test module.
 - Review also found that a child can exit while a descendant keeps inherited stdout/stderr pipes open. Reader completion is now covered by the same deadline, with a regression test for this case.
+
+## Follow-up review after 18b0824
+
+| Commit SHA | Subject | CI result / workflow run |
+|---|---|---|
+| 18b0824bf914315155e96250a8eb56fe62b7336d | chore: make install-local.sh executable | red (#45444914571) |
+
+- Formatting, installer-script checks, shell lint, desktop metadata validation, and 148/149 unit tests passed. `system::tests::system_command_runs_fake_dnf_rpm_and_pkexec_with_safe_environment` failed when `Command::output()` returned `ExecutableFileBusy` (ETXTBSY) for a freshly written fake script.
+- Classification: flaky test setup unrelated to the mode-only change. The fake executables lived in a PID-only temp directory and were exec'd immediately after being written in place, so a stale or still-open inode from another run could block exec.
+- Fix in this commit: give the temp directory a per-invocation nanosecond suffix and install each fake script by `fs::rename` from a staged file, so exec always sees a fresh inode. Verified locally with formatting, Clippy, `cargo check --all-targets`, 149/149 tests, and 40 repeated runs of the affected test.
